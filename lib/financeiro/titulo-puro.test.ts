@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   aplicarEstorno, arredondar2, calcularPagamento, competenciaDe, paraCentavos, podeCancelar, podeEditarDinheiro, podePagar,
-  saldoConta, situacaoTitulo, statusPorQuitado,
+  previaMoeda, saldoConta, situacaoTitulo, statusPorQuitado,
 } from './titulo-puro.ts'
 import { hojeBahiaISO } from '../data-bahia.ts'
 
@@ -16,6 +16,32 @@ test('centavos: pt-BR, ponto decimal e arredondamento sem erro de ponto flutuant
   assert.ok(Number.isNaN(paraCentavos('abc')))
   assert.equal(arredondar2(5000.555), 5000.56)
   assert.equal(arredondar2(2.675), 2.68)
+})
+
+test('ponto é milhar, a menos que seja decimal claro (1–2 casas); notação científica e lixo são recusados', () => {
+  assert.equal(paraCentavos('1.500'), 150000)
+  assert.equal(paraCentavos('R$ 2.000'), 200000)
+  assert.equal(paraCentavos('1.500,00'), 150000)
+  assert.equal(paraCentavos('1,5'), 150)
+  assert.equal(paraCentavos('1.5'), 150)
+  assert.equal(paraCentavos('1.50'), 150)
+  assert.equal(paraCentavos('1.234.567'), 123456700)
+  assert.equal(paraCentavos('2000'), 200000)
+  assert.ok(Number.isNaN(paraCentavos('1e3')))
+  assert.ok(Number.isNaN(paraCentavos('1,500.00'))) // ambíguo: não adivinha
+  assert.ok(Number.isNaN(paraCentavos('1,500'))) // 3 casas depois da vírgula
+  assert.ok(Number.isNaN(paraCentavos('12abc')))
+  assert.ok(Number.isNaN(paraCentavos('NaN')))
+  assert.ok(Number.isNaN(paraCentavos('Infinity')))
+  assert.ok(Number.isNaN(paraCentavos(1e12)))
+  assert.ok(Number.isNaN(paraCentavos(NaN)))
+})
+
+test('prévia em reais do que foi digitado', () => {
+  assert.match(previaMoeda('1.500') ?? '', /1\.500,00/)
+  assert.match(previaMoeda('1,5') ?? '', /1,50/)
+  assert.equal(previaMoeda('1e3'), null)
+  assert.equal(previaMoeda(''), null)
 })
 
 test('status guardado depende só do quitado', () => {
@@ -78,6 +104,16 @@ test('baixas recusadas', () => {
   assert.equal(calcularPagamento({ ...base, descontoCent: 5000 }).ok, false) // saída zero
   assert.equal(calcularPagamento({ ...base, restanteCent: 0 }).ok, false) // já pago
   assert.equal(calcularPagamento({ ...base, principalCent: NaN }).ok, false)
+})
+
+test('desconto: até o valor quitado passa (mesmo com juros); acima dele falha; acima de principal+juros falha', () => {
+  const base = { restanteCent: 20000, principalCent: 10000, jurosCent: 5000, descontoCent: 0 }
+  const a = calcularPagamento({ ...base, descontoCent: 10000 }) // = principal: sai só o juros
+  assert.ok(a.ok && a.pagoCent === 5000)
+  assert.equal(calcularPagamento({ ...base, descontoCent: 10001 }).ok, false) // > principal, ainda ≤ principal+juros
+  assert.equal(calcularPagamento({ ...base, descontoCent: 15001 }).ok, false) // > principal+juros
+  const b = calcularPagamento({ ...base, descontoCent: 4000 })
+  assert.ok(b.ok && b.pagoCent === 11000)
 })
 
 test('duas parcelas somam o título sem sobra de centavo', () => {

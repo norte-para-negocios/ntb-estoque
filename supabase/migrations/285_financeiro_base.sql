@@ -32,7 +32,7 @@ create table if not exists public.fin_contas_correntes (
   banco               text,
   agencia             text,
   numero_conta        text,
-  saldo_inicial       numeric(14,2) not null default 0,
+  saldo_inicial       numeric(14,2) not null default 0 check (saldo_inicial <> 'NaN'),
   data_saldo_inicial  date not null default ((now() at time zone 'America/Bahia')::date),
   ativa               boolean not null default true,
   observacao          text,
@@ -48,6 +48,8 @@ create table if not exists public.fin_categorias (
   id                   bigint generated always as identity primary key,
   loja_id              bigint not null references public.lojas(id),
   codigo               text,
+  -- Identificador estável das categorias padrão: renomear não faz a semente recriar a original.
+  padrao               text,
   nome                 text not null check (length(btrim(nome)) between 2 and 80),
   tipo                 text not null default 'despesa' check (tipo in ('despesa', 'receita')),
   -- Linha da DRE onde a categoria entra (relatório da etapa 6).
@@ -64,6 +66,8 @@ create table if not exists public.fin_categorias (
   unique (id, loja_id)
 );
 
+create unique index if not exists fin_categorias_padrao on public.fin_categorias (loja_id, padrao) where padrao is not null;
+
 -- Extrato: um lançamento por movimento de dinheiro. Imutável; o estorno é OUTRO lançamento ligado por estorno_de.
 create table if not exists public.fin_lancamentos (
   id                  bigint generated always as identity primary key,
@@ -71,7 +75,7 @@ create table if not exists public.fin_lancamentos (
   conta_id            bigint not null,
   data                date not null,
   tipo                text not null check (tipo in ('entrada', 'saida')),
-  valor               numeric(14,2) not null check (valor > 0),
+  valor               numeric(14,2) not null check (valor > 0 and valor <> 'NaN'),
   descricao           text,
   categoria_id        bigint,
   origem_tipo         text not null check (origem_tipo in ('pagamento', 'estorno_pagamento', 'manual', 'transferencia', 'recebimento')),
@@ -129,6 +133,17 @@ create or replace function public.fin_hoje() returns date language sql stable as
   select (now() at time zone 'America/Bahia')::date
 $$;
 
+-- Texto → dinheiro (2 casas). Vazio = padrão. Recusa lixo, NaN, infinito e valores absurdos (numeric aceita 'NaN').
+create or replace function public.fin_numero(p text, p_padrao numeric default null) returns numeric
+language plpgsql immutable as $$
+declare n numeric;
+begin
+  if p is null or btrim(p) = '' then return p_padrao; end if;
+  begin n := btrim(p)::numeric; exception when others then raise exception 'Valor numérico inválido' using errcode = '22023'; end;
+  if n = 'NaN'::numeric or n >= 1e12 or n <= -1e12 then raise exception 'Valor numérico inválido' using errcode = '22023'; end if;
+  return round(n, 2);
+end $$;
+
 create or replace function public.fin_exigir_loja_propria(p_loja bigint) returns void
 language plpgsql stable set search_path = public as $$
 begin
@@ -156,8 +171,9 @@ begin
   if length(v_nome) < 2 then raise exception 'Informe o nome da conta' using errcode = '22023'; end if;
   v_tipo := coalesce(nullif(p_dados->>'tipo', ''), 'banco');
   if v_tipo not in ('caixa', 'banco', 'outro') then raise exception 'Tipo de conta inválido' using errcode = '22023'; end if;
-  v_saldo := round(coalesce(nullif(p_dados->>'saldo_inicial', '')::numeric, 0), 2);
+  v_saldo := fin_numero(p_dados->>'saldo_inicial', 0);
   v_data := coalesce(nullif(p_dados->>'data_saldo_inicial', '')::date, fin_hoje());
+  if v_data > fin_hoje() then raise exception 'A data do saldo inicial não pode ser futura' using errcode = '22023'; end if;
   if exists (select 1 from fin_contas_correntes where loja_id = p_loja and lower(nome) = lower(v_nome) and id is distinct from p_id) then
     raise exception 'Já existe uma conta com esse nome' using errcode = '22023';
   end if;
@@ -175,8 +191,8 @@ begin
 
   select * into c from fin_contas_correntes where id = p_id and loja_id = p_loja for update;
   if not found then raise exception 'Conta não encontrada' using errcode = '22023'; end if;
-  if exists (select 1 from fin_lancamentos where conta_id = c.id and data < v_data) then
-    raise exception 'Há lançamentos anteriores a essa data de saldo inicial' using errcode = '22023';
+  if (v_saldo <> c.saldo_inicial or v_data <> c.data_saldo_inicial) and exists (select 1 from fin_lancamentos where conta_id = c.id) then
+    raise exception 'A conta já tem lançamentos: o saldo inicial e a data não mudam mais' using errcode = '22023';
   end if;
   v_antes := jsonb_build_object('nome', c.nome, 'saldo_inicial', c.saldo_inicial, 'data_saldo_inicial', c.data_saldo_inicial, 'ativa', c.ativa);
   update fin_contas_correntes set nome = v_nome, tipo = v_tipo,
@@ -260,6 +276,10 @@ begin
   end if;
   select * into k from fin_categorias where id = p_id and loja_id = p_loja for update;
   if not found then raise exception 'Categoria não encontrada' using errcode = '22023'; end if;
+  if v_tipo <> k.tipo and (exists (select 1 from fin_lancamentos where categoria_id = k.id)
+      or (to_regclass('public.fin_titulos_pagar') is not null and exists (select 1 from fin_titulos_pagar where categoria_id = k.id))) then
+    raise exception 'A categoria já é usada em títulos ou lançamentos: o tipo (despesa/receita) não muda' using errcode = '22023';
+  end if;
   update fin_categorias set codigo = nullif(btrim(coalesce(p_dados->>'codigo', '')), ''), nome = v_nome, tipo = v_tipo, grupo_dre = v_grupo,
       categoria_contabil_id = v_cc, ativa = coalesce((p_dados->>'ativa')::boolean, k.ativa), updated_at = now()
     where id = k.id returning * into k;
@@ -274,28 +294,29 @@ language plpgsql security definer set search_path = public as $$
 declare n int;
 begin
   perform fin_exigir_loja_propria(p_loja);
+  -- Chave estável (padrao): reaplicar nunca recria uma categoria padrão que o usuário renomeou ou inativou.
   with ins as (
-    insert into fin_categorias (loja_id, nome, tipo, grupo_dre)
-    select p_loja, v.nome, v.tipo, v.grupo from (values
-      ('Compra de mercadoria para revenda', 'despesa', 'cmv'),
-      ('Matéria-prima e insumos', 'despesa', 'cmv'),
-      ('Embalagens', 'despesa', 'cmv'),
-      ('Folha de pagamento e encargos', 'despesa', 'despesa_pessoal'),
-      ('Aluguel e condomínio', 'despesa', 'despesa_operacional'),
-      ('Energia, água e gás', 'despesa', 'despesa_operacional'),
-      ('Manutenção e reparos', 'despesa', 'despesa_operacional'),
-      ('Marketing e publicidade', 'despesa', 'despesa_operacional'),
-      ('Telefone e internet', 'despesa', 'despesa_administrativa'),
-      ('Serviços contábeis e jurídicos', 'despesa', 'despesa_administrativa'),
-      ('Material de limpeza e escritório', 'despesa', 'despesa_administrativa'),
-      ('Taxas de cartão e bancárias', 'despesa', 'despesa_financeira'),
-      ('Juros e multas pagos', 'despesa', 'despesa_financeira'),
-      ('Impostos sobre vendas', 'despesa', 'deducoes'),
-      ('Outras despesas', 'despesa', 'outras'),
-      ('Venda de mercadorias e pratos', 'receita', 'receita_bruta'),
-      ('Outras receitas', 'receita', 'outras')
-    ) as v(nome, tipo, grupo)
-    on conflict (loja_id, nome) do nothing returning 1
+    insert into fin_categorias (loja_id, padrao, nome, tipo, grupo_dre)
+    select p_loja, v.padrao, v.nome, v.tipo, v.grupo from (values
+      ('cmv_revenda', 'Compra de mercadoria para revenda', 'despesa', 'cmv'),
+      ('cmv_insumos', 'Matéria-prima e insumos', 'despesa', 'cmv'),
+      ('cmv_embalagens', 'Embalagens', 'despesa', 'cmv'),
+      ('pessoal_folha', 'Folha de pagamento e encargos', 'despesa', 'despesa_pessoal'),
+      ('oper_aluguel', 'Aluguel e condomínio', 'despesa', 'despesa_operacional'),
+      ('oper_energia', 'Energia, água e gás', 'despesa', 'despesa_operacional'),
+      ('oper_manutencao', 'Manutenção e reparos', 'despesa', 'despesa_operacional'),
+      ('oper_marketing', 'Marketing e publicidade', 'despesa', 'despesa_operacional'),
+      ('adm_telefone', 'Telefone e internet', 'despesa', 'despesa_administrativa'),
+      ('adm_servicos', 'Serviços contábeis e jurídicos', 'despesa', 'despesa_administrativa'),
+      ('adm_material', 'Material de limpeza e escritório', 'despesa', 'despesa_administrativa'),
+      ('fin_taxas', 'Taxas de cartão e bancárias', 'despesa', 'despesa_financeira'),
+      ('fin_juros', 'Juros e multas pagos', 'despesa', 'despesa_financeira'),
+      ('ded_impostos', 'Impostos sobre vendas', 'despesa', 'deducoes'),
+      ('outras_despesas', 'Outras despesas', 'despesa', 'outras'),
+      ('rec_vendas', 'Venda de mercadorias e pratos', 'receita', 'receita_bruta'),
+      ('rec_outras', 'Outras receitas', 'receita', 'outras')
+    ) as v(padrao, nome, tipo, grupo)
+    on conflict do nothing returning 1
   ) select count(*) into n from ins;
   return n;
 end $$;
@@ -309,7 +330,7 @@ end $$;
 -- ---------------------------------------------------------------------------------------------------------------- grants
 do $$ declare f text; begin
   foreach f in array array[
-    'fin_registrar_evento(bigint,text,bigint,text,jsonb,text,text)',
+    'fin_registrar_evento(bigint,text,bigint,text,jsonb,text,text)', 'fin_numero(text,numeric)',
     'fin_conta_salvar(bigint,bigint,jsonb,text,text)', 'fin_contas_saldo(bigint)', 'fin_extrato(bigint,bigint,date,date)',
     'fin_categoria_salvar(bigint,bigint,jsonb,text,text)', 'fin_categorias_semear(bigint)',
     'fin_exigir_loja_propria(bigint)', 'fin_hoje()'] loop

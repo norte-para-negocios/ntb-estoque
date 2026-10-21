@@ -21,7 +21,7 @@ export default async function TituloPagarPage({ params }: { params: Promise<{ id
   if (!d) notFound()
   const t = d.titulo
   const [fornecedores, categorias, { contas }] = await Promise.all([listarFornecedores(lojaId), listarCategorias(lojaId), listarContas(lojaId)])
-  const contasAtivas = contas.filter((c) => c.ativa).map((c) => ({ id: c.id, nome: c.nome, saldo: c.saldo_atual }))
+  const contasAtivas = contas.filter((c) => c.ativa).map((c) => ({ id: c.id, nome: c.nome }))
   const aberto = t.status === 'aberto' || t.status === 'parcial'
 
   return (

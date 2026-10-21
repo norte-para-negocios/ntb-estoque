@@ -36,8 +36,17 @@ wait
 NB=$($P -c "select count(*) from fin_pagamentos where titulo_id = $TB")
 LB=$($P -c "select count(*) from fin_lancamentos where loja_id = $LOJA")
 
-if [ "$A2" = "recusou" ] && [ "$NA" = "1" ] && [ "$QA" = "100.00" ] && [ "$DUP" = "true" ] && [ "$NB" = "1" ] && [ "$LB" = "2" ]; then
+# C) inativar a conta ao mesmo tempo que um pagamento: o pagamento espera a conta (FOR SHARE), vê que ela já está inativa e recusa
+CONTA2=$($P -c "select (fin_conta_salvar($LOJA, null, '{\"nome\":\"Conta C\",\"tipo\":\"caixa\"}'::jsonb)->>'id')")
+TC=$(novo)
+( $P -c "begin; select fin_conta_salvar($LOJA, $CONTA2, '{\"nome\":\"Conta C\",\"tipo\":\"caixa\",\"ativa\":false}'::jsonb); select pg_sleep(2); commit;" > /dev/null ) &
+sleep 0.5
+if $P -c "select fin_pagamento_registrar($LOJA, $TC, '{\"conta_id\":$CONTA2}'::jsonb, 'u', 'U', 'cC')" > /dev/null 2>&1; then C1=passou; else C1=recusou; fi
+wait
+NC=$($P -c "select count(*) from fin_pagamentos where titulo_id = $TC")
+
+if [ "$A2" = "recusou" ] && [ "$NA" = "1" ] && [ "$QA" = "100.00" ] && [ "$DUP" = "true" ] && [ "$NB" = "1" ] && [ "$LB" = "2" ] && [ "$C1" = "recusou" ] && [ "$NC" = "0" ]; then
   echo "concorrência (286) OK"
 else
-  echo "FALHOU: A 2ª baixa=$A2 pagamentos=$NA quitado=$QA | B duplicado=$DUP pagamentos=$NB lançamentos=$LB"; exit 1
+  echo "FALHOU: A 2ª baixa=$A2 pagamentos=$NA quitado=$QA | B duplicado=$DUP pagamentos=$NB lançamentos=$LB | C conta inativada: pagamento=$C1 gravados=$NC"; exit 1
 fi

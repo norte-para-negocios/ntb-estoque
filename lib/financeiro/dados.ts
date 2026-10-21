@@ -56,18 +56,25 @@ export type DetalheTitulo = {
 }
 
 const n = (v: unknown) => Number(v ?? 0)
-const semFin = (msg?: string) => /fin_/.test(msg ?? '')
+// Só "função/tabela não existe" (migration não aplicada) vira aviso de "não ativado"; qualquer outro erro é real.
+const FALTA_MIGRATION = new Set(['PGRST202', 'PGRST205', '42883', '42P01'])
+export const semMigration = (e: { code?: string } | null | undefined) => !!e?.code && FALTA_MIGRATION.has(e.code)
 
 export async function listarContas(lojaId: number): Promise<{ contas: ContaCorrente[]; semMigration: boolean }> {
   const { data, error } = await createServiceClient().rpc('fin_contas_saldo', { p_loja: lojaId })
-  if (error) return { contas: [], semMigration: semFin(error.message) }
+  if (error) if (!semMigration(error)) console.error('financeiro: fin_contas_saldo', error.message, error.code)
+  return { contas: [], semMigration: semMigration(error) }
   const contas = ((data ?? []) as ContaCorrente[]).map((c) => ({ ...c, saldo_inicial: n(c.saldo_inicial), saldo_atual: n(c.saldo_atual), lancamentos: n(c.lancamentos) }))
   return { contas, semMigration: false }
 }
 
 export async function listarCategorias(lojaId: number): Promise<Categoria[]> {
-  const { data } = await createServiceClient().from('fin_categorias').select('id, codigo, nome, tipo, grupo_dre, categoria_contabil_id, ativa')
+  const { data, error } = await createServiceClient().from('fin_categorias').select('id, codigo, nome, tipo, grupo_dre, categoria_contabil_id, ativa')
     .eq('loja_id', lojaId).order('tipo', { ascending: false }).order('nome')
+  if (error) {
+    if (semMigration(error)) return [] // a própria página mostra o aviso de "não ativado"
+    throw new Error(`Não foi possível carregar as categorias financeiras: ${error.message}`)
+  }
   return (data ?? []) as Categoria[]
 }
 
@@ -79,8 +86,9 @@ export async function listarCategoriasContabeis(lojaId: number): Promise<{ id: n
 export async function listarFornecedores(lojaId: number): Promise<{ id: number; nome: string }[]> {
   const out: { id: number; nome: string }[] = []
   for (let from = 0; ; from += 1000) {
-    const { data } = await createServiceClient().from('fornecedores').select('id, razao_social, nome_fantasia')
+    const { data, error } = await createServiceClient().from('fornecedores').select('id, razao_social, nome_fantasia')
       .eq('loja_id', lojaId).eq('inativo', false).order('razao_social').order('id').range(from, from + 999)
+    if (error) throw new Error(`Não foi possível carregar os fornecedores: ${error.message}`)
     for (const f of data ?? []) out.push({ id: Number(f.id), nome: String(f.nome_fantasia || f.razao_social) })
     if (!data || data.length < 1000) break
   }
@@ -95,7 +103,7 @@ export async function listarTitulos(lojaId: number, filtros: FiltrosTitulos, hoj
   const { data, error } = await createServiceClient().rpc('fin_titulos_pagar_listar', {
     p_loja: lojaId, p_filtros: filtros, p_limite: limite, p_offset: offset, p_hoje: hoje,
   })
-  if (error) return { itens: [], totais: vazio, erro: semFin(error.message) ? 'O contas a pagar ainda não foi ativado nesta instalação (migrations 285 e 286).' : 'Não foi possível carregar os títulos.' }
+  if (error) return { itens: [], totais: vazio, erro: semMigration(error) ? 'O contas a pagar ainda não foi ativado nesta instalação (migrations 285 e 286).' : 'Não foi possível carregar os títulos.' }
   const r = data as { itens: Titulo[]; totais: TotaisTitulos }
   const itens = (r.itens ?? []).map((t) => ({ ...t, valor: n(t.valor), valor_quitado: n(t.valor_quitado), restante: n(t.restante) }))
   const t = r.totais ?? vazio

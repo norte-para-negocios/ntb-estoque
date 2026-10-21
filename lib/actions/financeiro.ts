@@ -8,7 +8,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { exigirDevAcao } from '@/lib/recursos-dev'
-import { PERM } from '@/lib/financeiro/dados'
+import { PERM, semMigration } from '@/lib/financeiro/dados'
 import { calcularPagamento, paraCentavos } from '@/lib/financeiro/titulo-puro'
 
 // Finanças, etapa 1 (migrations 285/286): contas correntes, categorias, contas a pagar e registro de pagamento.
@@ -29,8 +29,8 @@ async function contexto(permissao: string): Promise<Ctx | Erro> {
 
 const msgErro = (e: { message?: string; code?: string } | null | undefined) => {
   if ((e?.code === '22023' || e?.code === 'PF001') && e.message) return e.message
-  if (/fin_/.test(e?.message ?? '')) return 'O financeiro ainda não foi ativado nesta instalação (migrations 285 e 286).'
-  console.error('financeiro:', e?.message)
+  if (semMigration(e)) return 'O financeiro ainda não foi ativado nesta instalação (migrations 285 e 286).'
+  console.error('financeiro:', e?.code, e?.message)
   return 'Não foi possível concluir agora. Tente de novo; se continuar, avise o suporte.'
 }
 

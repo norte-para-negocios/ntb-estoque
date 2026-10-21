@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
@@ -10,11 +10,11 @@ import { Money } from '@/components/ui-kit/Money'
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { cancelarTituloPagar, estornarPagamentoTitulo, registrarPagamentoTitulo, salvarTituloPagar } from '@/lib/actions/financeiro'
 import { calcularPagamento, paraCentavos } from '@/lib/financeiro/titulo-puro'
-import { campo, chaveNova, rotulo } from './comum'
+import { campo, chaveNova, PreviaMoeda, rotulo } from './comum'
 
 export type OpcaoFornecedor = { id: number; nome: string }
 export type OpcaoCategoria = { id: number; nome: string }
-export type OpcaoConta = { id: number; nome: string; saldo: number }
+export type OpcaoConta = { id: number; nome: string }
 
 export type DadosTitulo = {
   id: number; fornecedor_id: number; documento: string | null; valor: number; valor_quitado: number; data_emissao: string | null
@@ -45,6 +45,14 @@ export function FormTitulo({ titulo, fornecedores, categorias, hoje, children, p
   const [erro, setErro] = useState<string | null>(null)
   const [pend, start] = useTransition()
   const [chave, setChave] = useState(() => chaveNova('cp'))
+  // Chave nova sempre que os dados mudam: a mesma chave só vale para reenviar EXATAMENTE os mesmos dados (o servidor recusa o resto).
+  useEffect(() => { setChave(chaveNova('cp')) }, [forn, doc, valor, emissao, venc, comp, cat, obs])
+
+  function reiniciar() {
+    setForn(titulo ? String(titulo.fornecedor_id) : ''); setDoc(titulo?.documento ?? ''); setValor(titulo ? numTxt(titulo.valor) : '')
+    setEmissao(titulo?.data_emissao ?? ''); setVenc(titulo?.data_vencimento ?? hoje); setComp(titulo ? titulo.data_competencia.slice(0, 7) : '')
+    setCat(titulo?.categoria_id ? String(titulo.categoria_id) : ''); setObs(titulo?.observacao ?? ''); setErro(null)
+  }
 
   function salvar() {
     setErro(null)
@@ -64,7 +72,7 @@ export function FormTitulo({ titulo, fornecedores, categorias, hoje, children, p
   const valido = !!forn && paraCentavos(valor) > 0 && !!venc
 
   return (
-    <Dialog open={aberto} onOpenChange={(o) => { if (!pend) { setAberto(o); setErro(null); if (!o && paginaCheia) router.push('/financeiro/contas-pagar') } }}>
+    <Dialog open={aberto} onOpenChange={(o) => { if (!pend) { if (o) reiniciar(); setAberto(o); setErro(null); if (!o && paginaCheia) router.push('/financeiro/contas-pagar') } }}>
       {!paginaCheia && <DialogTrigger render={<button type="button" className={titulo ? 'text-[13px] font-medium text-brand hover:underline' : btnClass('primary')}>{children}</button>} />}
       <DialogContent>
         <DialogHeader>
@@ -78,7 +86,7 @@ export function FormTitulo({ titulo, fornecedores, categorias, hoje, children, p
               : <Combobox options={fornecedores.map((f) => ({ value: String(f.id), label: f.nome }))} value={forn} onChange={setForn} placeholder="Escolha um fornecedor do cadastro" />}
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <label className={rotulo}><span>Valor (R$)</span><input inputMode="decimal" className={campo} value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" disabled={pago} /></label>
+            <label className={rotulo}><span>Valor (R$)</span><input inputMode="decimal" className={campo} value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" disabled={pago} /><PreviaMoeda texto={valor} /></label>
             <label className={rotulo}><span>Documento</span><input className={campo} value={doc} onChange={(e) => setDoc(e.target.value)} maxLength={60} placeholder="Nº da nota ou boleto" /></label>
             <label className={rotulo}><span>Vencimento</span><input type="date" className={campo} value={venc} onChange={(e) => setVenc(e.target.value)} disabled={pago} /></label>
             <label className={rotulo}><span>Competência</span><input type="month" className={campo} value={comp} onChange={(e) => setComp(e.target.value)} /></label>
@@ -117,6 +125,13 @@ export function BotaoPagar({ tituloId, rotuloTitulo, restante, contas, hoje, chi
   const [erro, setErro] = useState<string | null>(null)
   const [pend, start] = useTransition()
   const [chave, setChave] = useState(() => chaveNova('pg'))
+  useEffect(() => { setChave(chaveNova('pg')) }, [conta, data, principal, juros, desconto, forma, obs])
+
+  // Reabrir sempre começa limpo e com o saldo que falta AGORA (o título pode ter mudado desde a última vez).
+  function reiniciar() {
+    setConta(contas[0] ? String(contas[0].id) : ''); setData(hoje); setPrincipal(numTxt(restante)); setJuros(''); setDesconto('')
+    setForma(''); setObs(''); setErro(null)
+  }
 
   const restanteCent = Math.round(restante * 100)
   const conf = calcularPagamento({
@@ -136,7 +151,7 @@ export function BotaoPagar({ tituloId, rotuloTitulo, restante, contas, hoje, chi
   }
 
   return (
-    <Dialog open={aberto} onOpenChange={(o) => { if (!pend) { setAberto(o); setErro(null) } }}>
+    <Dialog open={aberto} onOpenChange={(o) => { if (!pend) { if (o) reiniciar(); setAberto(o); setErro(null) } }}>
       <DialogTrigger render={<button type="button" className="text-[13px] font-medium text-brand hover:underline">{children}</button>} />
       <DialogContent>
         <DialogHeader>
@@ -155,10 +170,10 @@ export function BotaoPagar({ tituloId, rotuloTitulo, restante, contas, hoje, chi
             <label className={rotulo}><span>Forma</span>
               <select className={campo} value={forma} onChange={(e) => setForma(e.target.value)}>{FORMAS.map((f) => <option key={f} value={f}>{f || '—'}</option>)}</select>
             </label>
-            <label className={rotulo}><span>Valor quitado do título (R$)</span><input inputMode="decimal" className={campo} value={principal} onChange={(e) => setPrincipal(e.target.value)} /></label>
+            <label className={rotulo}><span>Valor quitado do título (R$)</span><input inputMode="decimal" className={campo} value={principal} onChange={(e) => setPrincipal(e.target.value)} /><PreviaMoeda texto={principal} /></label>
             <span />
-            <label className={rotulo}><span>Juros / multa (R$)</span><input inputMode="decimal" className={campo} value={juros} onChange={(e) => setJuros(e.target.value)} placeholder="0,00" /></label>
-            <label className={rotulo}><span>Desconto (R$)</span><input inputMode="decimal" className={campo} value={desconto} onChange={(e) => setDesconto(e.target.value)} placeholder="0,00" /></label>
+            <label className={rotulo}><span>Juros / multa (R$)</span><input inputMode="decimal" className={campo} value={juros} onChange={(e) => setJuros(e.target.value)} placeholder="0,00" /><PreviaMoeda texto={juros} /></label>
+            <label className={rotulo}><span>Desconto (R$)</span><input inputMode="decimal" className={campo} value={desconto} onChange={(e) => setDesconto(e.target.value)} placeholder="0,00" /><PreviaMoeda texto={desconto} /></label>
           </div>
           <label className={rotulo}><span>Observação</span><input className={campo} value={obs} onChange={(e) => setObs(e.target.value)} maxLength={300} /></label>
           {conf.ok

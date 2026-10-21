@@ -14,17 +14,33 @@ export const ROTULO_SITUACAO: Record<SituacaoTitulo, string> = {
   cancelado: 'Cancelado',
 }
 
-/** "1.234,56" / "1234.56" / "12,5" → centavos. NaN se não for número. */
+/**
+ * Texto de dinheiro → centavos. NaN se não for um valor claro (nunca adivinha).
+ * Vírgula = decimal ("12,5", "1.234,56"); ponto sozinho só é decimal com 1–2 casas ("10.5", "10.50"),
+ * senão é milhar ("1.500" = 1500, "R$ 2.000" = 2000). Recusa "1,500.00", "1e3", letras e valores de 1 trilhão para cima.
+ */
 export function paraCentavos(v: number | string | null | undefined): number {
   if (v == null || v === '') return NaN
   let n: number
   if (typeof v === 'number') n = v
   else {
-    const t = v.trim().replace(/[^\d.,-]/g, '')
-    if (!t) return NaN
-    n = Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t)
+    const t = v.trim().replace(/^R\$\s*/i, '').replace(/\s+/g, '')
+    let norm: string | null = null
+    if (/^-?\d{1,3}(\.\d{3})*,\d{1,2}$/.test(t) || /^-?\d+,\d{1,2}$/.test(t)) norm = t.replace(/\./g, '').replace(',', '.')
+    else if (/^-?\d+\.\d{1,2}$/.test(t)) norm = t
+    else if (/^-?\d{1,3}(\.\d{3})+$/.test(t) || /^-?\d+$/.test(t)) norm = t.replace(/\./g, '')
+    if (norm === null) return NaN
+    n = Number(norm)
   }
-  return Number.isFinite(n) ? Math.round(Number((n * 100).toPrecision(15))) : NaN
+  if (!Number.isFinite(n) || Math.abs(n) >= 1e12) return NaN
+  return Math.round(Number((n * 100).toPrecision(15)))
+}
+
+/** Prévia "R$ 1.500,00" do que o texto digitado vai valer; null se o texto não for um valor claro (ou estiver vazio). */
+export function previaMoeda(texto: string): string | null {
+  if (!texto.trim()) return null
+  const c = paraCentavos(texto)
+  return Number.isNaN(c) ? null : (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
 export const deCentavos = (c: number): number => c / 100

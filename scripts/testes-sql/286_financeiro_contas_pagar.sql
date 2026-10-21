@@ -5,12 +5,30 @@ begin;
 do $$
 declare
   v_loja bigint; v_omie bigint; v_forn bigint; v_inativo bigint; v_conta bigint; v_conta2 bigint; v_cat bigint;
-  r jsonb; t bigint; p1 bigint; p2 bigint; s jsonb; x record; v_hoje date := fin_hoje();
+  r jsonb; t bigint; p1 bigint; p2 bigint; s jsonb; x record; v_hoje date := fin_hoje(); v_loja2 bigint; v_forn2 bigint; v_forn_o bigint;
+  v_conta_o bigint; v_cat_o bigint; v_t_o bigint; e text;
 begin
   insert into lojas (nome, cnpj, modo_estoque) values ('TESTE FIN', '00000000000901', 'proprio') returning id into v_loja;
   insert into lojas (nome, cnpj, modo_estoque) values ('TESTE FIN OMIE', '00000000000902', 'omie') returning id into v_omie;
   insert into fornecedores (loja_id, razao_social) values (v_loja, 'ATACADO LTDA') returning id into v_forn;
   insert into fornecedores (loja_id, razao_social, inativo) values (v_loja, 'FECHADO LTDA', true) returning id into v_inativo;
+
+  insert into lojas (nome, cnpj, modo_estoque) values ('TESTE FIN 2', '00000000000903', 'proprio') returning id into v_loja2;
+  insert into fornecedores (loja_id, razao_social) values (v_loja2, 'OUTRA LOJA') returning id into v_forn2;
+  insert into fornecedores (loja_id, razao_social) values (v_omie, 'FORN DA OMIE') returning id into v_forn_o;
+  insert into fin_contas_correntes (loja_id, nome, saldo_inicial) values (v_omie, 'Conta da Omie', 0) returning id into v_conta_o;
+  insert into fin_categorias (loja_id, nome, tipo) values (v_omie, 'Cat da Omie', 'despesa') returning id into v_cat_o;
+  insert into fin_titulos_pagar (loja_id, numero, fornecedor_id, fornecedor_nome, valor, data_vencimento, data_competencia, assinatura)
+    values (v_omie, 1, v_forn_o, 'FORN DA OMIE', 100, v_hoje, date_trunc('month', v_hoje)::date, 'x') returning id into v_t_o;
+  -- mesmo com objetos da PRÓPRIA loja Omie, o financeiro recusa por ser loja Omie (e não por "não encontrado")
+  begin perform fin_titulo_pagar_salvar(v_omie, null, jsonb_build_object('fornecedor_id', v_forn_o, 'valor', 10, 'data_vencimento', v_hoje, 'categoria_id', v_cat_o));
+    raise exception 'título em loja omie';
+  exception when sqlstate '22023' then get stacked diagnostics e = message_text; if e not like '%estoque próprio%' then raise exception 'motivo errado: %', e; end if; end;
+  begin perform fin_pagamento_registrar(v_omie, v_t_o, jsonb_build_object('conta_id', v_conta_o), 'u', 'U', 'k-omie');
+    raise exception 'pagamento em loja omie';
+  exception when sqlstate '22023' then get stacked diagnostics e = message_text; if e not like '%estoque próprio%' then raise exception 'motivo errado: %', e; end if; end;
+  begin perform fin_categoria_salvar(v_omie, null, '{"nome":"X2"}'::jsonb); raise exception 'categoria em loja omie';
+  exception when sqlstate '22023' then null; end;
 
   -- loja Omie: nada de financeiro
   begin perform fin_conta_salvar(v_omie, null, '{"nome":"Caixa"}'::jsonb); raise exception 'loja omie criou conta';
@@ -19,7 +37,11 @@ begin
   -- categorias padrão (semear é idempotente)
   if fin_categorias_semear(v_loja) <> 17 then raise exception 'semear 1ª vez'; end if;
   if fin_categorias_semear(v_loja) <> 0 then raise exception 'semear 2ª vez deveria ser 0'; end if;
-  select id into v_cat from fin_categorias where loja_id = v_loja and nome = 'Aluguel e condomínio';
+  -- renomear uma categoria padrão e reaplicar a semente não recria a original
+  update fin_categorias set nome = 'Aluguel (renomeada)' where loja_id = v_loja and padrao = 'oper_aluguel';
+  if fin_categorias_semear(v_loja) <> 0 then raise exception 'semente recriou categoria renomeada'; end if;
+  if exists (select 1 from fin_categorias where loja_id = v_loja and nome = 'Aluguel e condomínio') then raise exception 'recriou pelo nome'; end if;
+  select id into v_cat from fin_categorias where loja_id = v_loja and padrao = 'oper_aluguel';
   r := fin_categoria_salvar(v_loja, null, '{"nome":"Gás de cozinha","tipo":"despesa","grupo_dre":"despesa_operacional"}'::jsonb);
   begin perform fin_categoria_salvar(v_loja, null, '{"nome":"gás de cozinha"}'::jsonb); raise exception 'nome duplicado aceito';
   exception when sqlstate '22023' then null; end;
@@ -34,8 +56,21 @@ begin
   if (select saldo_inicial from fin_contas_correntes where id = v_conta2) <> 5000.56 then raise exception 'arredondamento do saldo inicial'; end if;
   begin perform fin_conta_salvar(v_loja, null, '{"nome":"caixa da loja"}'::jsonb); raise exception 'conta duplicada';
   exception when sqlstate '22023' then null; end;
+  begin perform fin_conta_salvar(v_loja, null, jsonb_build_object('nome', 'Futura', 'data_saldo_inicial', v_hoje + 1)); raise exception 'data futura aceita';
+  exception when sqlstate '22023' then null; end;
+  begin perform fin_conta_salvar(v_loja, null, '{"nome":"Nan","saldo_inicial":"NaN"}'::jsonb); raise exception 'NaN aceito no saldo';
+  exception when sqlstate '22023' then null; end;
+  begin perform fin_conta_salvar(v_loja, null, '{"nome":"Lixo","saldo_inicial":"1e3x"}'::jsonb); raise exception 'lixo aceito no saldo';
+  exception when sqlstate '22023' then null; end;
 
   -- título: validações
+  begin perform fin_titulo_pagar_salvar(v_loja, null, jsonb_build_object('fornecedor_id', v_forn2, 'valor', 10, 'data_vencimento', v_hoje)); raise exception 'fornecedor de outra loja aceito';
+  exception when sqlstate '22023' then get stacked diagnostics e = message_text; if e not like '%fornecedor do cadastro%' then raise exception 'motivo errado: %', e; end if; end;
+  begin perform fin_titulo_pagar_salvar(v_loja, null, jsonb_build_object('fornecedor_id', v_forn, 'valor', 'NaN', 'data_vencimento', v_hoje)); raise exception 'NaN no valor';
+  exception when sqlstate '22023' then null; end;
+  begin insert into fin_titulos_pagar (loja_id, numero, fornecedor_id, fornecedor_nome, valor, data_vencimento, data_competencia, assinatura)
+      values (v_loja, 99, v_forn, 'x', 'NaN', v_hoje, date_trunc('month', v_hoje)::date, 'x'); raise exception 'check de NaN não barrou';
+  exception when check_violation then null; end;
   begin perform fin_titulo_pagar_salvar(v_loja, null, jsonb_build_object('fornecedor_id', v_forn, 'valor', 0, 'data_vencimento', v_hoje)); raise exception 'valor 0';
   exception when sqlstate '22023' then null; end;
   begin perform fin_titulo_pagar_salvar(v_loja, null, jsonb_build_object('fornecedor_id', v_inativo, 'valor', 10, 'data_vencimento', v_hoje)); raise exception 'fornecedor inativo';
@@ -48,8 +83,13 @@ begin
         'documento', 'NF 10', 'data_competencia', to_char(v_hoje, 'YYYY-MM')), 'u1', 'Ana', 'k-t1');
   t := (r->>'id')::bigint;
   if (r->>'numero')::int <> 1 then raise exception 'numero %', r; end if;
-  r := fin_titulo_pagar_salvar(v_loja, null, jsonb_build_object('fornecedor_id', v_forn, 'valor', 999, 'data_vencimento', v_hoje), 'u1', 'Ana', 'k-t1');
+  r := fin_titulo_pagar_salvar(v_loja, null, jsonb_build_object('fornecedor_id', v_forn, 'valor', 300, 'data_vencimento', v_hoje + 5, 'categoria_id', v_cat,
+        'documento', 'NF 10', 'data_competencia', to_char(v_hoje, 'YYYY-MM')), 'u1', 'Ana', 'k-t1');
   if (r->>'duplicado')::boolean is not true or (r->>'id')::bigint <> t then raise exception 'idempotência do título %', r; end if;
+  -- mesma chave com dados diferentes: recusa (não devolve o sucesso antigo)
+  begin perform fin_titulo_pagar_salvar(v_loja, null, jsonb_build_object('fornecedor_id', v_forn, 'valor', 999, 'data_vencimento', v_hoje), 'u1', 'Ana', 'k-t1');
+    raise exception 'chave reutilizada com outros dados no título';
+  exception when sqlstate '22023' then get stacked diagnostics e = message_text; if e not like '%outros dados%' then raise exception 'motivo errado: %', e; end if; end;
   if (select data_competencia from fin_titulos_pagar where id = t) <> date_trunc('month', v_hoje)::date then raise exception 'competência'; end if;
 
   -- situação derivada
@@ -83,15 +123,30 @@ begin
   select * into x from fin_lancamentos where origem_tipo = 'pagamento' and origem_id = p1;
   if x.valor <> 103 or x.tipo <> 'saida' or x.conta_id <> v_conta then raise exception 'lançamento da baixa %', x; end if;
   -- idempotência do pagamento: mesma chave não baixa de novo
-  r := fin_pagamento_registrar(v_loja, t, jsonb_build_object('conta_id', v_conta, 'valor_principal', 100), 'u1', 'Ana', 'k-p1');
+  r := fin_pagamento_registrar(v_loja, t, jsonb_build_object('conta_id', v_conta, 'valor_principal', 100, 'juros', 5, 'desconto', 2, 'forma', 'pix'), 'u1', 'Ana', 'k-p1');
   if (r->>'duplicado')::boolean is not true or (r->>'id')::bigint <> p1 then raise exception 'idempotência do pagamento %', r; end if;
+  begin perform fin_pagamento_registrar(v_loja, t, jsonb_build_object('conta_id', v_conta, 'valor_principal', 100), 'u1', 'Ana', 'k-p1');
+    raise exception 'chave reutilizada com outros dados no pagamento';
+  exception when sqlstate '22023' then get stacked diagnostics e = message_text; if e not like '%outros dados%' then raise exception 'motivo errado: %', e; end if; end;
+  begin perform fin_pagamento_registrar(v_loja, t, jsonb_build_object('conta_id', v_conta, 'valor_principal', 'NaN'), 'u1', 'Ana', 'k-nan');
+    raise exception 'NaN no principal';
+  exception when sqlstate '22023' then null; end;
+  begin perform fin_pagamento_registrar(v_loja, t, jsonb_build_object('conta_id', v_conta, 'valor_principal', 10, 'juros', 'NaN'), 'u1', 'Ana', 'k-nan2');
+    raise exception 'NaN nos juros';
+  exception when sqlstate '22023' then null; end;
   if (select count(*) from fin_lancamentos) <> 1 then raise exception 'idempotência duplicou lançamento'; end if;
   if (select valor_quitado from fin_titulos_pagar where id = t) <> 100 then raise exception 'idempotência mexeu no título'; end if;
+  begin perform fin_conta_salvar(v_loja, v_conta, jsonb_build_object('nome', 'Caixa da loja', 'saldo_inicial', 1, 'data_saldo_inicial', v_hoje - 30));
+    raise exception 'mudou saldo inicial com lançamentos';
+  exception when sqlstate '22023' then null; end;
+  perform fin_conta_salvar(v_loja, v_conta, jsonb_build_object('nome', 'Caixa da loja', 'tipo', 'caixa', 'saldo_inicial', 1000, 'data_saldo_inicial', v_hoje - 30, 'observacao', 'ok')); -- sem mudar os números: pode
   -- mesma chave em outro título
   r := fin_titulo_pagar_salvar(v_loja, null, jsonb_build_object('fornecedor_id', v_forn, 'valor', 50, 'data_vencimento', v_hoje - 3), 'u1', 'Ana', 'k-t2');
   begin perform fin_pagamento_registrar(v_loja, (r->>'id')::bigint, jsonb_build_object('conta_id', v_conta), 'u1', 'Ana', 'k-p1'); raise exception 'chave de outro título';
   exception when sqlstate '22023' then null; end;
 
+  begin perform fin_categoria_salvar(v_loja, v_cat, '{"nome":"Aluguel (renomeada)","tipo":"receita","grupo_dre":"outras"}'::jsonb); raise exception 'mudou tipo com título usando';
+  exception when sqlstate '22023' then null; end;
   -- editar com pagamento: valor não pode ficar abaixo do quitado; fornecedor travado
   begin perform fin_titulo_pagar_salvar(v_loja, t, jsonb_build_object('fornecedor_id', v_forn, 'valor', 99, 'data_vencimento', v_hoje + 5)); raise exception 'valor < quitado';
   exception when sqlstate '22023' then null; end;
@@ -175,6 +230,29 @@ begin
   if (r->'itens'->1->>'saldo_apos')::numeric <> 1000 or (r->'itens'->0->>'saldo_apos')::numeric <> 897 then raise exception 'saldo corrido %', r; end if;
   r := fin_extrato(v_loja, v_conta, v_hoje, v_hoje);
   if (r->>'saldo_anterior')::numeric <> 1000 then raise exception 'saldo anterior %', r; end if;
+
+  -- parcial atrasada continua "paga em parte"; % e _ na busca são texto
+  r := fin_titulo_pagar_salvar(v_loja, null, jsonb_build_object('fornecedor_id', v_forn, 'valor', 40, 'data_vencimento', v_hoje - 5, 'documento', '100%_ok'));
+  perform fin_pagamento_registrar(v_loja, (r->>'id')::bigint, jsonb_build_object('conta_id', v_conta, 'valor_principal', 10), 'u', 'U', 'k-par');
+  if (fin_titulos_pagar_listar(v_loja, '{"situacao":"parcial"}'::jsonb)->'totais'->>'quantidade')::int <> 1 then raise exception 'parcial atrasada sumiu do filtro'; end if;
+  if (fin_titulos_pagar_listar(v_loja, '{"situacao":"atrasado"}'::jsonb)->'totais'->>'quantidade')::int <> 2 then raise exception 'atrasado deve incluir a parcial atrasada'; end if;
+  if (fin_titulos_pagar_listar(v_loja, '{"q":"%"}'::jsonb)->'totais'->>'quantidade')::int <> 1 then raise exception '%% virou curinga'; end if;
+  if (fin_titulos_pagar_listar(v_loja, '{"q":"0%_o"}'::jsonb)->'totais'->>'quantidade')::int <> 1 then raise exception 'busca com %% e _ literais'; end if;
+  if (fin_titulos_pagar_listar(v_loja, '{"q":"_"}'::jsonb)->'totais'->>'quantidade')::int <> 1 then raise exception '_ virou curinga'; end if;
+  -- desfaz o título de apoio para manter as contas dos totais abaixo
+  perform fin_pagamento_estornar(v_loja, (select id from fin_pagamentos where chave_idempotencia = 'k-par'), 'apoio');
+  perform fin_titulo_pagar_cancelar(v_loja, (r->>'id')::bigint, 'apoio do teste');
+
+  -- extrato: o saldo anterior conta só o que é de ANTES do dia inicial (< e não <=)
+  r := fin_conta_salvar(v_loja, null, jsonb_build_object('nome', 'Conta extrato', 'saldo_inicial', 1000, 'data_saldo_inicial', v_hoje - 10));
+  s := fin_titulo_pagar_salvar(v_loja, null, jsonb_build_object('fornecedor_id', v_forn, 'valor', 500, 'data_vencimento', v_hoje));
+  perform fin_pagamento_registrar(v_loja, (s->>'id')::bigint, jsonb_build_object('conta_id', (r->>'id')::bigint, 'valor_principal', 100, 'data_pagamento', v_hoje - 5), 'u', 'U', 'k-x1');
+  perform fin_pagamento_registrar(v_loja, (s->>'id')::bigint, jsonb_build_object('conta_id', (r->>'id')::bigint, 'valor_principal', 50, 'data_pagamento', v_hoje - 2), 'u', 'U', 'k-x2');
+  perform fin_pagamento_registrar(v_loja, (s->>'id')::bigint, jsonb_build_object('conta_id', (r->>'id')::bigint, 'valor_principal', 20, 'data_pagamento', v_hoje), 'u', 'U', 'k-x3');
+  s := fin_extrato(v_loja, (r->>'id')::bigint, v_hoje - 2, v_hoje - 2);
+  if (s->>'saldo_anterior')::numeric <> 900 or jsonb_array_length(s->'itens') <> 1 or (s->>'saldo_final')::numeric <> 850 then raise exception 'extrato com dias anteriores %', s; end if;
+  s := fin_extrato(v_loja, (r->>'id')::bigint, v_hoje - 1);
+  if (s->>'saldo_anterior')::numeric <> 850 or jsonb_array_length(s->'itens') <> 1 or (s->>'saldo_final')::numeric <> 830 then raise exception 'extrato a partir de ontem %', s; end if;
 
   -- detalhe
   r := fin_titulo_pagar_detalhe(v_loja, t);

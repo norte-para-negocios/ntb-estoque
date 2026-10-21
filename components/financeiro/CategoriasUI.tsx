@@ -24,6 +24,11 @@ export function FormCategoria({ categoria, contabeis, children }: { categoria?: 
   const [erro, setErro] = useState<string | null>(null)
   const [pend, start] = useTransition()
 
+  function reiniciar() {
+    setNome(categoria?.nome ?? ''); setCodigo(categoria?.codigo ?? ''); setTipo(categoria?.tipo ?? 'despesa'); setGrupo(categoria?.grupo_dre ?? 'despesa_operacional')
+    setContabil(categoria?.categoria_contabil_id ? String(categoria.categoria_contabil_id) : ''); setAtiva(categoria?.ativa ?? true); setErro(null)
+  }
+
   function salvar() {
     setErro(null)
     start(async () => {
@@ -36,7 +41,7 @@ export function FormCategoria({ categoria, contabeis, children }: { categoria?: 
   }
 
   return (
-    <Dialog open={aberto} onOpenChange={(o) => { if (!pend) { setAberto(o); setErro(null) } }}>
+    <Dialog open={aberto} onOpenChange={(o) => { if (!pend) { if (o) reiniciar(); setAberto(o); setErro(null) } }}>
       <DialogTrigger render={<button type="button" className={categoria ? 'text-[13px] font-medium text-brand hover:underline' : btnClass('primary')}>{children}</button>} />
       <DialogContent>
         <DialogHeader><DialogTitle>{categoria ? 'Editar categoria' : 'Nova categoria financeira'}</DialogTitle></DialogHeader>

@@ -54,6 +54,23 @@ RLS: habilitada com a política por loja do padrão (`usuario_e_admin() or loja_
 `Financeiro - Contas a pagar` (ver/lançar/editar/cancelar), `Financeiro - Contas a pagar - Pagar` (registrar/estornar), `Financeiro - Contas correntes`
 (contas e extrato), `Financeiro - Categorias`. Admin/AdminLoja seguem as regras atuais de `requirePermissao`.
 
+## Endurecimentos da revisão independente (mesmas migrations 285/286, ainda não aplicadas em lugar nenhum)
+
+- **Idempotência com assinatura**: título e pagamento guardam `assinatura` (md5 dos dados normalizados). Mesma chave + mesmos dados = `duplicado`;
+  mesma chave + dados diferentes = erro 22023 "Essa chave já foi usada com outros dados". A UI gera chave nova a cada mudança nos campos.
+- **Conta travada na baixa**: `fin_pagamento_registrar` faz `select … for share` na conta depois de travar o título (inativar a conta ou mexer no saldo
+  inicial ao mesmo tempo não deixa passar pagamento com a regra antiga; `fin_conta_salvar` não trava título, sem deadlock). Coberto em `286_concorrencia.sh` (caso C).
+- **NaN/lixo**: `fin_numero()` recusa texto não numérico, NaN e valores ≥ 1 trilhão em título, saldo inicial, principal, juros e desconto; CHECK `<> 'NaN'`
+  em todas as colunas de dinheiro.
+- **Conta**: data de saldo inicial não pode ser futura; com lançamentos, saldo inicial e data não mudam mais.
+- **Categorias**: semente por chave estável `padrao` (renomear/inativar não recria); tipo despesa↔receita não muda se há título ou lançamento usando.
+- **Listagem**: `%` e `_` da busca são literais; "Pagas em parte" inclui parciais atrasadas (que também aparecem em "Atrasadas").
+- **Dinheiro digitado** (`paraCentavos`): vírgula = decimal; ponto só é decimal com 1–2 casas, senão é milhar ("1.500" = R$ 1.500); recusa "1e3", "1,500.00", letras.
+  Os formulários mostram a prévia "= R$ 1.500,00".
+- **Erros**: só PGRST202/PGRST205/42883/42P01 viram "financeiro ainda não ativado"; o resto vai ao log com a mensagem real. `listarCategorias`/`listarFornecedores` checam erro.
+- **Navegador**: quem só tem "Pagar" não recebe saldos das contas; diálogos reabrem limpos (e o de pagamento com o saldo atual).
+- **Reverter** (`285_286_reverter.sql`): recusa se houver qualquer dado/evento/categoria alterada à mão; funciona se só a 285 (ou nenhuma) foi aplicada.
+
 ## Telas (`app/(app)/financeiro/`)
 
 `contas-pagar` (lista, filtros vencimento/fornecedor/categoria/situação/busca, 4 totais do filtro, novo, pagar), `contas-pagar/[id]` (ficha, pagamentos
@@ -65,7 +82,7 @@ Resumo, Importar planilha, Contas a receber, lançamento/transferência/OFX e re
 
 - `node --test lib/financeiro/titulo-puro.test.ts` (situação, atrasado por data Bahia, arredondamento, parcial, estorno, juros/desconto).
 - SQL (cópia local): `scripts/testes-sql/286_financeiro_contas_pagar.sql` (roda em transação e faz rollback) e `286_concorrencia.sh <banco>`.
-  Banco usado: `fin1` = `create database fin1 template c1` no container `ntb-teste-sql` + 285 + 286.
+  Banco usado: `fin1` = `create database fin1 template c1` no container `ntb-teste-sql` + 285 + 286 (recriar do zero para reaplicar). O teste cobre também loja Omie com objetos próprios, fornecedor de outra loja, NaN, extrato com dias anteriores e chave reutilizada.
 - Reversão: `scripts/testes-sql/285_286_reverter.sql` (recusa se houver qualquer dado lançado).
 
 ## Runbook de aplicação (manual, com OK do dono; NADA disto foi feito)

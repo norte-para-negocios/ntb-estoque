@@ -10,7 +10,7 @@ import { Money } from '@/components/ui-kit/Money'
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { salvarContaCorrente } from '@/lib/actions/financeiro'
 import type { ContaCorrente } from '@/lib/financeiro/dados'
-import { campo, dataBR, rotulo } from './comum'
+import { campo, dataBR, PreviaMoeda, rotulo } from './comum'
 
 const TIPOS = { caixa: 'Caixa', banco: 'Banco', outro: 'Outra' } as const
 
@@ -29,6 +29,14 @@ export function FormConta({ conta, hoje, children }: { conta?: ContaCorrente; ho
   const [erro, setErro] = useState<string | null>(null)
   const [pend, start] = useTransition()
 
+  function reiniciar() {
+    setNome(conta?.nome ?? ''); setTipo(conta?.tipo ?? 'banco'); setBanco(conta?.banco ?? ''); setAgencia(conta?.agencia ?? ''); setNumero(conta?.numero_conta ?? '')
+    setSaldo(conta ? String(conta.saldo_inicial).replace('.', ',') : ''); setData(conta?.data_saldo_inicial ?? hoje); setAtiva(conta?.ativa ?? true)
+    setObs(conta?.observacao ?? ''); setErro(null)
+  }
+  // Com lançamentos, o saldo inicial e a data não mudam mais (o servidor também recusa).
+  const travado = (conta?.lancamentos ?? 0) > 0
+
   function salvar() {
     setErro(null)
     start(async () => {
@@ -41,7 +49,7 @@ export function FormConta({ conta, hoje, children }: { conta?: ContaCorrente; ho
   }
 
   return (
-    <Dialog open={aberto} onOpenChange={(o) => { if (!pend) { setAberto(o); setErro(null) } }}>
+    <Dialog open={aberto} onOpenChange={(o) => { if (!pend) { if (o) reiniciar(); setAberto(o); setErro(null) } }}>
       <DialogTrigger render={<button type="button" className={conta ? 'text-[13px] font-medium text-brand hover:underline' : btnClass('primary')}>{children}</button>} />
       <DialogContent>
         <DialogHeader><DialogTitle>{conta ? 'Editar conta corrente' : 'Nova conta corrente'}</DialogTitle></DialogHeader>
@@ -56,8 +64,8 @@ export function FormConta({ conta, hoje, children }: { conta?: ContaCorrente; ho
             <label className={rotulo}><span>Banco</span><input className={campo} value={banco} onChange={(e) => setBanco(e.target.value)} maxLength={80} disabled={tipo === 'caixa'} /></label>
             <label className={rotulo}><span>Agência</span><input className={campo} value={agencia} onChange={(e) => setAgencia(e.target.value)} maxLength={20} disabled={tipo === 'caixa'} /></label>
             <label className={rotulo}><span>Conta</span><input className={campo} value={numero} onChange={(e) => setNumero(e.target.value)} maxLength={30} disabled={tipo === 'caixa'} /></label>
-            <label className={rotulo}><span>Saldo inicial (R$)</span><input inputMode="decimal" className={campo} value={saldo} onChange={(e) => setSaldo(e.target.value)} placeholder="0,00" /></label>
-            <label className={rotulo}><span>Saldo válido desde</span><input type="date" className={campo} value={data} onChange={(e) => setData(e.target.value)} /></label>
+            <label className={rotulo}><span>Saldo inicial (R$)</span><input inputMode="decimal" className={campo} value={saldo} onChange={(e) => setSaldo(e.target.value)} placeholder="0,00" disabled={travado} /><PreviaMoeda texto={saldo} /></label>
+            <label className={rotulo}><span>Saldo válido desde</span><input type="date" className={campo} value={data} max={hoje} onChange={(e) => setData(e.target.value)} disabled={travado} /></label>
           </div>
           <label className={rotulo}><span>Observação</span><input className={campo} value={obs} onChange={(e) => setObs(e.target.value)} maxLength={300} /></label>
           {conta && (

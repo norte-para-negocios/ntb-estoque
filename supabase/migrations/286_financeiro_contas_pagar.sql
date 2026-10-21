@@ -28,8 +28,8 @@ create table if not exists public.fin_titulos_pagar (
   documento           text,
   parcela             int not null default 1 check (parcela >= 1),
   total_parcelas      int not null default 1 check (total_parcelas >= 1),
-  valor               numeric(14,2) not null check (valor > 0),
-  valor_quitado       numeric(14,2) not null default 0 check (valor_quitado >= 0),
+  valor               numeric(14,2) not null check (valor > 0 and valor <> 'NaN'),
+  valor_quitado       numeric(14,2) not null default 0 check (valor_quitado >= 0 and valor_quitado <> 'NaN'),
   data_emissao        date,
   data_vencimento     date not null,
   data_competencia    date not null check (extract(day from data_competencia) = 1),
@@ -40,6 +40,8 @@ create table if not exists public.fin_titulos_pagar (
   origem_tipo         text not null default 'manual' check (origem_tipo in ('manual', 'nota_entrada', 'pedido_compra', 'importacao')),
   origem_id           bigint,
   chave_idempotencia  text,
+  -- Resumo dos dados da inclusão: a mesma chave com dados diferentes é recusada.
+  assinatura          text,
   cancelado_em        timestamptz,
   cancelado_por       text,
   cancelado_por_nome  text,
@@ -74,14 +76,15 @@ create table if not exists public.fin_pagamentos (
   titulo_id             bigint not null,
   conta_id              bigint not null,
   data_pagamento        date not null,
-  valor_principal       numeric(14,2) not null check (valor_principal > 0),
-  juros                 numeric(14,2) not null default 0 check (juros >= 0),
-  desconto              numeric(14,2) not null default 0 check (desconto >= 0 and desconto <= valor_principal),
-  valor_pago            numeric(14,2) not null check (valor_pago > 0),
+  valor_principal       numeric(14,2) not null check (valor_principal > 0 and valor_principal <> 'NaN'),
+  juros                 numeric(14,2) not null default 0 check (juros >= 0 and juros <> 'NaN'),
+  desconto              numeric(14,2) not null default 0 check (desconto >= 0 and desconto <= valor_principal and desconto <> 'NaN'),
+  valor_pago            numeric(14,2) not null check (valor_pago > 0 and valor_pago <> 'NaN'),
   forma                 text,
   observacao            text,
   lancamento_id         bigint not null references public.fin_lancamentos(id),
   chave_idempotencia    text not null,
+  assinatura            text not null,
   criado_por            text,
   criado_por_nome       text,
   created_at            timestamptz not null default now(),
@@ -106,10 +109,10 @@ begin
   end if;
   if old.estornado_em is not null
      or (new.id, new.loja_id, new.titulo_id, new.conta_id, new.data_pagamento, new.valor_principal, new.juros, new.desconto,
-         new.valor_pago, new.lancamento_id, new.chave_idempotencia)
+         new.valor_pago, new.lancamento_id, new.chave_idempotencia, new.assinatura)
         is distinct from
         (old.id, old.loja_id, old.titulo_id, old.conta_id, old.data_pagamento, old.valor_principal, old.juros, old.desconto,
-         old.valor_pago, old.lancamento_id, old.chave_idempotencia) then
+         old.valor_pago, old.lancamento_id, old.chave_idempotencia, old.assinatura) then
     raise exception 'fin_pagamentos é imutável (só o estorno altera)' using errcode = '55000';
   end if;
   return new;
@@ -130,7 +133,7 @@ end $$;
 
 -- ----------------------------------------------------------------------------------------------------------- situação
 create or replace function public.fin_situacao_titulo(p_status text, p_vencimento date, p_hoje date default null) returns text
-language sql immutable as $$
+language sql stable as $$
   select case
     when p_status = 'cancelado' then 'cancelado'
     when p_status = 'pago' then 'pago'
@@ -154,11 +157,11 @@ language plpgsql security definer set search_path = public as $$
 declare
   t fin_titulos_pagar%rowtype; f fornecedores%rowtype; v_valor numeric; v_venc date; v_comp date; v_emissao date; v_cat bigint;
   v_forn bigint; v_chave text := nullif(btrim(coalesce(p_chave, '')), ''); v_numero int; v_status text; v_antes jsonb;
-  v_origem text; v_origem_id bigint; v_parcela int; v_total int; v_comp_txt text;
+  v_origem text; v_origem_id bigint; v_parcela int; v_total int; v_comp_txt text; v_assin text;
 begin
   perform fin_exigir_loja_propria(p_loja);
 
-  v_valor := round(coalesce(nullif(p_dados->>'valor', '')::numeric, 0), 2);
+  v_valor := fin_numero(p_dados->>'valor', 0);
   v_venc := nullif(p_dados->>'data_vencimento', '')::date;
   v_emissao := nullif(p_dados->>'data_emissao', '')::date;
   v_comp_txt := nullif(btrim(coalesce(p_dados->>'data_competencia', '')), '');
@@ -183,17 +186,22 @@ begin
     v_parcela := coalesce(nullif(p_dados->>'parcela', '')::int, 1);
     v_total := coalesce(nullif(p_dados->>'total_parcelas', '')::int, 1);
     if v_origem <> 'manual' and v_origem_id is null then raise exception 'Origem sem identificador' using errcode = '22023'; end if;
+    v_assin := md5(concat_ws('|', f.id, coalesce(nullif(btrim(coalesce(p_dados->>'documento', '')), ''), ''), v_valor, coalesce(v_emissao::text, ''), v_venc,
+        v_comp, coalesce(v_cat::text, ''), coalesce(nullif(btrim(coalesce(p_dados->>'observacao', '')), ''), ''), v_origem, coalesce(v_origem_id::text, ''), v_parcela, v_total));
     perform pg_advisory_xact_lock(7286, p_loja::int);
     if v_chave is not null then
       select * into t from fin_titulos_pagar where loja_id = p_loja and chave_idempotencia = v_chave;
-      if found then return jsonb_build_object('ok', true, 'duplicado', true, 'id', t.id, 'numero', t.numero); end if;
+      if found then
+        if t.assinatura is distinct from v_assin then raise exception 'Essa chave já foi usada com outros dados' using errcode = '22023'; end if;
+        return jsonb_build_object('ok', true, 'duplicado', true, 'id', t.id, 'numero', t.numero);
+      end if;
     end if;
     select coalesce(max(numero), 0) + 1 into v_numero from fin_titulos_pagar where loja_id = p_loja;
     insert into fin_titulos_pagar (loja_id, numero, fornecedor_id, fornecedor_nome, documento, parcela, total_parcelas, valor, data_emissao,
-        data_vencimento, data_competencia, categoria_id, observacao, origem_tipo, origem_id, chave_idempotencia, criado_por, criado_por_nome)
+        data_vencimento, data_competencia, categoria_id, observacao, origem_tipo, origem_id, chave_idempotencia, assinatura, criado_por, criado_por_nome)
     values (p_loja, v_numero, f.id, coalesce(nullif(f.nome_fantasia, ''), f.razao_social), nullif(btrim(coalesce(p_dados->>'documento', '')), ''),
         v_parcela, v_total, v_valor, v_emissao, v_venc, v_comp, v_cat, nullif(btrim(coalesce(p_dados->>'observacao', '')), ''),
-        v_origem, v_origem_id, v_chave, p_user, p_user_nome)
+        v_origem, v_origem_id, v_chave, v_assin, p_user, p_user_nome)
     returning * into t;
     perform fin_registrar_evento(p_loja, 'titulo_pagar', t.id, 'incluido',
       jsonb_build_object('numero', t.numero, 'valor', t.valor, 'vencimento', t.data_vencimento, 'fornecedor', t.fornecedor_nome, 'origem', t.origem_tipo),
@@ -267,7 +275,7 @@ language plpgsql security definer set search_path = public as $$
 declare
   t fin_titulos_pagar%rowtype; c fin_contas_correntes%rowtype; pg fin_pagamentos%rowtype; v_chave text := nullif(btrim(coalesce(p_chave, '')), '');
   v_princ numeric; v_juros numeric; v_desc numeric; v_cash numeric; v_data date; v_restante numeric; v_lanc bigint; v_pid bigint;
-  v_status text; v_quit numeric;
+  v_status text; v_quit numeric; v_assin text;
 begin
   perform fin_exigir_loja_propria(p_loja);
   if v_chave is null then raise exception 'Chave de idempotência obrigatória' using errcode = '22023'; end if;
@@ -276,9 +284,12 @@ begin
   select * into t from fin_titulos_pagar where id = p_titulo and loja_id = p_loja for update;
   if not found then raise exception 'Título não encontrado' using errcode = '22023'; end if;
 
+  v_assin := md5(concat_ws('|', t.id, coalesce(nullif(p_dados->>'conta_id', ''), ''), coalesce(nullif(p_dados->>'data_pagamento', ''), ''),
+      coalesce(fin_numero(p_dados->>'valor_principal')::text, ''), fin_numero(p_dados->>'juros', 0), fin_numero(p_dados->>'desconto', 0),
+      coalesce(nullif(btrim(coalesce(p_dados->>'forma', '')), ''), ''), coalesce(nullif(btrim(coalesce(p_dados->>'observacao', '')), ''), '')));
   select * into pg from fin_pagamentos where loja_id = p_loja and chave_idempotencia = v_chave;
   if found then
-    if pg.titulo_id <> t.id then raise exception 'Essa chave já foi usada em outro título' using errcode = '22023'; end if;
+    if pg.titulo_id <> t.id or pg.assinatura <> v_assin then raise exception 'Essa chave já foi usada com outros dados' using errcode = '22023'; end if;
     return jsonb_build_object('ok', true, 'duplicado', true, 'id', pg.id, 'lancamento_id', pg.lancamento_id,
       'status', t.status, 'valor_quitado', t.valor_quitado, 'restante', t.valor - t.valor_quitado);
   end if;
@@ -289,9 +300,9 @@ begin
 
   v_data := coalesce(nullif(p_dados->>'data_pagamento', '')::date, fin_hoje());
   if v_data > fin_hoje() then raise exception 'A data do pagamento não pode ser futura' using errcode = '22023'; end if;
-  v_princ := round(coalesce(nullif(p_dados->>'valor_principal', '')::numeric, v_restante), 2);
-  v_juros := round(coalesce(nullif(p_dados->>'juros', '')::numeric, 0), 2);
-  v_desc := round(coalesce(nullif(p_dados->>'desconto', '')::numeric, 0), 2);
+  v_princ := fin_numero(p_dados->>'valor_principal', v_restante);
+  v_juros := fin_numero(p_dados->>'juros', 0);
+  v_desc := fin_numero(p_dados->>'desconto', 0);
   if v_princ <= 0 then raise exception 'O valor do pagamento precisa ser maior que zero' using errcode = '22023'; end if;
   if v_princ > v_restante then raise exception 'O valor passa do que falta pagar (%)', v_restante using errcode = '22023'; end if;
   if v_juros < 0 or v_desc < 0 then raise exception 'Juros e desconto não podem ser negativos' using errcode = '22023'; end if;
@@ -299,7 +310,9 @@ begin
   v_cash := v_princ + v_juros - v_desc;
   if v_cash <= 0 then raise exception 'O valor pago (valor + juros − desconto) precisa ser maior que zero' using errcode = '22023'; end if;
 
-  select * into c from fin_contas_correntes where id = nullif(p_dados->>'conta_id', '')::bigint and loja_id = p_loja;
+  -- FOR SHARE (depois da trava do título; fin_conta_salvar não trava título, então não há deadlock): uma conta inativada ou
+  -- com saldo inicial alterado ao mesmo tempo não aceita este pagamento com a regra antiga.
+  select * into c from fin_contas_correntes where id = nullif(p_dados->>'conta_id', '')::bigint and loja_id = p_loja for share;
   if not found then raise exception 'Escolha a conta corrente do pagamento' using errcode = '22023'; end if;
   if not c.ativa then raise exception 'A conta corrente está inativa' using errcode = '22023'; end if;
   if v_data < c.data_saldo_inicial then
@@ -313,9 +326,9 @@ begin
       t.categoria_id, 'pagamento', v_pid, p_user, p_user_nome)
   returning id into v_lanc;
   insert into fin_pagamentos (id, loja_id, titulo_id, conta_id, data_pagamento, valor_principal, juros, desconto, valor_pago, forma, observacao,
-      lancamento_id, chave_idempotencia, criado_por, criado_por_nome)
+      lancamento_id, chave_idempotencia, assinatura, criado_por, criado_por_nome)
   values (v_pid, p_loja, t.id, c.id, v_data, v_princ, v_juros, v_desc, v_cash, nullif(btrim(coalesce(p_dados->>'forma', '')), ''),
-      nullif(btrim(coalesce(p_dados->>'observacao', '')), ''), v_lanc, v_chave, p_user, p_user_nome);
+      nullif(btrim(coalesce(p_dados->>'observacao', '')), ''), v_lanc, v_chave, v_assin, p_user, p_user_nome);
 
   v_quit := t.valor_quitado + v_princ;
   v_status := fin_status_titulo(t.valor, v_quit);
@@ -371,7 +384,8 @@ language plpgsql stable security definer set search_path = public as $$
 declare
   v_hoje date := coalesce(p_hoje, fin_hoje()); v_de date := nullif(p_filtros->>'venc_de', '')::date; v_ate date := nullif(p_filtros->>'venc_ate', '')::date;
   v_forn bigint := nullif(p_filtros->>'fornecedor_id', '')::bigint; v_cat bigint := nullif(p_filtros->>'categoria_id', '')::bigint;
-  v_sit text := nullif(p_filtros->>'situacao', ''); v_q text := nullif(btrim(coalesce(p_filtros->>'q', '')), '');
+  v_sit text := nullif(p_filtros->>'situacao', ''); -- % e _ digitados valem como texto, não como curinga
+  v_q text := replace(replace(replace(nullif(btrim(coalesce(p_filtros->>'q', '')), ''), '\', '\\'), '%', '\%'), '_', '\_');
   v_itens jsonb; v_tot jsonb;
 begin
   with base as (
@@ -381,10 +395,12 @@ begin
       and (v_de is null or t.data_vencimento >= v_de) and (v_ate is null or t.data_vencimento <= v_ate)
       and (v_forn is null or t.fornecedor_id = v_forn) and (v_cat is null or t.categoria_id = v_cat)
       and (v_q is null or t.fornecedor_nome ilike '%' || v_q || '%' or coalesce(t.documento, '') ilike '%' || v_q || '%'
-           or coalesce(t.observacao, '') ilike '%' || v_q || '%' or t.numero::text = v_q)
+           or coalesce(t.observacao, '') ilike '%' || v_q || '%' or t.numero::text = btrim(p_filtros->>'q'))
   ), filtrado as (
     select * from base where v_sit is null
-      or (v_sit = 'em_aberto' and situacao in ('aberto', 'parcial', 'atrasado')) or situacao = v_sit
+      or (v_sit = 'em_aberto' and situacao in ('aberto', 'parcial', 'atrasado'))
+      or (v_sit = 'parcial' and status = 'parcial') -- parcial atrasada continua sendo "paga em parte"
+      or (v_sit not in ('em_aberto', 'parcial') and situacao = v_sit)
   )
   select
     coalesce((select jsonb_agg(jsonb_build_object(

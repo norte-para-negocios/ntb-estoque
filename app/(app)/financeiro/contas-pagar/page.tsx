@@ -31,7 +31,7 @@ export default async function ContasPagarPage({ searchParams }: { searchParams: 
     listarFornecedores(lojaId), listarCategorias(lojaId), listarContas(lojaId),
   ])
   const catDespesa = categorias.filter((c) => c.tipo === 'despesa' && c.ativa).map((c) => ({ id: c.id, nome: c.nome }))
-  const contasAtivas = contas.filter((c) => c.ativa).map((c) => ({ id: c.id, nome: c.nome, saldo: c.saldo_atual }))
+  const contasAtivas = contas.filter((c) => c.ativa).map((c) => ({ id: c.id, nome: c.nome })) // sem saldos: quem só tem "Pagar" não precisa deles no navegador
   const temProxima = page * POR_PAGINA < totais.quantidade
 
   const link = (p: number) => {
