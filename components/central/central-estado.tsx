@@ -21,6 +21,8 @@ export function useCentral(): Valor | null {
 // ---- menu antigo / novo ----
 const LS_MODO = 'ntb.menu.modo'
 const EVT_MODO = 'ntb-menu-modo'
+// Se o localStorage falhar (modo privado), a escolha vale em memória até recarregar, para todos os componentes.
+let modoEmMemoria: string | null = null
 
 /**
  * Padrão: novo para quem é desenvolvedor. O valor salvo só é lido depois de montar; até lá `pronto` é false
@@ -33,11 +35,13 @@ export function useMenuNovo(isSuperAdmin: boolean): [boolean, (novo: boolean) =>
   React.useEffect(() => {
     if (!isSuperAdmin) return
     const ler = () => {
+      let pref = modoEmMemoria
       try {
-        setNovo(menuNovoAtivo(true, window.localStorage.getItem(LS_MODO)))
+        pref = window.localStorage.getItem(LS_MODO) ?? modoEmMemoria
       } catch {
-        setNovo(true)
+        /* usa a memória */
       }
+      setNovo(menuNovoAtivo(true, pref))
       setPronto(true)
     }
     ler()
@@ -51,8 +55,9 @@ export function useMenuNovo(isSuperAdmin: boolean): [boolean, (novo: boolean) =>
 
   const alterar = React.useCallback((v: boolean) => {
     setNovo(v)
+    modoEmMemoria = v ? 'novo' : 'antigo'
     try {
-      window.localStorage.setItem(LS_MODO, v ? 'novo' : 'antigo')
+      window.localStorage.setItem(LS_MODO, modoEmMemoria)
     } catch {
       /* sem localStorage: vale só nesta aba */
     }

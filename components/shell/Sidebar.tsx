@@ -13,7 +13,7 @@ import { hrefAtivo } from '@/lib/nav-ativo'
 import { useMenuNovo } from '@/components/central/central-estado'
 import { navItemVisivel } from '@/lib/nav-visivel'
 
-// Menu por módulos: carregado sob demanda, só para desenvolvedores (lib/central/* e nomes de telas só-dev não vão no JS dos demais).
+// Menu por módulos: carregado sob demanda, só para desenvolvedores. NAV_ITEMS já vai no JS de todos; ficam fora dele só a Central, Finanças e os relatórios novos (lib/central/*).
 const MenuModulos = dynamic(() => import('@/components/central/MenuModulos').then((m) => m.MenuModulos), { ssr: false })
 const AlternaMenu = dynamic(() => import('@/components/central/MenuModulos').then((m) => m.AlternaMenu), { ssr: false })
 

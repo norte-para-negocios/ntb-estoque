@@ -45,6 +45,7 @@ export function itemVisivel(item: ItemCentral, nav: readonly NavRegra[], ctx: Ct
   // Flags de modo próprias do item (relatórios que a página recusa em certos modos de loja, tela só do desktop).
   if (item.soEstoqueProprio && !ctx.estoqueProprio) return false
   if (item.comEstoque && !ctx.temEstoque) return false
+  if (item.soOmie && (ctx.estoqueProprio || !ctx.temEstoque)) return false // modo Omie = tem estoque e não é próprio
   if (item.soDesktop && !ctx.desktop) return false
   const n = navDoItem(item, nav)
   return n ? navItemVisivel(n, ctx) : true

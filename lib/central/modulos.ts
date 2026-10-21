@@ -25,6 +25,8 @@ export type ItemCentral = {
   /** Só em loja de estoque próprio / com estoque (próprio ou Omie) / no app para computador: a página recusa nos outros casos. */
   soEstoqueProprio?: boolean
   comEstoque?: boolean
+  /** Só em loja de modo Omie (a página redireciona ou recusa o estoque próprio). */
+  soOmie?: boolean
   soDesktop?: boolean
   /** Repetição de um item que pertence a outro módulo (não conta para "módulo ativo"). */
   ref?: boolean
@@ -81,7 +83,7 @@ export const MODULOS: ModuloCentral[] = [
       {
         nome: 'Consultas do estoque',
         itens: [
-          { label: 'Kardex da loja', href: '/estoque/kardex' },
+          { label: 'Kardex da loja', href: '/estoque/kardex', soOmie: true },
           { label: 'Ajustes de estoque', href: '/estoque/ajustes' },
           { label: 'Fichas que usam o insumo', href: '/estoque/fichas' },
           { label: 'Quem mexeu', href: '/estoque/quem-mexeu' },
@@ -92,7 +94,7 @@ export const MODULOS: ModuloCentral[] = [
         nome: 'Produtos',
         itens: [
           { label: 'Incluir', href: '/produto/novo' },
-          { label: 'Importar planilha', href: '/produto/importar' },
+          { label: 'Importar planilha', href: '/produto/importar', soEstoqueProprio: true },
           { label: 'Exibir todos', href: '/produto' },
           // A página pede a permissão 'Produto Substituicoes'; a visibilidade herda de Produtos (dev vê tudo).
           { label: 'Produtos substitutos', href: '/produto-substituicao', regra: '/produto' },
@@ -131,7 +133,7 @@ export const MODULOS: ModuloCentral[] = [
       {
         nome: 'Fornecedores',
         itens: [
-          { label: 'Importar planilha', href: '/fornecedor/importar' },
+          { label: 'Importar planilha', href: '/fornecedor/importar', soEstoqueProprio: true },
           { label: 'Exibir todos', href: '/fornecedor' },
           { label: 'Compradores e prazos', href: '/compras-cadastros' },
           { label: 'Consulta SINTEGRA', href: '/sintegra' },
@@ -141,7 +143,7 @@ export const MODULOS: ModuloCentral[] = [
         nome: 'Pedidos de compra',
         itens: [
           { label: 'Incluir', href: '/pedido-compra/novo' },
-          { label: 'Importar planilha', href: '/pedido-compra/importar' },
+          { label: 'Importar planilha', href: '/pedido-compra/importar', soEstoqueProprio: true },
           { label: 'Exibir todos', href: '/pedido-compra' },
         ],
       },
@@ -155,9 +157,9 @@ export const MODULOS: ModuloCentral[] = [
       {
         nome: 'Notas de entrada',
         itens: [
-          { label: 'Importar XML', href: '/nota-fiscal/importar' },
-          { label: 'Lançar sem XML', href: '/nota-fiscal/nova' },
-          { label: 'Etapas do recebimento', href: '/nota-fiscal/etapas' },
+          { label: 'Importar XML', href: '/nota-fiscal/importar', soEstoqueProprio: true },
+          { label: 'Lançar sem XML', href: '/nota-fiscal/nova', soEstoqueProprio: true },
+          { label: 'Etapas do recebimento', href: '/nota-fiscal/etapas', soEstoqueProprio: true },
         ],
       },
       { nome: 'Devolução ao fornecedor', itens: [{ label: 'Exibir todas', href: '/devolucao-fornecedor' }] },

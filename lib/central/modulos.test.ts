@@ -167,6 +167,22 @@ test('relatórios respeitam o modo da loja como a página /relatorios', () => {
   assert.equal(itemVisivel(lucro, NAV_ITEMS, { ...gestor, temEstoque: true, estoqueProprio: true }), true)
 })
 
+test('itens que a página só aceita em certo modo de loja carregam a flag', () => {
+  const gestor = { ...dev, isAdmin: true }
+  const achar = (h: string) => todosItens.find((i) => i.href === h)!
+  const forn = achar('/relatorio-produtos-fornecedor')
+  assert.equal(forn.comEstoque, true)
+  assert.equal(itemVisivel(forn, NAV_ITEMS, gestor), false) // modo 'nenhum'
+  assert.equal(itemVisivel(forn, NAV_ITEMS, { ...gestor, temEstoque: true }), true)
+  for (const h of ['/produto/importar', '/fornecedor/importar', '/nota-fiscal/importar', '/nota-fiscal/nova', '/nota-fiscal/etapas', '/pedido-compra/importar']) {
+    assert.equal(achar(h).soEstoqueProprio, true, h)
+    assert.equal(itemVisivel(achar(h), NAV_ITEMS, { ...gestor, temEstoque: true, pedidosOmie: true }), false, `${h} em loja Omie`)
+  }
+  const kardex = achar('/estoque/kardex')
+  assert.equal(itemVisivel(kardex, NAV_ITEMS, { ...gestor, temEstoque: true }), true) // Omie
+  assert.equal(itemVisivel(kardex, NAV_ITEMS, { ...gestor, temEstoque: true, estoqueProprio: true }), false) // redireciona
+})
+
 test('Cargos herdam /usuario; Sincronização só no desktop; Produtos substitutos herdam /produto', () => {
   const cargos = todosItens.find((i) => i.href === '/cargo')!
   assert.equal(cargos.regra, '/usuario')
