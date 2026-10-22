@@ -9,29 +9,15 @@ import { SPRING_UI } from '@/lib/motion'
 import { NAV_ITEMS } from '@/components/shell/NavItems'
 import { MODULOS, moduloDoPath } from '@/lib/central/modulos'
 import { modulosVisiveis, type ModuloPronto } from '@/lib/central/visibilidade'
+import { destinosDoMenu } from '@/lib/central/organizar'
+import { iconeDoItem } from '@/lib/central/icones'
 import type { CtxVisibilidade } from '@/lib/nav-visivel'
 
 type Destino = { href: string; label: string; Icon: LucideIcon }
 
-// Nomes do menu antigo que mudam de rótulo no novo.
-const ROTULO_NOVO: Record<string, string> = { '/home': 'Painel do dia' }
-
-/**
- * Telas do módulo que já existiam no menu antigo (mesmo nome, mesmo ícone), na ordem da central.
- * Dão acesso direto a cada tela com um clique, sem passar pela central do módulo.
- */
-export function destinosDoModulo(m: ModuloPronto): Destino[] {
-  const vistos = new Set<string>()
-  const out: Destino[] = []
-  for (const i of [...m.atalhos, ...m.secoes.flatMap((s) => s.itens)]) {
-    if (!i.href || i.emBreve || i.ref || i.href.endsWith('?criar=1')) continue
-    const h = i.href.split('?')[0]
-    const nav = NAV_ITEMS.find((n) => n.href === h)
-    if (!nav || vistos.has(h)) continue
-    vistos.add(h)
-    out.push({ href: h, label: ROTULO_NOVO[h] ?? nav.label, Icon: nav.icon })
-  }
-  return out
+/** Telas e cadastros do módulo (mesmos nomes da central), cada um a um clique. */
+function destinosDoModulo(m: ModuloPronto): Destino[] {
+  return destinosDoMenu(m).map((d) => ({ ...d, Icon: iconeDoItem(d.label).Icon }))
 }
 
 /** Menu novo (só desenvolvedores): 7 módulos, cada um abre a central em /central/<id>. */
@@ -75,8 +61,8 @@ export function MenuModulos({ ctx, compacto = false }: { ctx: CtxVisibilidade; c
         return (
           <div key={m.id}>
             <div className="relative flex items-center">
-              <Link href={`/central/${m.id}`} className={`${cls(on)} flex-1`} aria-current={on && pathname.startsWith('/central/') ? 'page' : undefined}>
-                {on && pathname.startsWith('/central/') && <Pilula id={pilulaId} />}
+              <Link href={m.href} className={`${cls(on)} flex-1`} aria-current={pathname === m.href ? 'page' : undefined}>
+                {pathname === m.href && m.href.startsWith('/central') && <Pilula id={pilulaId} />}
                 <Icon className="relative size-[17px] shrink-0" strokeWidth={1.9} />
                 <span className="relative flex-1">{m.nome}</span>
               </Link>

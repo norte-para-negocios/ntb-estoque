@@ -67,7 +67,9 @@ export type ModuloPronto = {
   nome: string
   desc: string
   icone: ModuloCentral['icone']
-  atalhos: ItemPronto[]
+  href: string
+  novos: ItemPronto[]
+  telas: ItemPronto[]
   secoes: SecaoPronta[]
 }
 
@@ -85,7 +87,9 @@ export function moduloVisivel(m: ModuloCentral, nav: readonly NavRegra[], ctx: C
     nome: m.nome,
     desc: m.desc,
     icone: m.icone,
-    atalhos: m.atalhos.filter(ok).map(pronto),
+    href: m.href ?? `/central/${m.id}`,
+    novos: m.novos.filter(ok).map(pronto),
+    telas: m.telas.filter(ok).map(pronto),
     secoes: m.secoes
       .map((s) => ({ nome: s.nome, tipo: s.tipo, desc: s.desc, itens: s.itens.filter(ok).map(pronto) }))
       .filter((s) => s.itens.length > 0),
@@ -100,5 +104,5 @@ export function modulosVisiveis(
 ): ModuloPronto[] {
   return modulos
     .map((m) => moduloVisivel(m, nav, ctx))
-    .filter((m) => m.atalhos.length > 0 || m.secoes.length > 0)
+    .filter((m) => m.telas.length > 0 || m.novos.length > 0 || m.secoes.length > 0)
 }

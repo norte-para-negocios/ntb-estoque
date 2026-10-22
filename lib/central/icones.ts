@@ -33,7 +33,7 @@ const REGRAS: Regra[] = [
   [/dre/, Percent, 'relatorio'],
   [/fluxo de caixa/, TrendingUp, 'relatorio'],
   [/relatorio|posicao|valorizado|cmv/, BarChart3, 'relatorio'],
-  [/painel inicial|dashboard/, LayoutDashboard, 'marca'],
+  [/painel|dashboard/, LayoutDashboard, 'marca'],
   [/resumo/, Gauge, 'marca'],
   [/robo/, Bot, 'marca'],
   [/central de correcoes|correcoes/, ClipboardCheck, 'alerta'],
@@ -68,8 +68,8 @@ const REGRAS: Regra[] = [
   [/sintegra/, ShieldCheck, 'marca'],
   [/pedidos?|requisic/, ShoppingCart, 'marca'],
   [/etapas do recebimento/, PackageCheck, 'marca'],
-  [/devolucao/, Undo2, 'marca'],
-  [/ordens? de producao|^abertas/, Cog, 'marca'],
+  [/devoluc/, Undo2, 'marca'],
+  [/ordens?|^abertas/, Cog, 'marca'],
   [/usuarios|cargos/, Users, 'marca'],
   [/^lojas|minha loja/, Store, 'marca'],
   [/qr/, QrCode, 'marca'],
@@ -108,7 +108,7 @@ export function iconeDaSecao(nome: string): LucideIcon {
   if (h(/fornecedores/)) return Truck
   if (h(/pedidos|requisic/)) return ShoppingCart
   if (h(/notas/)) return ReceiptText
-  if (h(/devolucao/)) return Undo2
+  if (h(/devoluc/)) return Undo2
   if (h(/producao/)) return Cog
   if (h(/usuarios/)) return UserCog
   if (h(/lojas/)) return Store
