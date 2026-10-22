@@ -116,6 +116,8 @@ export default function CenaCentral({ modulo }: { modulo: string }) {
       renderer.setSize(w, h, false)
       camera.aspect = w / h
       camera.updateProjectionMatrix()
+      // setSize limpa o canvas: redesenha já (vale também com o loop parado, no modo de movimento reduzido).
+      renderer.render(cena, camera)
     }
     tamanho()
     const ro = new ResizeObserver(tamanho)

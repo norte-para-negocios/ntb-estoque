@@ -33,6 +33,19 @@ const entra: Variants = {
 }
 const semMovimento: Variants = { oculto: { opacity: 1 }, visivel: { opacity: 1 } }
 
+/** Cena 3D só de tablet para cima: no celular nem baixa a biblioteca. */
+function useTelaLarga() {
+  const [larga, setLarga] = React.useState(false)
+  React.useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const ler = () => setLarga(mq.matches)
+    ler()
+    mq.addEventListener('change', ler)
+    return () => mq.removeEventListener('change', ler)
+  }, [])
+  return larga
+}
+
 function useVariantes() {
   const reduzir = useReducedMotion()
   return { lista: reduzir ? semMovimento : lista, entra: reduzir ? semMovimento : entra, reduzir: !!reduzir }
@@ -50,11 +63,13 @@ function Bloco({ label, secao, tamanho = 'm' }: { label: string; secao?: string;
   )
 }
 
-function Etiquetas({ item }: { item: ItemPronto }) {
+function Etiquetas({ item, claro = false }: { item: ItemPronto; claro?: boolean }) {
   return (
     <>
       {item.cadeado && <Lock className="size-3.5 shrink-0 text-text-muted/60" strokeWidth={2} aria-label="Em breve para quem não é administrador" />}
-      {item.soDev && <span className="rounded-full bg-brand-soft px-1.5 py-px text-[10px] font-semibold text-brand">só dev</span>}
+      {item.soDev && (
+        <span className={`rounded-full px-1.5 py-px text-[10px] font-semibold ${claro ? 'bg-white/25 text-white' : 'bg-brand-soft text-brand'}`}>só dev</span>
+      )}
     </>
   )
 }
@@ -74,7 +89,7 @@ function Estrela({ href, favs, alternar }: { href: string; favs: string[]; alter
       aria-label={on ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
       title={on ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
       className={`flex size-7 shrink-0 items-center justify-center rounded-full u-motion u-press-sm hover:bg-surface-2 focus-visible:opacity-100 ${
-        on ? 'text-warn opacity-100' : 'text-text-muted/60 opacity-0 hover:text-text group-hover:opacity-100'
+        on ? 'text-warn opacity-100' : 'text-text-muted/60 opacity-0 hover:text-text group-hover:opacity-100 [@media(hover:none)]:opacity-100'
       }`}
     >
       <Star className="size-4" strokeWidth={2} fill={on ? 'currentColor' : 'none'} />
@@ -108,7 +123,7 @@ function CartaoAcao({ item, principal, favs, alternar }: { item: ItemPronto; pri
         transition={SPRING_UI}
         className={`group relative h-full overflow-hidden rounded-[22px] ${
           principal
-            ? 'bg-[linear-gradient(135deg,var(--brand),var(--brand-strong))] text-white shadow-[0_14px_34px_-14px_var(--brand)]'
+            ? 'bg-[linear-gradient(135deg,var(--brand-fill),var(--brand-fill-hover))] text-white shadow-[0_14px_34px_-14px_var(--brand-fill)]'
             : 'bg-surface shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)]'
         }`}
       >
@@ -122,7 +137,7 @@ function CartaoAcao({ item, principal, favs, alternar }: { item: ItemPronto; pri
               : 'radial-gradient(260px circle at var(--mx,50%) var(--my,50%), color-mix(in srgb, var(--brand) 11%, transparent), transparent 70%)',
           }}
         />
-        <Link href={item.href!} className="relative flex h-full min-h-[150px] flex-col justify-between gap-5 p-5 pr-12">
+        <Link href={item.href!} className={`relative flex h-full min-h-[150px] flex-col justify-between gap-5 rounded-[22px] p-5 pr-12 outline-none focus-visible:ring-2 focus-visible:ring-inset ${principal ? 'focus-visible:ring-white' : 'focus-visible:ring-brand'}`}>
           <span
             className={
               principal
@@ -135,9 +150,9 @@ function CartaoAcao({ item, principal, favs, alternar }: { item: ItemPronto; pri
           <span>
             <span className="flex items-center gap-2">
               <span className={`text-[17px] font-semibold leading-tight tracking-[-0.01em] ${principal ? '' : 'text-text'}`}>{item.label}</span>
-              {!principal && <Etiquetas item={item} />}
+              <Etiquetas item={item} claro={principal} />
             </span>
-            {item.desc && <span className={`mt-1 block text-[13px] leading-snug ${principal ? 'text-white/80' : 'text-text-muted'}`}>{item.desc}</span>}
+            {item.desc && <span className={`mt-1 block text-[13px] leading-snug ${principal ? 'text-white/90' : 'text-text-muted'}`}>{item.desc}</span>}
           </span>
           <ArrowRight
             className={`absolute bottom-5 right-5 size-[18px] -translate-x-1 opacity-0 transition duration-300 group-hover:translate-x-0 group-hover:opacity-100 ${principal ? 'text-white' : 'text-brand'}`}
@@ -162,7 +177,7 @@ function CartaoConsulta({ item, secao, favs, alternar }: { item: ItemPronto; sec
         whileHover={v.reduzir ? undefined : { y: -2 }}
         whileTap={v.reduzir ? undefined : { scale: 0.985 }}
         transition={SPRING_UI}
-        className="group flex items-center gap-1 rounded-[18px] bg-surface pr-2 shadow-[var(--shadow-sm)] u-motion hover:shadow-[var(--shadow-md)]"
+        className="group flex items-center gap-1 rounded-[18px] bg-surface pr-2 shadow-[var(--shadow-sm)] transition-shadow duration-200 hover:shadow-[var(--shadow-md)]"
       >
         <Link href={item.href!} className="flex min-h-[68px] flex-1 items-center gap-3.5 p-3.5">
           <Bloco label={item.label} secao={secao} />
@@ -185,7 +200,7 @@ function CartaoConsulta({ item, secao, favs, alternar }: { item: ItemPronto; sec
 const CLASSE_BOTAO = {
   novo: 'bg-[color-mix(in_srgb,#16a34a_14%,transparent)] text-[#15803d] hover:bg-[#16a34a] hover:text-white dark:text-[#4ade80] dark:hover:text-white',
   importar: 'bg-[color-mix(in_srgb,#2563eb_14%,transparent)] text-[#1d4ed8] hover:bg-[#2563eb] hover:text-white dark:text-[#93c5fd] dark:hover:text-white',
-  padrao: 'bg-surface-2 text-text hover:bg-brand hover:text-white',
+  padrao: 'bg-surface-2 text-text hover:bg-brand-fill hover:text-white',
 } as const
 
 function CartaoCadastro({ secao }: { secao: SecaoPronta }) {
@@ -315,6 +330,7 @@ function Cabecalho({
   setBusca: (s: string) => void
 }) {
   const v = useVariantes()
+  const larga = useTelaLarga()
   return (
     <motion.header
       initial={v.reduzir ? false : { opacity: 0, y: 10 }}
@@ -323,7 +339,7 @@ function Cabecalho({
       className="relative overflow-hidden rounded-[30px] bg-[linear-gradient(120deg,color-mix(in_srgb,var(--brand)_16%,var(--surface)),var(--surface)_62%)] shadow-[var(--shadow-sm)]"
     >
       <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[52%] [mask-image:linear-gradient(to_right,transparent,black_38%)] md:block">
-        <CenaCentral modulo={id} key={id} />
+        {larga && <CenaCentral modulo={id} key={id} />}
       </div>
       <div className="relative flex min-h-[210px] flex-col justify-center gap-5 p-7 md:w-[62%] md:p-9">
         <div>
@@ -452,6 +468,7 @@ export function CentralGeral() {
   const central = useCentral()
   const [favs, alternar] = useFavoritos(central?.userId ?? '')
   const v = useVariantes()
+  const larga = useTelaLarga()
   const modulos = React.useMemo(() => (central ? modulosVisiveis(MODULOS, NAV_ITEMS, central.ctx) : []), [central])
   if (!central) return null
 
@@ -464,7 +481,7 @@ export function CentralGeral() {
         className="relative overflow-hidden rounded-[30px] bg-[linear-gradient(120deg,color-mix(in_srgb,var(--brand)_16%,var(--surface)),var(--surface)_62%)] shadow-[var(--shadow-sm)]"
       >
         <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[52%] [mask-image:linear-gradient(to_right,transparent,black_38%)] md:block">
-          <CenaCentral modulo="inicio" />
+          {larga && <CenaCentral modulo="inicio" />}
         </div>
         <div className="relative flex min-h-[190px] flex-col justify-center p-7 md:w-[62%] md:p-9">
           <h1 className="text-[34px] font-bold leading-[1.05] tracking-[-0.03em] text-text md:text-[44px]">Central</h1>
@@ -476,14 +493,14 @@ export function CentralGeral() {
         {modulos.map((m) => {
           const Icon = m.icone
           const o = organizar(m)
-          const total = o.acoes.length + o.consultas.length + o.cadastros.reduce((n, s) => n + s.itens.length, 0) + o.relatorios.length
+          const total = [...o.acoes, ...o.consultas.map((c) => c.item), ...o.cadastros.flatMap((s) => s.itens), ...o.relatorios].filter((i) => !i.ref).length
           return (
             <motion.section
               key={m.id}
               variants={v.entra}
               whileHover={v.reduzir ? undefined : { y: -5 }}
               transition={SPRING_UI}
-              className="group relative rounded-[24px] bg-surface p-5 shadow-[var(--shadow-sm)] u-motion hover:shadow-[var(--shadow-md)]"
+              className="group relative rounded-[24px] bg-surface p-5 shadow-[var(--shadow-sm)] transition-shadow duration-200 hover:shadow-[var(--shadow-md)]"
             >
               <Link href={`/central/${m.id}`} className="flex items-start gap-4">
                 <span className="flex size-12 shrink-0 items-center justify-center rounded-[16px] bg-brand-soft text-brand">
@@ -505,7 +522,7 @@ export function CentralGeral() {
                     <li key={`${i.label}-${k}`}>
                       <Link
                         href={i.href!}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1.5 text-[12px] font-medium text-text-muted u-motion hover:bg-brand hover:text-white"
+                        className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1.5 text-[12px] font-medium text-text-muted u-motion hover:bg-brand-fill hover:text-white"
                       >
                         <Ic className="size-3.5" strokeWidth={2} aria-hidden />
                         {i.label}

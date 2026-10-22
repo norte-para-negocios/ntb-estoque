@@ -99,7 +99,7 @@ export function AppShell({
             (cabecalho de tabela congelado tipo Excel). */}
         <main className="flex-1 min-w-0 overflow-x-clip pb-20 lg:pb-0">
           {/* Central (só dev): usa a largura toda da tela, sem a coluna estreita das demais telas. */}
-          <div className={`mx-auto w-full px-4 lg:px-8 py-6 ${pathname.startsWith('/central') ? 'max-w-[1560px]' : 'max-w-6xl'}`}>
+          <div className={`mx-auto w-full px-4 lg:px-8 py-6 ${(pathname === '/central' || pathname.startsWith('/central/')) ? 'max-w-[1560px]' : 'max-w-6xl'}`}>
             <div className="mb-2 hidden items-center justify-end gap-2 lg:flex">
               <Sininho tela="desktop" />
               {/* Celular: a busca fica na barra superior (MobileNav). Desktop: botao completo com texto e atalho de teclado */}
