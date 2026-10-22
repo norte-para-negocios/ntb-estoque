@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { useCriarDaCentral } from '@/lib/use-criar-da-central'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -28,6 +29,7 @@ export function NovoLocalEstoque({ proprio = false }: { proprio?: boolean }) {
   const [extras, setExtras] = useState<CamposLocal>(CAMPOS_LOCAL_PADRAO)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
+  useCriarDaCentral(() => setOpen(true))
 
   function criar() {
     if (!descricao.trim()) {

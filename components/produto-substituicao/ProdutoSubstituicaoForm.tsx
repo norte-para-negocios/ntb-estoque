@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { useCriarDaCentral } from '@/lib/use-criar-da-central'
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
@@ -19,6 +20,7 @@ export function ProdutoSubstituicaoForm({ produtos }: { produtos: Produto[] }) {
   const [form, setForm] = useState<Partial<ProdutoSubstituicaoInput>>({})
   const [pending, startTransition] = useTransition()
   const router = useRouter()
+  useCriarDaCentral(() => setOpen(true))
 
   function salvar() {
     if (!form.n_cod_prod || !form.substitui_n_cod_prod) {

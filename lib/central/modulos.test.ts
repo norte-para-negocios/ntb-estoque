@@ -81,10 +81,19 @@ test('Finanças: itens reais só de estoque próprio e só dev; o resto segue "e
   const fin = MODULOS.find((m) => m.id === 'financas')
   assert.ok(fin)
   const itens = itensDoModulo(fin)
-  const reais = itens.filter((i) => !i.emBreve)
+  // Só o financeiro novo; os relatórios gerenciais (faturamento, margem…) moram aqui mas são do sistema atual.
+  const reais = itens.filter((i) => !i.emBreve && i.href!.startsWith('/financeiro'))
   assert.deepEqual(
     reais.map((i) => i.href).sort(),
-    ['/financeiro/categorias', '/financeiro/contas-correntes', '/financeiro/contas-pagar', '/financeiro/contas-pagar/nova', '/financeiro/extrato']
+    [
+      '/financeiro/categorias',
+      '/financeiro/categorias?criar=1',
+      '/financeiro/contas-correntes',
+      '/financeiro/contas-correntes?criar=1',
+      '/financeiro/contas-pagar',
+      '/financeiro/contas-pagar/nova',
+      '/financeiro/extrato',
+    ]
   )
   for (const i of reais) {
     assert.equal(i.soEstoqueProprio, true, `${i.href} precisa da flag de estoque próprio`)

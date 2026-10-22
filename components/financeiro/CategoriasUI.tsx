@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { useCriarDaCentral } from '@/lib/use-criar-da-central'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { btnClass } from '@/components/ui-kit/Button'
@@ -15,6 +16,7 @@ type Contabil = { id: number; nome: string }
 export function FormCategoria({ categoria, contabeis, children }: { categoria?: Categoria; contabeis: Contabil[]; children: React.ReactNode }) {
   const router = useRouter()
   const [aberto, setAberto] = useState(false)
+  useCriarDaCentral(() => setAberto(true), !categoria)
   const [nome, setNome] = useState(categoria?.nome ?? '')
   const [codigo, setCodigo] = useState(categoria?.codigo ?? '')
   const [tipo, setTipo] = useState<'despesa' | 'receita'>(categoria?.tipo ?? 'despesa')

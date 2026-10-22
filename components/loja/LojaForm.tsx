@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { useCriarDaCentral } from '@/lib/use-criar-da-central'
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 import {
   Building2,
@@ -274,6 +275,7 @@ export function LojaForm({
   const [tentou, setTentou] = useState(false)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
+  useCriarDaCentral(() => abrir(true), !editando)
   const modo: ModoEstoque = form.modo_estoque ?? 'omie'
   const travado = editando && !!loja?.tem_movimentos_estoque
 

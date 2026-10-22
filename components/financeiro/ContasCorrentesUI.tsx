@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { useCriarDaCentral } from '@/lib/use-criar-da-central'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
@@ -17,6 +18,7 @@ const TIPOS = { caixa: 'Caixa', banco: 'Banco', outro: 'Outra' } as const
 export function FormConta({ conta, hoje, children }: { conta?: ContaCorrente; hoje: string; children: React.ReactNode }) {
   const router = useRouter()
   const [aberto, setAberto] = useState(false)
+  useCriarDaCentral(() => setAberto(true), !conta)
   const [nome, setNome] = useState(conta?.nome ?? '')
   const [tipo, setTipo] = useState<'caixa' | 'banco' | 'outro'>(conta?.tipo ?? 'banco')
   const [banco, setBanco] = useState(conta?.banco ?? '')

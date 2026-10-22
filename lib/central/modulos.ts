@@ -59,11 +59,19 @@ const rel = (label: string, href: string, extra: Partial<ItemCentral> = {}): Ite
 })
 const breve = (label: string, desc?: string): ItemCentral => ({ label, desc, emBreve: true })
 
+// Criar = "<rota>?criar=1": a própria tela da lista abre o formulário (hook useCriarDaCentral). `regra` herda a visibilidade da tela.
+const criar = (label: string, rota: string, extra: Partial<ItemCentral> = {}): ItemCentral => ({
+  label,
+  href: `${rota}?criar=1`,
+  regra: rota,
+  ...extra,
+})
+
 export const MODULOS: ModuloCentral[] = [
   {
     id: 'inicio',
     nome: 'Dashboard',
-    desc: 'Resumo da loja e pendências do dia.',
+    desc: 'O dia da loja e o que precisa de atenção.',
     icone: LayoutDashboard,
     atalhos: [
       { label: 'Ver o dia da loja', href: '/home', desc: 'Painel inicial, num olhar' },
@@ -77,7 +85,7 @@ export const MODULOS: ModuloCentral[] = [
   {
     id: 'estoque',
     nome: 'Estoque',
-    desc: 'Saldo, movimentos, inventário e transferências.',
+    desc: 'Saldo, movimentos, validade e cadastro de produtos.',
     icone: Boxes,
     atalhos: [
       { label: 'Ver o estoque de hoje', href: '/estoque', desc: 'Saldo e custo de cada produto' },
@@ -97,6 +105,7 @@ export const MODULOS: ModuloCentral[] = [
           { label: 'Quem mexeu', href: '/estoque/quem-mexeu', desc: 'Quem alterou o estoque e quando' },
           { label: 'Reposição', href: '/reposicao', desc: 'O que está abaixo do mínimo' },
           { label: 'Transferências', href: '/transferencia', desc: 'Entre locais da loja', ref: true },
+          { label: 'Sincronização Vendas', href: '/sync-catalogo', desc: 'Catálogo enviado ao Norte Vendas' },
         ],
       },
       {
@@ -110,10 +119,9 @@ export const MODULOS: ModuloCentral[] = [
           { label: 'Produtos substitutos', href: '/produto-substituicao', regra: '/produto' },
         ],
       },
-      { nome: 'Locais de estoque', desc: 'Câmara, depósito, balcão', itens: [{ label: 'Exibir todos', href: '/local-estoque' }] },
-      { nome: 'Famílias', desc: 'Agrupam produtos parecidos', itens: [{ label: 'Exibir todas', href: '/familia' }] },
+      { nome: 'Locais de estoque', desc: 'Câmara, depósito, balcão', itens: [criar('Incluir', '/local-estoque'), { label: 'Exibir todos', href: '/local-estoque' }] },
+      { nome: 'Famílias', desc: 'Agrupam produtos parecidos', itens: [criar('Incluir', '/familia'), { label: 'Exibir todas', href: '/familia' }] },
       { nome: 'Grupos e subgrupos', desc: 'Classificação dos produtos', itens: [{ label: 'Exibir todos', href: '/grupo-produto' }] },
-      { nome: 'Sincronização do catálogo', tipo: 'consulta', itens: [{ label: 'Sincronização Vendas', href: '/sync-catalogo', desc: 'Catálogo enviado ao Norte Vendas' }] },
       {
         nome: 'Relatórios',
         tipo: 'relatorio',
@@ -131,29 +139,24 @@ export const MODULOS: ModuloCentral[] = [
   {
     id: 'compras',
     nome: 'Compras',
-    desc: 'Do pedido à nota de entrada.',
+    desc: 'Do pedido ao recebimento da nota.',
     icone: ShoppingCart,
     atalhos: [
       { label: 'Ver o que comprar', href: '/sugestao-compra', desc: 'Sugestão de compra' },
+      { label: 'Criar um pedido de compra', href: '/pedido-compra/novo', desc: 'Escolher fornecedor e produtos' },
+      { label: 'Importar o XML de uma nota', href: '/nota-fiscal/importar', desc: 'Dar entrada na mercadoria', soEstoqueProprio: true },
       { label: 'Ver tarefas de compras', href: '/tarefas-compras', desc: 'Pendências do comprador' },
-      { label: 'Conferir notas recebidas', href: '/nota-fiscal', desc: 'Notas de entrada e importação de XML' },
     ],
     secoes: [
       {
-        nome: 'Fornecedores',
-        desc: 'Quem vende para a loja',
-        itens: [
-          { label: 'Importar planilha', href: '/fornecedor/importar', soEstoqueProprio: true },
-          { label: 'Exibir todos', href: '/fornecedor' },
-          { label: 'Compradores e prazos', href: '/compras-cadastros' },
-          { label: 'Consulta SINTEGRA', href: '/sintegra' },
-        ],
+        nome: 'Consultas de compras',
+        tipo: 'consulta',
+        itens: [{ label: 'Consulta SINTEGRA', href: '/sintegra', desc: 'Situação cadastral de um fornecedor' }],
       },
       {
         nome: 'Pedidos de compra',
         desc: 'O que foi pedido e ainda não chegou',
         itens: [
-          { label: 'Incluir', href: '/pedido-compra/novo' },
           { label: 'Importar planilha', href: '/pedido-compra/importar', soEstoqueProprio: true },
           { label: 'Exibir todos', href: '/pedido-compra' },
         ],
@@ -170,11 +173,21 @@ export const MODULOS: ModuloCentral[] = [
         nome: 'Notas de entrada',
         desc: 'Receber a mercadoria no estoque',
         itens: [
-          { label: 'Importar XML', href: '/nota-fiscal/importar', soEstoqueProprio: true },
           { label: 'Lançar sem XML', href: '/nota-fiscal/nova', soEstoqueProprio: true },
+          { label: 'Exibir todas', href: '/nota-fiscal' },
           { label: 'Etapas do recebimento', href: '/nota-fiscal/etapas', soEstoqueProprio: true },
         ],
       },
+      {
+        nome: 'Fornecedores',
+        desc: 'Quem vende para a loja',
+        itens: [
+          criar('Incluir', '/fornecedor'),
+          { label: 'Importar planilha', href: '/fornecedor/importar', soEstoqueProprio: true },
+          { label: 'Exibir todos', href: '/fornecedor' },
+        ],
+      },
+      { nome: 'Compradores e prazos', desc: 'Quem compra e em quantos dias chega', itens: [{ label: 'Exibir todos', href: '/compras-cadastros' }] },
       { nome: 'Devolução ao fornecedor', desc: 'Mercadoria devolvida e nota de devolução', itens: [{ label: 'Exibir todas', href: '/devolucao-fornecedor' }] },
       {
         nome: 'Relatórios',
@@ -192,18 +205,11 @@ export const MODULOS: ModuloCentral[] = [
     desc: 'Ordens de produção, inventários e transferências.',
     icone: Factory,
     atalhos: [
-      // ?criar=1 abre o formulário direto (a tela /ordem-producao/nova sozinha só funciona depois do passo 1).
-      { label: 'Criar uma ordem de produção', href: '/ordem-producao?criar=1', desc: 'Escolher data, local e produtos', regra: '/ordem-producao', soEstoqueProprio: true },
+      criar('Criar uma ordem de produção', '/ordem-producao', { desc: 'Escolher data, local e produtos', soEstoqueProprio: true }),
       { label: 'Ver ordens de produção', href: '/ordem-producao', desc: 'Abertas e concluídas' },
-      { label: 'Criar um inventário', href: '/inventario?criar=1', desc: 'Contar e acertar o saldo', regra: '/inventario' },
+      criar('Criar um inventário', '/inventario', { desc: 'Contar e acertar o saldo' }),
       { label: 'Ver inventários', href: '/inventario', desc: 'Contagens feitas e em andamento' },
-      {
-        label: 'Ver fichas técnicas',
-        href: '/produto',
-        desc: 'Estrutura dos produtos (ícone de camadas na lista)',
-        soEstoqueProprio: true,
-        ref: true,
-      },
+      criar('Criar uma transferência', '/transferencia', { desc: 'Mover entre locais da loja' }),
     ],
     secoes: [
       {
@@ -212,6 +218,7 @@ export const MODULOS: ModuloCentral[] = [
         itens: [
           { label: 'Ordens abertas', href: '/ordem-producao/abertas', desc: 'O que ainda está para produzir' },
           { label: 'Etiquetas e listas', href: '/impressoes', desc: 'Imprimir etiquetas e listas de contagem' },
+          { label: 'Fichas técnicas', href: '/produto', desc: 'Estrutura dos produtos (ícone de camadas na lista)', soEstoqueProprio: true, ref: true },
         ],
       },
       { nome: 'Transferências', desc: 'Entre locais da loja', itens: [{ label: 'Exibir todas', href: '/transferencia' }] },
@@ -225,16 +232,17 @@ export const MODULOS: ModuloCentral[] = [
   {
     id: 'fiscal',
     nome: 'Fiscal',
-    desc: 'Notas, categorias contábeis e pacote do contador.',
+    desc: 'Notas, transferências entre lojas e pacote do contador.',
     icone: FileText,
     atalhos: [
       { label: 'Conferir notas de entrada', href: '/nota-fiscal', desc: 'Entradas', ref: true },
       { label: 'Emitir NF-e de saída', href: '/nfe-saida', desc: 'Emitir e acompanhar' },
       { label: 'Fechar o mês com o contador', href: '/contador', desc: 'Pacote do mês' },
+      criar('Criar transferência entre lojas', '/transferencia-loja', { desc: 'Enviar mercadoria com nota fiscal' }),
     ],
     secoes: [
       { nome: 'Transferências entre lojas', desc: 'Notas de transferência', itens: [{ label: 'Exibir todas', href: '/transferencia-loja' }] },
-      { nome: 'Categorias contábeis', desc: 'Como as notas entram na contabilidade', itens: [{ label: 'Exibir todas', href: '/categoria-contabil' }] },
+      { nome: 'Categorias contábeis', desc: 'Como as notas entram na contabilidade', itens: [criar('Incluir', '/categoria-contabil'), { label: 'Exibir todas', href: '/categoria-contabil' }] },
       {
         nome: 'Relatórios',
         tipo: 'relatorio',
@@ -245,71 +253,36 @@ export const MODULOS: ModuloCentral[] = [
   {
     id: 'financas',
     nome: 'Finanças',
-    desc: 'Contas a pagar, a receber e caixa.',
+    desc: 'Contas a pagar, caixa, extrato e resultado.',
     icone: Wallet,
     atalhos: [
       { label: 'Lançar uma conta a pagar', href: '/financeiro/contas-pagar/nova', desc: 'Fornecedor, valor e vencimento', regra: '/financeiro/contas-pagar', soEstoqueProprio: true },
-      breve('Resumo', 'Caixa de hoje e vencimentos'),
       { label: 'Ver contas a pagar', href: '/financeiro/contas-pagar', desc: 'Em aberto e atrasadas', soEstoqueProprio: true },
+      { label: 'Ver o extrato', href: '/financeiro/extrato', desc: 'Entradas e saídas das contas', soEstoqueProprio: true },
+      breve('Resumo', 'Caixa de hoje e vencimentos'),
       breve('Contas a receber', 'Cartões e convênios'),
       breve('Aprovação de pagamentos', 'Aguardando o dono'),
     ],
     secoes: [
-      {
-        // Exibir todas = o atalho acima; registrar e estornar pagamento são ações da própria lista e da ficha do título.
-        nome: 'Contas a pagar',
-        desc: 'Boletos e compromissos',
-        itens: [breve('Importar planilha')],
-      },
+      { nome: 'Contas a pagar', desc: 'Boletos e compromissos', itens: [breve('Importar planilha')] },
       { nome: 'Contas a receber', itens: [breve('Incluir'), breve('Exibir todas'), breve('Registrar recebimentos')] },
-      { nome: 'Contas correntes', desc: 'Caixa, banco e cartão', itens: [{ label: 'Exibir todas', href: '/financeiro/contas-correntes', soEstoqueProprio: true }] },
-      { nome: 'Categorias financeiras', desc: 'Onde cada despesa cai no DRE', itens: [{ label: 'Exibir todas', href: '/financeiro/categorias', soEstoqueProprio: true }] },
       {
-        nome: 'Movimentação',
-        desc: 'Entradas e saídas das contas',
+        nome: 'Contas correntes',
+        desc: 'Caixa, banco e cartão',
         itens: [
-          breve('Incluir lançamento'),
-          breve('Incluir transferência'),
-          breve('Importar extrato OFX'),
-          { label: 'Exibir extrato', href: '/financeiro/extrato', soEstoqueProprio: true },
+          criar('Incluir', '/financeiro/contas-correntes', { soEstoqueProprio: true }),
+          { label: 'Exibir todas', href: '/financeiro/contas-correntes', soEstoqueProprio: true },
         ],
       },
       {
-        nome: 'Relatórios',
-        tipo: 'relatorio',
-        itens: [breve('Contas a pagar em aberto'), breve('Pagamentos realizados'), breve('Fluxo de caixa'), breve('DRE')],
-      },
-    ],
-  },
-  {
-    id: 'administracao',
-    nome: 'Administração',
-    desc: 'Lojas, pessoas, relatórios e saúde do sistema.',
-    icone: Settings,
-    atalhos: [
-      { label: 'Gerenciar usuários', href: '/usuario', desc: 'Quem acessa o quê' },
-      { label: 'Ver todos os relatórios', href: '/relatorios', desc: 'Todos num lugar só' },
-      { label: 'Ver a saúde da integração', href: '/sync-status', desc: 'Omie e SEFAZ' },
-      { label: 'Ver logs de integração', href: '/log', desc: 'Erros e envios' },
-    ],
-    secoes: [
-      {
-        nome: 'Lojas',
-        desc: 'Unidades da rede',
+        nome: 'Categorias financeiras',
+        desc: 'Onde cada despesa cai no DRE',
         itens: [
-          { label: 'Exibir todas', href: '/loja' },
-          { label: 'Minha loja', href: '/minha-loja' },
+          criar('Incluir', '/financeiro/categorias', { soEstoqueProprio: true }),
+          { label: 'Exibir todas', href: '/financeiro/categorias', soEstoqueProprio: true },
         ],
       },
-      { nome: 'Usuários', desc: 'Quem acessa o sistema', itens: [{ label: 'Cargos', href: '/cargo', regra: '/usuario' }] },
-      {
-        nome: 'Sistema',
-        tipo: 'consulta',
-        itens: [
-          { label: 'Saúde do banco', href: '/saude-banco', desc: 'Espaço, lentidão e erros do banco' },
-          { label: 'Sincronização', href: '/sincronizacao', soDesktop: true, desc: 'Dados do computador com a nuvem' },
-        ],
-      },
+      { nome: 'Movimentação', desc: 'Lançamentos e extrato das contas', itens: [breve('Incluir lançamento'), breve('Incluir transferência'), breve('Importar extrato OFX')] },
       {
         nome: 'Relatórios',
         tipo: 'relatorio',
@@ -322,6 +295,46 @@ export const MODULOS: ModuloCentral[] = [
           rel('Lucro', '/relatorio-lucro', { soEstoqueProprio: true }),
           rel('Meta do mês', '/meta-mensal'),
           rel('Meta de faturamento', '/relatorio-meta'),
+          breve('Contas a pagar em aberto'),
+          breve('Pagamentos realizados'),
+          breve('Fluxo de caixa'),
+          breve('DRE'),
+        ],
+      },
+    ],
+  },
+  {
+    id: 'administracao',
+    nome: 'Administração',
+    desc: 'Lojas, pessoas, permissões e saúde do sistema.',
+    icone: Settings,
+    atalhos: [
+      { label: 'Ver todos os relatórios', href: '/relatorios', desc: 'Todos num lugar só' },
+      { label: 'Ver a saúde da integração', href: '/sync-status', desc: 'Omie e SEFAZ' },
+      { label: 'Ver logs de integração', href: '/log', desc: 'Erros e envios' },
+    ],
+    secoes: [
+      {
+        nome: 'Usuários',
+        desc: 'Quem acessa o sistema',
+        itens: [criar('Incluir', '/usuario'), { label: 'Exibir todos', href: '/usuario' }],
+      },
+      {
+        nome: 'Cargos',
+        desc: 'O que cada função pode fazer',
+        itens: [criar('Incluir', '/cargo', { regra: '/usuario' }), { label: 'Exibir todos', href: '/cargo', regra: '/usuario' }],
+      },
+      {
+        nome: 'Lojas',
+        desc: 'Unidades da rede',
+        itens: [criar('Incluir', '/loja'), { label: 'Exibir todas', href: '/loja' }, { label: 'Minha loja', href: '/minha-loja' }],
+      },
+      {
+        nome: 'Sistema',
+        tipo: 'consulta',
+        itens: [
+          { label: 'Saúde do banco', href: '/saude-banco', desc: 'Espaço, lentidão e erros do banco' },
+          { label: 'Sincronização', href: '/sincronizacao', soDesktop: true, desc: 'Dados do computador com a nuvem' },
         ],
       },
     ],

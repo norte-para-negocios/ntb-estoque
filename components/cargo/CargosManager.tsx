@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { useCriarDaCentral } from '@/lib/use-criar-da-central'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { IdCard, Plus, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -89,6 +90,8 @@ function EditorCargo({
   const [sel, setSel] = useState<Set<number>>(new Set(cargo?.permissaoIds ?? []))
   const [pending, start] = useTransition()
   const router = useRouter()
+
+  useCriarDaCentral(() => setOpen(true), !cargo)
 
   function toggle(id: number) {
     setSel((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })

@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { useCriarDaCentral } from '@/lib/use-criar-da-central'
 import {
   Dialog,
   DialogContent,
@@ -42,6 +43,7 @@ export function NovoUsuario({
   const [copiado, setCopiado] = useState(false)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
+  useCriarDaCentral(() => setOpen(true))
 
   // Mapa nome da permissao -> id (vindo do banco), pra casar com o catalogo.
   const idPorNome = useMemo(() => {

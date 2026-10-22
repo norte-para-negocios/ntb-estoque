@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { useCriarDaCentral } from '@/lib/use-criar-da-central'
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 import { Plus, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
@@ -28,6 +29,7 @@ export function CategoriaContabilForm({ categoria }: { categoria?: CategoriaCont
   })
   const [pending, startTransition] = useTransition()
   const router = useRouter()
+  useCriarDaCentral(() => setOpen(true), !editando)
 
   function set<K extends keyof CategoriaContabilInput>(campo: K, valor: CategoriaContabilInput[K]) {
     setForm((prev) => ({ ...prev, [campo]: valor }))

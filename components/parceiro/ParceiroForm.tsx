@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { useCriarDaCentral } from '@/lib/use-criar-da-central'
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 import { Plus, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
@@ -69,6 +70,7 @@ export function ParceiroForm({
   const [form, setForm] = useState<ParceiroFormValues>(existente?.values ?? vazio(comCest))
   const [pending, startTransition] = useTransition()
   const router = useRouter()
+  useCriarDaCentral(() => setOpen(true), !editando)
 
   function set<K extends keyof ParceiroFormValues>(campo: K, valor: ParceiroFormValues[K]) {
     setForm((prev) => ({ ...prev, [campo]: valor }))

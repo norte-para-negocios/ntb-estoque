@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { useCriarDaCentral } from '@/lib/use-criar-da-central'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { btnClass } from '@/components/ui-kit/Button'
@@ -21,6 +22,7 @@ const lerNum = (t: string) => { const s = t.trim(); return s ? Number(s.includes
 export function NovaTransferenciaLoja({ destinos, locais }: { destinos: Destino[]; locais: Local[] }) {
   const router = useRouter()
   const [aberto, setAberto] = useState(false)
+  useCriarDaCentral(() => setAberto(true))
   const [destino, setDestino] = useState<number | ''>('')
   const [local, setLocal] = useState<number | ''>(locais[0]?.codigo ?? '')
   const [busca, setBusca] = useState('')
