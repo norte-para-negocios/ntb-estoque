@@ -6,6 +6,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
+import { btnClass } from '@/components/ui-kit/Button'
 import { Money } from '@/components/ui-kit/Money'
 import { ConfigNfeForm } from '@/components/nfe-saida/ConfigNfeForm'
 import { listarNfesSaida } from '@/lib/nfe-saida/loader'
@@ -59,7 +60,10 @@ export default async function NfeSaidaPage() {
               }} />
           </section>
           {nfes.length === 0 ? (
-            <EmptyState icon={FileOutput} title="Nenhuma NF-e de saída" hint="Registre uma devolução ao fornecedor (na nota de entrada) ou uma transferência entre lojas e emita a NF-e por lá." />
+            <EmptyState icon={FileOutput} title="Nenhuma NF-e de saída" hint="Registre uma devolução ao fornecedor (na nota de entrada) ou uma transferência entre lojas e emita a NF-e por lá.">
+              <Link href="/devolucao-fornecedor" className={btnClass('outline')}>Devoluções ao fornecedor</Link>
+              <Link href="/transferencia-loja" className={btnClass('outline')}>Transferências entre lojas</Link>
+            </EmptyState>
           ) : (
             <ul className="divide-y divide-[var(--border)] overflow-hidden rounded-[var(--r-lg)] bg-surface u-card">
               {nfes.map((n) => (

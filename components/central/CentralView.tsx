@@ -26,10 +26,10 @@ const CenaCentral = dynamic(() => import('./CenaCentral'), { ssr: false })
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
 // ---------- movimento ----------
-const lista: Variants = { oculto: {}, visivel: { transition: { staggerChildren: 0.055, delayChildren: 0.05 } } }
+const lista: Variants = { oculto: {}, visivel: { transition: { staggerChildren: 0.03, delayChildren: 0.02 } } }
 const entra: Variants = {
-  oculto: { opacity: 0, y: 16, scale: 0.985 },
-  visivel: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', bounce: 0.12, duration: 0.55 } },
+  oculto: { opacity: 0, y: 10 },
+  visivel: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0.1, duration: 0.35 } },
 }
 const semMovimento: Variants = { oculto: { opacity: 1 }, visivel: { opacity: 1 } }
 
@@ -52,8 +52,8 @@ function useVariantes() {
 }
 
 // ---------- peças ----------
-function Bloco({ label, secao, tamanho = 'm' }: { label: string; secao?: string; tamanho?: 'p' | 'm' | 'g' }) {
-  const { Icon, tom } = iconeDoItem(label, secao)
+function Bloco({ label, secao, href, tamanho = 'm' }: { label: string; secao?: string; href?: string; tamanho?: 'p' | 'm' | 'g' }) {
+  const { Icon, tom } = iconeDoItem(label, secao, href)
   const cls = tamanho === 'g' ? 'size-12 rounded-[16px]' : tamanho === 'm' ? 'size-10 rounded-[13px]' : 'size-8 rounded-[10px]'
   const ic = tamanho === 'g' ? 'size-[23px]' : tamanho === 'm' ? 'size-[19px]' : 'size-[16px]'
   return (
@@ -88,7 +88,7 @@ function Estrela({ href, favs, alternar }: { href: string; favs: string[]; alter
       aria-pressed={on}
       aria-label={on ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
       title={on ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
-      className={`flex size-7 shrink-0 items-center justify-center rounded-full u-motion u-press-sm hover:bg-surface-2 focus-visible:opacity-100 ${
+      className={`flex size-7 shrink-0 items-center justify-center rounded-full u-motion u-press-sm hover:bg-surface-2 focus-visible:opacity-100 [@media(hover:none)]:size-11 ${
         on ? 'text-warn opacity-100' : 'text-text-muted/60 opacity-0 hover:text-text group-hover:opacity-100 [@media(hover:none)]:opacity-100'
       }`}
     >
@@ -145,7 +145,7 @@ function CartaoAcao({ item, principal, favs, alternar }: { item: ItemPronto; pri
                 : 'contents'
             }
           >
-            {principal ? React.createElement(iconeDoItem(item.label).Icon, { className: 'size-[23px]', strokeWidth: 1.9 }) : <Bloco label={item.label} tamanho="g" />}
+            {principal ? React.createElement(iconeDoItem(item.label, undefined, item.href).Icon, { className: 'size-[23px]', strokeWidth: 1.9 }) : <Bloco label={item.label} href={item.href} tamanho="g" />}
           </span>
           <span>
             <span className="flex items-center gap-2">
@@ -180,7 +180,7 @@ function CartaoConsulta({ item, secao, favs, alternar }: { item: ItemPronto; sec
         className="group flex items-center gap-1 rounded-[18px] bg-surface pr-2 shadow-[var(--shadow-sm)] transition-shadow duration-200 hover:shadow-[var(--shadow-md)]"
       >
         <Link href={item.href!} className="flex min-h-[68px] flex-1 items-center gap-3.5 p-3.5">
-          <Bloco label={item.label} secao={secao} />
+          <Bloco label={item.label} secao={secao} href={item.href} />
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-2">
               <span className="truncate text-[15px] font-semibold text-text group-hover:text-brand">{item.label}</span>
@@ -198,19 +198,21 @@ function CartaoConsulta({ item, secao, favs, alternar }: { item: ItemPronto; sec
 
 // ---------- cadastros (uma coisa, vários botões) ----------
 const CLASSE_BOTAO = {
-  novo: 'bg-[color-mix(in_srgb,#16a34a_14%,transparent)] text-[#15803d] hover:bg-[#16a34a] hover:text-white dark:text-[#4ade80] dark:hover:text-white',
-  importar: 'bg-[color-mix(in_srgb,#2563eb_14%,transparent)] text-[#1d4ed8] hover:bg-[#2563eb] hover:text-white dark:text-[#93c5fd] dark:hover:text-white',
+  novo: 'bg-[color-mix(in_srgb,var(--tone-new)_14%,transparent)] text-[var(--tone-new)] hover:bg-[#15803d] hover:text-white',
+  importar: 'bg-[color-mix(in_srgb,var(--tone-import)_14%,transparent)] text-[var(--tone-import)] hover:bg-[#1d4ed8] hover:text-white',
   padrao: 'bg-surface-2 text-text hover:bg-brand-fill hover:text-white',
 } as const
 
 function CartaoCadastro({ secao }: { secao: SecaoPronta }) {
   const v = useVariantes()
-  const Icon = iconeDaSecao(secao.nome)
+  // O ícone do cadastro é o da tela dele ("Exibir todos"): o mesmo do menu lateral.
+  const exibir = secao.itens.find((i) => /^exibir/i.test(i.label))
+  const Icon = exibir ? iconeDoItem(secao.nome, undefined, exibir.href).Icon : iconeDaSecao(secao.nome)
   return (
     <motion.section variants={v.entra} className="flex flex-col gap-4 rounded-[22px] bg-surface p-5 shadow-[var(--shadow-sm)]">
       <div className="flex items-start gap-3.5">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-[13px] bg-brand-soft text-brand" aria-hidden>
-          <Icon className="size-[19px]" strokeWidth={1.9} />
+          {React.createElement(Icon, { className: 'size-[19px]', strokeWidth: 1.9 })}
         </span>
         <div className="min-w-0">
           <h3 className="text-[15px] font-semibold leading-tight text-text">{secao.nome}</h3>
@@ -237,14 +239,14 @@ function CartaoCadastro({ secao }: { secao: SecaoPronta }) {
 // ---------- relatórios ----------
 function ChipRelatorio({ item }: { item: ItemPronto }) {
   const v = useVariantes()
-  const { Icon } = iconeDoItem(item.label)
+  const { Icon } = iconeDoItem(item.label, undefined, item.href)
   return (
     <motion.span variants={v.entra} whileHover={v.reduzir ? undefined : { y: -2 }} whileTap={v.reduzir ? undefined : { scale: 0.96 }} transition={SPRING_UI}>
       <Link
         href={item.href!}
         className="inline-flex h-10 items-center gap-2 rounded-full bg-surface px-4 text-[14px] font-medium text-text shadow-[var(--shadow-sm)] u-motion hover:text-brand hover:shadow-[var(--shadow-md)]"
       >
-        <Icon className="size-4 text-[#8b5cf6]" strokeWidth={2} aria-hidden />
+        <Icon className="size-4 text-text-muted" strokeWidth={2} aria-hidden />
         {item.label}
         <Etiquetas item={item} />
       </Link>
@@ -318,23 +320,24 @@ function BarraFavoritos({ favs, modulos, alternar }: { favs: string[]; modulos: 
 }
 
 // ---------- faixa "Novo" (criar documentos) ----------
-function BotaoNovo({ item, primeiro }: { item: ItemPronto; primeiro: boolean }) {
+function BotaoNovo({ item }: { item: ItemPronto }) {
   const v = useVariantes()
+  // Ícone do documento com um "+" no canto (não um "+" igual para todos); um só destaque por tela: o cartão principal.
+  const { Icon, tom } = iconeDoItem(item.label, undefined, item.href)
   return (
     <motion.span variants={v.entra} whileHover={v.reduzir ? undefined : { y: -2 }} whileTap={v.reduzir ? undefined : { scale: 0.96 }} transition={SPRING_UI} className="inline-flex">
       <Link
         href={item.href!}
-        className={`inline-flex h-11 items-center gap-2 rounded-full pl-3.5 pr-4 text-[14px] font-semibold shadow-[var(--shadow-sm)] u-motion ${
-          primeiro
-            ? 'bg-brand-fill text-white hover:bg-[var(--brand-fill-hover)]'
-            : 'bg-surface text-text hover:text-brand hover:shadow-[var(--shadow-md)]'
-        }`}
+        className="inline-flex h-11 items-center gap-2.5 rounded-full bg-surface pl-2 pr-4 text-[14px] font-semibold text-text shadow-[var(--shadow-sm)] u-motion outline-none hover:text-brand hover:shadow-[var(--shadow-md)] focus-visible:ring-2 focus-visible:ring-brand"
       >
-        <span className={`flex size-6 items-center justify-center rounded-full ${primeiro ? 'bg-white/20' : 'bg-[color-mix(in_srgb,#16a34a_15%,transparent)] text-[#16a34a]'}`}>
-          <Plus className="size-4" strokeWidth={2.4} aria-hidden />
+        <span className={`relative flex size-8 items-center justify-center rounded-full ${CLASSE_TOM[tom === 'importar' ? 'importar' : 'novo']}`}>
+          <Icon className="size-[17px]" strokeWidth={1.9} aria-hidden />
+          <span className="absolute -bottom-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full bg-surface text-current shadow-[0_0_0_1.5px_currentColor]" aria-hidden>
+            <Plus className="size-2.5" strokeWidth={3} />
+          </span>
         </span>
         {item.label}
-        <Etiquetas item={item} claro={primeiro} />
+        <Etiquetas item={item} />
       </Link>
     </motion.span>
   )
@@ -447,7 +450,7 @@ export function CentralModulo({ id }: { id: string }) {
               <Titulo>Novo</Titulo>
               <div className="flex flex-wrap gap-2.5">
                 {org.novos.map((i, k) => (
-                  <BotaoNovo key={`${i.label}-${k}`} item={i} primeiro={k === 0} />
+                  <BotaoNovo key={`${i.label}-${k}`} item={i} />
                 ))}
               </div>
             </section>
@@ -538,7 +541,7 @@ export function CentralGeral() {
               </Link>
               <ul className="mt-4 flex flex-wrap gap-1.5">
                 {telas.map((i, k) => {
-                  const { Icon: Ic } = iconeDoItem(i.label)
+                  const { Icon: Ic } = iconeDoItem(i.label, undefined, i.href)
                   return (
                     <li key={`${i.label}-${k}`}>
                       <Link

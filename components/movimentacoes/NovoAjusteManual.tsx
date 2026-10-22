@@ -20,9 +20,11 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui-kit/Spinner'
+import { Combobox } from '@/components/ui-kit/Combobox'
 import { Info, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { criarAjusteManual } from '@/lib/actions/movimentacoes'
+import { useCriarDaCentral } from '@/lib/use-criar-da-central'
 
 type Local = { codigo_local_estoque: number; descricao: string | null }
 type Produto = { id_prod: number; codigo: string; descricao: string }
@@ -32,8 +34,15 @@ const TIPOS_AJUSTE: Record<'ENT' | 'SAI', string> = {
   SAI: 'Saída (ajuste negativo)',
 }
 
-export function NovoAjusteManual({ locais, produto, proprio = false }: { locais: Local[]; produto: Produto; proprio?: boolean }) {
+/**
+ * Sem `produto`, o formulário pede o produto (`produtos`): é o "+ Ajuste de estoque" do menu novo,
+ * que abre direto pela central (`?criar=1`).
+ */
+export function NovoAjusteManual({ locais, produto: produtoFixo, produtos, proprio = false }: { locais: Local[]; produto?: Produto; produtos?: Produto[]; proprio?: boolean }) {
   const [open, setOpen] = useState(false)
+  const [escolhido, setEscolhido] = useState('')
+  const produto = produtoFixo ?? produtos?.find((p) => String(p.id_prod) === escolhido) ?? null
+  useCriarDaCentral(() => setOpen(true), !produtoFixo)
   const [tipo, setTipo] = useState<'ENT' | 'SAI'>('SAI')
   const [local, setLocal] = useState('')
   const [quantidade, setQuantidade] = useState('')
@@ -47,6 +56,10 @@ export function NovoAjusteManual({ locais, produto, proprio = false }: { locais:
 
   function criar() {
     const qtd = Number(quantidade.replace(',', '.'))
+    if (!produto) {
+      toast.error('Escolha o produto')
+      return
+    }
     if (!local) {
       toast.error('Selecione o local de estoque')
       return
@@ -89,6 +102,7 @@ export function NovoAjusteManual({ locais, produto, proprio = false }: { locais:
       setMotivo('')
       setCusto('')
       setPerda(false)
+      if (!produtoFixo) setEscolhido('')
       router.refresh()
     })
   }
@@ -98,7 +112,7 @@ export function NovoAjusteManual({ locais, produto, proprio = false }: { locais:
       <DialogTrigger
         render={
           <Button variant="outline">
-            <Plus className="size-4" /> Novo ajuste
+            <Plus className="size-4" /> {produtoFixo ? 'Novo ajuste' : 'Ajuste de estoque'}
           </Button>
         }
       />
@@ -107,9 +121,21 @@ export function NovoAjusteManual({ locais, produto, proprio = false }: { locais:
           <DialogTitle>Novo ajuste manual</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <p className="text-[13px] text-text-muted">
-            <span className="num">{produto.codigo}</span> {produto.descricao}
-          </p>
+          {produtoFixo ? (
+            <p className="text-[13px] text-text-muted">
+              <span className="num">{produtoFixo.codigo}</span> {produtoFixo.descricao}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <Label>Produto</Label>
+              <Combobox
+                options={(produtos ?? []).map((p) => ({ value: String(p.id_prod), label: `${p.codigo} · ${p.descricao}` }))}
+                value={escolhido}
+                onChange={setEscolhido}
+                placeholder="Busque pelo nome ou código"
+              />
+            </div>
+          )}
           <p className="flex items-start gap-2.5 rounded-[var(--r-lg)] bg-surface-2 px-4 py-3 text-[13px] text-text-muted">
             <Info className="mt-0.5 size-3.5 shrink-0 text-warn" />
             <span>

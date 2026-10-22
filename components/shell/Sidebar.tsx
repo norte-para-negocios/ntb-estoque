@@ -151,7 +151,7 @@ export function Sidebar({
 
       <aside
         data-recolhida={recolhida}
-        className={`sidebar-blue hidden lg:flex shrink-0 flex-col sticky top-0 h-screen self-start overflow-hidden will-change-[width,opacity] ${
+        className={`sidebar-blue ${menuNovo ? 'sidebar-contraste' : ''} hidden lg:flex shrink-0 flex-col sticky top-0 h-screen self-start overflow-hidden will-change-[width,opacity] ${
           recolhida ? 'w-0 -translate-x-2 opacity-0 pointer-events-none' : 'w-64 translate-x-0 opacity-100'
         }`}
         style={{

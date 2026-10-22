@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
@@ -60,11 +61,16 @@ export default async function ProdutoSubstituicaoPage({
   // Todos os produtos da loja, só pro dropdown de seleção do form de criar
   // vínculo (ProdutoSubstituicaoForm) -- esse uso precisa continuar buscando
   // o cadastro inteiro, não só os já vinculados.
-  const { data: todosProdutos } = await supabase
-    .from('produtos')
-    .select('n_cod_prod:codigo_produto, descricao')
-    .eq('loja_id', lojaId)
-    .order('descricao')
+  // Paginado: o PostgREST corta em 1000 e as lojas têm 2.300–2.900 produtos.
+  const todosProdutos = await buscarTodasLinhas<Produto>((from, to) =>
+    supabase
+      .from('produtos')
+      .select('n_cod_prod:codigo_produto, descricao')
+      .eq('loja_id', lojaId)
+      .order('descricao')
+      .order('codigo_produto')
+      .range(from, to),
+  )
 
   // Map construído uma vez (em vez de .find() linear a cada chamada, 2x por
   // comparação dentro do .sort() abaixo) -- mesmo mapa usado no sort e no render.
@@ -97,7 +103,7 @@ export default async function ProdutoSubstituicaoPage({
           icon={Shuffle}
           description="Quando um produto não tem histórico de venda próprio (ex.: troca de marca/fornecedor), a previsão usa o histórico do produto vinculado aqui."
           voltarHref="/produto"
-          actions={podeCriar ? <ProdutoSubstituicaoForm produtos={(todosProdutos ?? []) as Produto[]} /> : undefined}
+          actions={podeCriar ? <ProdutoSubstituicaoForm produtos={todosProdutos} /> : undefined}
         />
       </ListaHeader>
 

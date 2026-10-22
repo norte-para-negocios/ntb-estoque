@@ -1,9 +1,9 @@
 import {
   LayoutDashboard,
   Boxes,
-  ShoppingCart,
+  ShoppingBag,
   Factory,
-  FileText,
+  Stamp,
   Wallet,
   Settings,
   type LucideIcon,
@@ -95,13 +95,16 @@ export const MODULOS: ModuloCentral[] = [
   {
     id: 'estoque',
     nome: 'Estoque',
-    desc: 'Saldo, movimentos, validade e cadastro de produtos.',
+    desc: 'Saldo, movimentos, inventários, transferências e cadastro de produtos.',
     icone: Boxes,
-    novos: [],
+    // Contar e mover entre locais são operações de estoque (antes ficavam em Produção).
+    novos: [criar('Ajuste de estoque', '/estoque/ajustes', { regra: '/estoque' }), criar('Inventário', '/inventario'), criar('Transferência', '/transferencia')],
     telas: [
       { label: 'Estoque', href: '/estoque', desc: 'Saldo e custo de cada produto', principal: true },
       { label: 'Central de correções', href: '/estoque/correcoes', desc: 'Diferenças a corrigir' },
       { label: 'Movimentações', href: '/movimentacoes', desc: 'Todas as entradas e saídas' },
+      { label: 'Inventários', href: '/inventario', desc: 'Contagens feitas e em andamento' },
+      { label: 'Transferências', href: '/transferencia', desc: 'Entre locais da loja' },
       { label: 'Validade', href: '/validade', desc: 'Lotes a vencer' },
       { label: 'Reposição', href: '/reposicao', desc: 'O que está abaixo do mínimo' },
       { label: 'Kardex da loja', href: '/estoque/kardex', soOmie: true, desc: 'Histórico de um produto, dia a dia' },
@@ -143,7 +146,7 @@ export const MODULOS: ModuloCentral[] = [
     id: 'compras',
     nome: 'Compras',
     desc: 'Do pedido ao recebimento da nota.',
-    icone: ShoppingCart,
+    icone: ShoppingBag, // ShoppingCart fica para Pedidos de compra
     novos: [
       // Loja Omie: o pedido só é criado com a gravação no Omie ligada (C1, desligada); até lá, só estoque próprio.
       { label: 'Pedido de compra', href: '/pedido-compra/novo', soEstoqueProprio: true },
@@ -186,19 +189,15 @@ export const MODULOS: ModuloCentral[] = [
   {
     id: 'producao',
     nome: 'Produção',
-    desc: 'Ordens de produção, inventários e transferências.',
+    desc: 'Ordens de produção, OPs abertas e impressões.',
     icone: Factory,
     novos: [
       // A tela /ordem-producao/nova sozinha é o passo 2; o passo 1 é o formulário da lista (?criar=1).
-      criar('Ordem de produção', '/ordem-producao', { soEstoqueProprio: true }),
-      criar('Inventário', '/inventario'),
-      criar('Transferência', '/transferencia'),
+      criar('Ordem de produção', '/ordem-producao'),
     ],
     telas: [
       { label: 'Ordens de Produção', href: '/ordem-producao', desc: 'Abertas e concluídas', principal: true },
       { label: 'OPs abertas', href: '/ordem-producao/abertas', desc: 'O que ainda está para produzir' },
-      { label: 'Inventários', href: '/inventario', desc: 'Contagens feitas e em andamento' },
-      { label: 'Transferências', href: '/transferencia', desc: 'Entre locais da loja' },
       { label: 'Impressões', href: '/impressoes', desc: 'Etiquetas e listas de contagem' },
     ],
     secoes: [
@@ -213,7 +212,7 @@ export const MODULOS: ModuloCentral[] = [
     id: 'fiscal',
     nome: 'Fiscal',
     desc: 'Notas de saída, transferências entre lojas e contador.',
-    icone: FileText,
+    icone: Stamp, // FileText era o ícone genérico de reserva
     novos: [criar('Transferência entre lojas', '/transferencia-loja')],
     telas: [
       { label: 'NF-e de saída', href: '/nfe-saida', desc: 'Emitir e acompanhar', principal: true },

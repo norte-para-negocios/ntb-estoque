@@ -267,3 +267,8 @@ test('módulo ativo pelo pathname, inclusive rotas filhas', () => {
   assert.equal(moduloDoPath('/home'), 'inicio')
   assert.equal(moduloDoPath('/sugestao-compra'), 'compras')
 })
+
+test('"+ Ordem de produção" aparece também na loja Omie (a tela cria a OP lá)', () => {
+  const op = todosItens.find((i) => i.href === '/ordem-producao?criar=1')!
+  assert.equal(itemVisivel(op, NAV_ITEMS, { ...dev, estoqueProprio: false }), true)
+})

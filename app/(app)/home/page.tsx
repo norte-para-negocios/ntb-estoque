@@ -25,6 +25,7 @@ import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { TEXTO_CLASSE, type CorToken } from '@/lib/status-cor'
 import { limiteJanelaQuente, contarOrdensProducaoAntigas, complementarOrdensProducao } from '@/lib/historico-contabo'
 import { PainelGerencial } from '@/components/home/PainelGerencial'
+import { ehDesenvolvedor } from '@/lib/recursos-dev'
 
 export default async function HomePage() {
   const profile = await getProfile()
@@ -243,15 +244,36 @@ export default async function HomePage() {
   if ((nfPendentes.count ?? 0) > 0 && pode('Notas Fiscais'))
     alertas.push({ icon: FileText, token: 'warn', texto: `${nfPendentes.count} nota(s) fiscal(is) pendente(s) este mês`, href: '/nota-fiscal?status=P' })
 
+  // Menu novo (só desenvolvedores, loja de estoque próprio): o que os módulos de compras, produção e finanças
+  // já calculam e o painel não mostrava. Tabela que ainda não existe (migration não aplicada) só não gera alerta.
+  if (homeProprio && (await ehDesenvolvedor())) {
+    const [contasHoje, opsHoje, pedidosAprovar, requisicoesAprovar] = await Promise.all([
+      supabase.from('fin_titulos_pagar').select('id', head).eq('loja_id', lojaId).in('status', ['aberto', 'parcial']).lte('data_vencimento', hojeLocal),
+      supabase.from('ordens_producao').select('id', head).eq('loja_id', lojaId).eq('concluida', false).lte('identificacao_d_dt_previsao', hojeLocal),
+      supabase.from('pedidos_compra').select('id', head).eq('loja_id', lojaId).eq('etapa', 'aguardando_aprovacao'),
+      supabase.from('requisicoes_compra').select('id', head).eq('loja_id', lojaId).eq('etapa', 'aberta'),
+    ])
+    const n = (r: { count: number | null; error: unknown }) => (r.error ? 0 : r.count ?? 0)
+    if (n(contasHoje) > 0)
+      alertas.push({ icon: CalendarClock, token: 'warn', texto: `${n(contasHoje)} conta(s) a pagar vencem hoje ou estão atrasadas`, href: `/financeiro/contas-pagar?situacao=em_aberto&ate=${hojeLocal}` })
+    if (n(opsHoje) > 0 && pode('Ordens de Producao'))
+      alertas.push({ icon: ClipboardList, token: 'brand', texto: `${n(opsHoje)} ordem(ns) de produção de hoje ou atrasadas para concluir`, href: `/ordem-producao?op_concluido=N&data_inicio=&data_final=${hojeLocal}` })
+    const aprovar = n(pedidosAprovar) + n(requisicoesAprovar)
+    if (aprovar > 0)
+      alertas.push({ icon: FileText, token: 'brand', texto: `${aprovar} pedido(s) ou requisição(ões) de compra esperando aprovação`, href: '/tarefas-compras' })
+  }
+
   const secundarios = [
     { label: 'Notas fiscais', value: nfs.count ?? 0, hint: '30 dias', href: '/nota-fiscal', perm: 'Notas Fiscais' },
     { label: 'Ordens de produção', value: opsTotalCount, hint: 'total', href: '/ordem-producao', perm: 'Ordens de Producao' },
     { label: 'Inventários', value: invAbertos.count ?? 0, hint: 'abertos', href: '/inventario', perm: 'Inventarios - Ver' },
   ].filter((k) => pode(k.perm))
 
+  // Desenvolvedores: "Novo …" já abre o formulário da lista (?criar=1, useCriarDaCentral); os demais seguem na lista.
+  const criarDireto = (await ehDesenvolvedor()) ? '?criar=1' : ''
   const atalhos = [
-    { label: 'Novo inventário', desc: 'Contagem de estoque', href: '/inventario', icon: ClipboardList, perm: 'Inventarios - Criar' },
-    { label: 'Nova transferência', desc: 'Entre locais', href: '/transferencia', icon: ArrowLeftRight, perm: 'Transferencias - Criar' },
+    { label: 'Novo inventário', desc: 'Contagem de estoque', href: `/inventario${criarDireto}`, icon: ClipboardList, perm: 'Inventarios - Criar' },
+    { label: 'Nova transferência', desc: 'Entre locais', href: `/transferencia${criarDireto}`, icon: ArrowLeftRight, perm: 'Transferencias - Criar' },
     { label: 'Etiquetas de NF', desc: 'Imprimir', href: '/nota-fiscal', icon: FileText, perm: 'Notas Fiscais' },
   ].filter((a) => pode(a.perm))
 

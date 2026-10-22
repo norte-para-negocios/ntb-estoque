@@ -3,7 +3,7 @@
 import * as React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ChevronDown, LayoutGrid, type LucideIcon } from 'lucide-react'
+import { ChevronDown, Compass, type LucideIcon } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { SPRING_UI } from '@/lib/motion'
 import { NAV_ITEMS } from '@/components/shell/NavItems'
@@ -16,9 +16,11 @@ import type { CtxVisibilidade } from '@/lib/nav-visivel'
 
 type Destino = { href: string; label: string; Icon: LucideIcon }
 
+const CHAVE_FECHADOS = 'menu-novo-fechados'
+
 /** Telas e cadastros do módulo (mesmos nomes da central), cada um a um clique. */
 function destinosDoModulo(m: ModuloPronto): Destino[] {
-  return destinosDoMenu(m).map((d) => ({ ...d, Icon: iconeDoItem(d.label).Icon }))
+  return destinosDoMenu(m).map((d) => ({ ...d, Icon: iconeDoItem(d.label, undefined, d.href).Icon }))
 }
 
 /** Menu novo (só desenvolvedores): 7 módulos, cada um abre a central em /central/<id>. */
@@ -27,16 +29,25 @@ export function MenuModulos({ ctx, compacto = false }: { ctx: CtxVisibilidade; c
   const modulos = React.useMemo(() => modulosVisiveis(MODULOS, NAV_ITEMS, ctx), [ctx])
   const ativo = moduloDoPath(pathname)
   const geralAtivo = pathname === '/central'
-  // Abertos: o módulo da tela atual abre sozinho; os demais abrem pela seta.
-  const [abertos, setAbertos] = React.useState<Set<string>>(() => new Set(ativo ? [ativo] : []))
-  React.useEffect(() => {
-    if (ativo) setAbertos((a) => (a.has(ativo) ? a : new Set(a).add(ativo)))
-  }, [ativo])
+  // Todos os módulos abertos (como o grupo Operação do menu antigo): qualquer tela a 1 clique.
+  // A pessoa pode recolher um módulo; isso fica lembrado neste navegador (o menu só monta no cliente).
+  // O módulo da tela atual fica sempre aberto.
+  const [fechados, setFechados] = React.useState<Set<string>>(() => {
+    try {
+      const salvo = JSON.parse(localStorage.getItem(CHAVE_FECHADOS) ?? '[]')
+      return new Set(Array.isArray(salvo) ? salvo.filter((x): x is string => typeof x === 'string') : [])
+    } catch {
+      return new Set()
+    }
+  })
   const alternar = (id: string) =>
-    setAbertos((a) => {
-      const n = new Set(a)
+    setFechados((f) => {
+      const n = new Set(f)
       if (n.has(id)) n.delete(id)
       else n.add(id)
+      try {
+        localStorage.setItem(CHAVE_FECHADOS, JSON.stringify([...n]))
+      } catch {}
       return n
     })
   const pilulaId = compacto ? 'nav-ativo-modulos-m' : 'nav-ativo'
@@ -51,7 +62,7 @@ export function MenuModulos({ ctx, compacto = false }: { ctx: CtxVisibilidade; c
     <div className="space-y-0.5" data-menu-novo>
       <Link href="/central" className={cls(geralAtivo)} aria-current={geralAtivo ? 'page' : undefined}>
         {geralAtivo && <Pilula id={pilulaId} />}
-        <LayoutGrid className="relative size-[17px] shrink-0" strokeWidth={1.9} />
+        <Compass className="relative size-[17px] shrink-0" strokeWidth={1.9} />
         <span className="relative flex-1">Visão geral</span>
       </Link>
       {modulos.map((m) => {
@@ -60,7 +71,7 @@ export function MenuModulos({ ctx, compacto = false }: { ctx: CtxVisibilidade; c
         const destinos = destinosDoModulo(m)
         // Mais específico vence: em /estoque/ajustes só "Ajustes de estoque" acende, não "Estoque".
         const destinoAtivo = hrefAtivo(pathname, destinos.map((d) => d.href))
-        const aberto = abertos.has(m.id)
+        const aberto = on || !fechados.has(m.id)
         return (
           <div key={m.id}>
             <div className="relative flex items-center">
@@ -69,13 +80,13 @@ export function MenuModulos({ ctx, compacto = false }: { ctx: CtxVisibilidade; c
                 <Icon className="relative size-[17px] shrink-0" strokeWidth={1.9} />
                 <span className="relative flex-1">{m.nome}</span>
               </Link>
-              {destinos.length > 0 && (
+              {destinos.length > 0 && !on && (
                 <button
                   type="button"
                   onClick={() => alternar(m.id)}
                   aria-expanded={aberto}
                   aria-label={`${aberto ? 'Recolher' : 'Mostrar'} as telas de ${m.nome}`}
-                  className="absolute right-1 flex size-7 items-center justify-center rounded-full text-text-muted u-motion hover:bg-white/15 hover:text-text"
+                  className={`absolute right-1 flex ${compacto ? 'size-11' : 'size-7'} items-center justify-center rounded-full text-text-muted u-motion hover:bg-white/15 hover:text-text`}
                 >
                   <motion.span animate={{ rotate: aberto ? 180 : 0 }} transition={SPRING_UI}>
                     <ChevronDown className="size-4" aria-hidden />

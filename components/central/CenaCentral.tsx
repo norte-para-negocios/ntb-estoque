@@ -178,6 +178,7 @@ export default function CenaCentral({ modulo }: { modulo: string }) {
       for (const p of pecas) p.m.geometry.dispose()
       materiais.forEach((m) => m.dispose())
       renderer.dispose()
+      renderer.forceContextLoss() // libera o WebGL na hora: cada troca de módulo cria um contexto novo
       renderer.domElement.remove()
     }
   }, [modulo])

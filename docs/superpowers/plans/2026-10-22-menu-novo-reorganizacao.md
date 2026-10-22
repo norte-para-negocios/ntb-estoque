@@ -45,3 +45,33 @@ Relatórios continuam nos módulos (gerenciais em Finanças).
 - Testes: todo item do menu antigo tem dono; nenhuma rota repetida entre módulos (sem exceção `ref` nas telas); nomes de tela únicos; "Novo" só aponta para formulário real ou `?criar=1` de tela com modal.
 - Relatório por modo (próprio × Omie) conferido módulo a módulo.
 - tsc, build, revisão independente, deploy; clique real em cada "Novo" pendente de sessão logada.
+
+## Rodada 2 (22/10/2026): auditoria completa e correções
+
+Auditoria (16 agentes, 103 itens, 507 botões, 186 achados confirmados, 15 altos): painel em
+`~/Documents/ntb-estoque/mapa-menu-novo.html`. O que entrou:
+
+**Fase 1 (erros reais)**
+- Fornecedor "+ Novo" na loja de estoque próprio grava só no banco (antes chamava o Omie e falhava sem chave):
+  código da faixa própria via `fornecedor_da_nota_sefaz`, origem `manual`, nunca sobrescreve cadastro existente.
+- Substitutos: lista de produtos paginada (cortava em 1000).
+- "+ Ordem de produção" também na loja Omie (a tela cria a OP lá).
+- Atalhos da home abrem o formulário (`?criar=1`) para desenvolvedores.
+- Estados vazios com link para o cadastro que falta (extrato, pagamento, conta a pagar, NF-e de saída).
+- Menu lateral com mais contraste no tema claro (só com o menu novo).
+
+**Fase 2 (fluxo)**
+- Todos os módulos abertos no menu lateral; recolher fica lembrado; o módulo atual sempre aberto.
+- Inventário e Transferência em Estoque (com a faixa Novo: Ajuste de estoque, Inventário, Transferência).
+- "+ Ajuste de estoque": formulário de sempre com escolha do produto (`/estoque/ajustes?criar=1`).
+- Barra inferior do celular com os módulos (Dashboard, Estoque, Compras, Produção, Mais).
+- Dashboard (só dev, loja própria): contas a pagar vencendo/atrasadas, OPs de hoje a concluir, aprovações de compra.
+
+**Fase 3 (design)**
+- Ícone por tela num mapa explícito (`ICONE_POR_ROTA`), com teste: nenhuma tela no ícone genérico, sem repetir
+  ícone dentro do módulo. Compras = ShoppingBag, Fiscal = Stamp, Visão geral = Compass.
+- Faixa Novo: ícone do documento com selo "+", um só destaque por tela (o cartão principal).
+- Cores das ações em tokens (`--tone-new/import/report/warn`, claro e escuro); cascata mais curta; WebGL liberado ao sair.
+
+**Ficou para depois (pede decisão ou muda tela de cliente)**: "Voltar" dos relatórios (F11), nomes de criar
+unificados (F14), cadeia de compras mais curta (F12), favoritos no menu lateral (F09), telas e ações no Ctrl+K (F08).

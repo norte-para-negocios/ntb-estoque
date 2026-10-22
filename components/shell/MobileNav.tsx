@@ -27,6 +27,7 @@ import { navItemVisivel } from '@/lib/nav-visivel'
 // Menu por módulos: carregado sob demanda, só para desenvolvedores. NAV_ITEMS já vai no JS de todos; ficam fora dele só a Central, Finanças e os relatórios novos (lib/central/*).
 const MenuModulos = dynamic(() => import('@/components/central/MenuModulos').then((m) => m.MenuModulos), { ssr: false })
 const AlternaMenu = dynamic(() => import('@/components/central/MenuModulos').then((m) => m.AlternaMenu), { ssr: false })
+const BarraModulos = dynamic(() => import('@/components/central/BarraModulos').then((m) => m.BarraModulos), { ssr: false })
 
 const GRUPOS = ['Operação', 'Cadastros', 'Administração'] as const
 type Grupo = (typeof GRUPOS)[number]
@@ -170,7 +171,7 @@ export function MobileNav({
       />
 
       <aside
-        className={`sidebar-blue lg:hidden fixed inset-y-0 left-0 z-50 w-[300px] max-w-[86vw] flex flex-col will-change-transform ${
+        className={`sidebar-blue ${menuNovo ? 'sidebar-contraste' : ''} lg:hidden fixed inset-y-0 left-0 z-50 w-[300px] max-w-[86vw] flex flex-col will-change-transform ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
         style={{
@@ -291,6 +292,10 @@ export function MobileNav({
         </div>
       </aside>
 
+      {/* Dev: nada até saber qual menu (sem piscar a barra antiga). */}
+      {!menuPronto && isSuperAdmin ? null : menuPronto && menuNovo ? (
+        <BarraModulos ctx={ctxCentral} onMais={() => setOpen(true)} />
+      ) : (
       <nav
         className="lg:hidden fixed bottom-0 inset-x-0 z-30 grid border-t border-border bg-surface/85 backdrop-blur-xl backdrop-saturate-150"
         style={{
@@ -323,6 +328,7 @@ export function MobileNav({
           )
         })}
       </nav>
+      )}
     </>
   )
 }

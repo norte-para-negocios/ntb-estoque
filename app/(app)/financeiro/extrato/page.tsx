@@ -27,7 +27,9 @@ export default async function ExtratoPage({ searchParams }: { searchParams: Prom
       <PageHeader title="Extrato" icon={ScrollText} voltarHref="/financeiro/contas-correntes"
         description="Movimento da conta corrente, do mais antigo para o mais novo, com o saldo depois de cada lançamento." />
       {contas.length === 0 ? (
-        <EmptyState icon={ScrollText} title="Nenhuma conta corrente" hint="Crie uma conta em Contas correntes para ver o extrato." />
+        <EmptyState icon={ScrollText} title="Nenhuma conta corrente" hint="Crie uma conta corrente para ver o extrato.">
+          <Link href="/financeiro/contas-correntes?criar=1" className={btnClass('primary')}>Nova conta corrente</Link>
+        </EmptyState>
       ) : (
         <>
           <form method="get" className="grid gap-3 rounded-[var(--r-lg)] bg-surface p-4 text-[13px] u-card sm:grid-cols-4">

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useTransition } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
@@ -83,7 +84,10 @@ export function FormTitulo({ titulo, fornecedores, categorias, hoje, children, p
           <div className={rotulo}><span>Fornecedor</span>
             {comPagamento
               ? <p className="rounded-[var(--r-md)] bg-surface-2 px-3 py-2">{fornecedores.find((f) => String(f.id) === forn)?.nome ?? '—'}</p>
-              : <Combobox options={fornecedores.map((f) => ({ value: String(f.id), label: f.nome }))} value={forn} onChange={setForn} placeholder="Escolha um fornecedor do cadastro" />}
+              : <>
+                  <Combobox options={fornecedores.map((f) => ({ value: String(f.id), label: f.nome }))} value={forn} onChange={setForn} placeholder="Escolha um fornecedor do cadastro" />
+                  {fornecedores.length === 0 && <p className="text-text-muted">Nenhum fornecedor no cadastro. <Link href="/fornecedor?criar=1" className="font-medium text-brand underline">Novo fornecedor</Link></p>}
+                </>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <label className={rotulo}><span>Valor (R$)</span><input inputMode="decimal" className={campo} value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" disabled={pago} /><PreviaMoeda texto={valor} /></label>
@@ -159,7 +163,7 @@ export function BotaoPagar({ tituloId, rotuloTitulo, restante, contas, hoje, chi
           <p className="text-[13px] text-text-muted">{rotuloTitulo} · falta pagar <Money value={restante} />. Só registra: o Norte não faz o pagamento no banco.</p>
         </DialogHeader>
         <div className="max-h-[65vh] space-y-3 overflow-auto text-[13px]">
-          {contas.length === 0 && <p className="rounded-[var(--r-md)] bg-surface-2 p-2 text-warn">Cadastre uma conta corrente ativa antes de registrar pagamentos.</p>}
+          {contas.length === 0 && <p className="rounded-[var(--r-md)] bg-surface-2 p-2 text-warn">Cadastre uma conta corrente ativa antes de registrar pagamentos. <Link href="/financeiro/contas-correntes?criar=1" className="font-medium underline">Nova conta corrente</Link></p>}
           <label className={rotulo}><span>Saiu de qual conta</span>
             <select className={campo} value={conta} onChange={(e) => setConta(e.target.value)}>
               {contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}

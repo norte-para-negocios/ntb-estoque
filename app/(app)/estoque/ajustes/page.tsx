@@ -24,6 +24,8 @@ import { carregarLocais, carregarProdutosMin } from '../dados-produtos'
 import { lojaEspelho, nomesDeUsuarios } from '../dados-comum'
 import { LOJA_BLOQUEADA, motivoNaoCorrige } from '@/lib/estoque/escrita-omie-puro'
 import { CorrigirCusto, RefazerCorrecao } from '@/components/estoque-proprio/CorrigirCusto'
+import { NovoAjusteManual } from '@/components/movimentacoes/NovoAjusteManual'
+import { ehDesenvolvedor } from '@/lib/recursos-dev'
 
 const POR_PAGINA = 50
 const fmtQ = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
@@ -112,6 +114,21 @@ export default async function AjustesPage({ searchParams }: { searchParams: Prom
   ])
   const cmcAtual = new Map(visao.linhas.map((l) => [l.codigoProduto, l.custoSuspeito ? null : l.cmc]))
 
+  // "+ Ajuste de estoque" (menu novo, só desenvolvedores): o formulário de sempre, escolhendo o produto aqui.
+  // Loja 4 fica fora, como nas outras escritas no Omie pelas telas de estoque (LOJA_BLOQUEADA).
+  const podeLancar = !(modo === 'omie' && lojaId === LOJA_BLOQUEADA) && (await ehDesenvolvedor()) && (await requirePermissao(lojaId, 'Movimentacoes - Criar'))
+  let locaisAjuste: { codigo_local_estoque: number; descricao: string | null }[] = []
+  if (podeLancar) {
+    const { data } = await (await createClient()).from('local_estoques').select('codigo_local_estoque, descricao, inativo').eq('loja_id', lojaId).order('descricao')
+    locaisAjuste = ((data ?? []) as { codigo_local_estoque: number; descricao: string | null; inativo: string | boolean | null }[])
+      .filter((l) => l.inativo !== 'S' && l.inativo !== true)
+  }
+  const produtosAjuste = podeLancar
+    ? [...produtos.values()].filter((p) => p.inativo !== true)
+      .map((p) => ({ id_prod: Number(p.codigo_produto), codigo: p.codigo ?? String(p.codigo_produto), descricao: p.descricao ?? '' }))
+      .sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR'))
+    : []
+
   // Corrigir custo de um ajuste no Omie ("nosso Omie" Fase 4): loja Omie, fora a loja 4, com "Estoque - Corrigir custo".
   const podeCorrigir = modo === 'omie' && lojaId !== LOJA_BLOQUEADA && (await requirePermissao(lojaId, 'Estoque - Corrigir custo'))
   const lojaTeste = podeCorrigir ? (await lojaEspelho(lojaId)).isTest : false
@@ -150,7 +167,8 @@ export default async function AjustesPage({ searchParams }: { searchParams: Prom
   return (
     <div className="space-y-4">
       <ListaHeader>
-        <PageHeader title="Ajustes de estoque" description={modo === 'omie' ? 'Todo ajuste lançado no Omie, com quem lançou, o motivo, a quantidade e o custo' : 'Todo ajuste lançado no estoque, com quem lançou, a quantidade e o custo'} />
+        <PageHeader title="Ajustes de estoque" description={modo === 'omie' ? 'Todo ajuste lançado no Omie, com quem lançou, o motivo, a quantidade e o custo' : 'Todo ajuste lançado no estoque, com quem lançou, a quantidade e o custo'}
+          actions={podeLancar ? <NovoAjusteManual locais={locaisAjuste} produtos={produtosAjuste} proprio={modo === 'proprio'} /> : undefined} />
       </ListaHeader>
       <EstoqueAtalhos atual="ajustes" />
 

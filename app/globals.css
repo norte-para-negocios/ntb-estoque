@@ -78,6 +78,11 @@
   --warn: #b25000;
   --err: #d70015;
   --info: #0066cc;
+  /* Tons das ações da central (menu novo): criar, importar, relatório, alerta. Texto ≥ 4,5:1 no fundo claro. */
+  --tone-new: #15803d;
+  --tone-import: #1d4ed8;
+  --tone-report: #6d28d9;
+  --tone-warn: #b45309;
   /* Menu lateral na cor da marca (teal) */
   --sidebar-bg: #1a9aa7;
   --sidebar-bg-2: #106e78;
@@ -136,6 +141,10 @@
 
 /* Modo escuro: sobrescreve os tokens. Ativado por .dark no <html>. */
 .dark {
+  --tone-new: #4ade80;
+  --tone-import: #93c5fd;
+  --tone-report: #c4b5fd;
+  --tone-warn: #fbbf24;
   --bg: #000000;
   --surface: #1c1c1e;
   --surface-2: #2c2c2e;
@@ -451,6 +460,16 @@
 .dark .logo-adapt,
 .sidebar-blue .logo-adapt {
   filter: brightness(0) invert(1);
+}
+/* Menu novo (só desenvolvedores): no tema claro o topo do degradê (#1a9aa7) deixava o texto
+   abaixo de 4,5:1 (branco 3,4:1; secundário 2,5:1). Degradê mais escuro e secundário mais forte:
+   branco ~5:1 e secundário ~4,3:1 no topo. O tema escuro já passa e fica igual. */
+html:not(.dark) .sidebar-blue.sidebar-contraste {
+  --sidebar-bg: #117a85;
+  --sidebar-bg-2: #0c5a62;
+}
+.sidebar-blue.sidebar-contraste {
+  --text-muted: rgba(255, 255, 255, 0.88);
 }
 
 [data-sticky-table] thead {

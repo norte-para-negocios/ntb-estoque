@@ -1,10 +1,13 @@
 import {
-  Activity, Archive, ArrowLeftRight, BadgeCheck, BarChart3, BookOpen, Bot, Boxes, Building2, CalendarClock,
-  ClipboardCheck, ClipboardList, Cog, Database, FileDown, FileSpreadsheet, FileText, FileUp, FolderTree, Gauge,
-  GitBranch, HeartPulse, History, Landmark, Layers, LayoutDashboard, ListChecks, ListOrdered, ListPlus, Package,
-  PackageCheck, PackagePlus, Percent, PiggyBank, Printer, QrCode, Receipt, ReceiptText, RefreshCw, Repeat, Scale,
-  ScrollText, Search, ShieldCheck, ShoppingCart, Store, Tags, TrendingDown, TrendingUp, Truck, Undo2, UserCog,
-  Users, Wallet, Warehouse, Wrench, Plus, Upload, List,
+  Activity, Archive, ArrowDownUp, ArrowLeftRight, BadgeCheck, BadgeDollarSign, Banknote, BarChart3, BookOpen, BookOpenCheck, Bot,
+  Boxes, Building2, Calculator, CalendarClock, CalendarRange, ChartBar, ChartBarDecreasing, ChartBarStacked, ChartColumnStacked,
+  ChartLine, ChartSpline, ClipboardCheck, ClipboardList, ClipboardPen, Coins, Cog, Database, Factory, FileCode2, FileDown,
+  FileOutput, FilePenLine, FileQuestion, FileSearch, FileSpreadsheet, FileText, FileUp, FolderTree, Gauge, Goal, Group,
+  HandCoins, History, Hourglass, IdCard, Landmark, Layers, LayoutDashboard, Lightbulb, List, ListChecks, ListOrdered,
+  ListPlus, ListTree, Logs, MonitorDown, Network, Package, PackageCheck, PackagePlus, PackageSearch, Percent, PiggyBank, Plus,
+  Presentation, Printer, QrCode, Receipt, ReceiptText, RefreshCw, Repeat, Replace, Scale, ScanSearch, ScrollText, Search, Shapes,
+  ShieldCheck, ShoppingCart, Sigma, SlidersHorizontal, SquareKanban, Stethoscope, Store, Table2, Tags, Target, TrendingDown,
+  TrendingUp, Truck, Undo2, Upload, UserCog, UserSearch, Users, Vault, Wallet, Warehouse, Wrench,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -13,16 +16,16 @@ export type Tom = 'marca' | 'novo' | 'importar' | 'relatorio' | 'alerta' | 'neut
 
 export const CLASSE_TOM: Record<Tom, string> = {
   marca: 'bg-brand-soft text-brand',
-  novo: 'bg-[color-mix(in_srgb,#16a34a_15%,transparent)] text-[#16a34a]',
-  importar: 'bg-[color-mix(in_srgb,#2563eb_15%,transparent)] text-[#3b82f6]',
-  relatorio: 'bg-[color-mix(in_srgb,#7c3aed_15%,transparent)] text-[#8b5cf6]',
-  alerta: 'bg-[color-mix(in_srgb,#d97706_16%,transparent)] text-[#d97706]',
+  novo: 'bg-[color-mix(in_srgb,var(--tone-new)_15%,transparent)] text-[var(--tone-new)]',
+  importar: 'bg-[color-mix(in_srgb,var(--tone-import)_15%,transparent)] text-[var(--tone-import)]',
+  relatorio: 'bg-[color-mix(in_srgb,var(--tone-report)_15%,transparent)] text-[var(--tone-report)]',
+  alerta: 'bg-[color-mix(in_srgb,var(--tone-warn)_16%,transparent)] text-[var(--tone-warn)]',
   neutro: 'bg-surface-2 text-text-muted',
 }
 
 type Regra = [RegExp, LucideIcon, Tom]
 
-// Ordem importa: a primeira que casar vence. Texto já sem acento e em minúsculas.
+// Reserva (item sem endereço no mapa): a primeira que casar vence. Texto já sem acento e em minúsculas.
 const REGRAS: Regra[] = [
   [/^incluir transferencia|transferencia/, ArrowLeftRight, 'marca'],
   [/^incluir|lancar sem xml/, Plus, 'novo'],
@@ -78,12 +81,138 @@ const REGRAS: Regra[] = [
 
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
-/** Ícone e tom do item pelo nome (rótulo), com a seção como segunda pista. */
-export function iconeDoItem(label: string, secao?: string): { Icon: LucideIcon; tom: Tom } {
+type Icone = [LucideIcon, Tom]
+
+/**
+ * Um ícone por tela, pelo endereço (auditoria 22/10: escolher pelo nome dava gráfico para "Reposição", que contém
+ * "posição", e 17 itens caíam no ícone genérico). Chave = endereço sem a query; a query só entra quando a mesma
+ * página tem dois itens (Estoque mínimo × Sugestão de compra). O teste falha se uma tela visível ficar sem ícone.
+ */
+export const ICONE_POR_ROTA: Record<string, Icone> = {
+  // Dashboard
+  '/home': [LayoutDashboard, 'marca'],
+  '/resumo': [CalendarRange, 'marca'],
+  '/correcoes': [Bot, 'marca'],
+  // Estoque
+  '/estoque': [Boxes, 'marca'],
+  '/estoque/correcoes': [Stethoscope, 'alerta'],
+  '/movimentacoes': [ArrowDownUp, 'marca'],
+  '/inventario': [ClipboardList, 'marca'],
+  '/transferencia': [ArrowLeftRight, 'marca'],
+  '/validade': [CalendarClock, 'alerta'],
+  '/reposicao': [PackagePlus, 'alerta'],
+  '/estoque/kardex': [ListOrdered, 'marca'],
+  '/estoque/ajustes': [SlidersHorizontal, 'marca'],
+  '/estoque/fichas': [ListTree, 'marca'],
+  '/estoque/quem-mexeu': [UserSearch, 'marca'],
+  '/sync-catalogo': [RefreshCw, 'marca'],
+  '/produto': [Package, 'marca'],
+  '/produto/novo': [Package, 'novo'],
+  '/produto/importar': [FileSpreadsheet, 'importar'],
+  '/produto-substituicao': [Replace, 'marca'],
+  '/local-estoque': [Warehouse, 'marca'],
+  '/familia': [Tags, 'marca'],
+  '/grupo-produto': [Group, 'marca'],
+  '/relatorio-posicao-estoque': [Table2, 'relatorio'],
+  '/relatorio-estoque-valorizado': [Coins, 'relatorio'],
+  '/sugestao-compra?ver=abaixo': [PackagePlus, 'relatorio'],
+  '/relatorio-curva-abc': [ChartBarDecreasing, 'relatorio'],
+  '/relatorio-cmv': [Calculator, 'relatorio'],
+  '/relatorio-movimentacao': [ChartColumnStacked, 'relatorio'],
+  // Compras
+  '/pedido-compra/novo': [ShoppingCart, 'novo'],
+  '/requisicao-compra/novo': [ClipboardPen, 'novo'],
+  '/nota-fiscal/importar': [FileCode2, 'importar'],
+  '/nota-fiscal/nova': [FilePenLine, 'novo'],
+  '/pedido-compra/importar': [FileSpreadsheet, 'importar'],
+  '/nota-fiscal': [ReceiptText, 'marca'],
+  '/sugestao-compra': [Lightbulb, 'alerta'],
+  '/tarefas-compras': [ListChecks, 'marca'],
+  '/pedido-compra': [ShoppingCart, 'marca'],
+  '/requisicao-compra': [ClipboardPen, 'marca'],
+  '/nota-fiscal/etapas': [SquareKanban, 'marca'],
+  '/devolucao-fornecedor': [Undo2, 'marca'],
+  '/sintegra': [ScanSearch, 'marca'],
+  '/fornecedor': [Truck, 'marca'],
+  '/fornecedor/importar': [FileSpreadsheet, 'importar'],
+  '/compras-cadastros': [UserCog, 'marca'],
+  '/relatorio-compras': [ChartBar, 'relatorio'],
+  '/relatorio-produtos-fornecedor': [PackageSearch, 'relatorio'],
+  // Produção
+  '/ordem-producao': [Factory, 'marca'],
+  '/ordem-producao/abertas': [Hourglass, 'marca'],
+  '/impressoes': [Printer, 'marca'],
+  '/relatorio-ops': [ChartBarStacked, 'relatorio'],
+  '/relatorio-producao': [ChartLine, 'relatorio'],
+  // Fiscal
+  '/nfe-saida': [FileOutput, 'marca'],
+  '/transferencia-loja': [Building2, 'marca'],
+  '/contador': [BookOpenCheck, 'marca'],
+  '/categoria-contabil': [FolderTree, 'marca'],
+  '/auditoria-fiscal': [FileSearch, 'relatorio'],
+  '/pendencias-classificacao': [FileQuestion, 'relatorio'],
+  // Finanças
+  '/financeiro/contas-pagar': [Receipt, 'marca'],
+  '/financeiro/contas-pagar/nova': [Receipt, 'novo'],
+  '/financeiro/extrato': [ScrollText, 'marca'],
+  '/financeiro/contas-correntes': [Landmark, 'marca'],
+  '/financeiro/categorias': [Shapes, 'marca'],
+  '/relatorio-mensal': [Presentation, 'relatorio'],
+  '/faturamento': [BadgeDollarSign, 'relatorio'],
+  '/relatorio-faturamento': [FileSpreadsheet, 'relatorio'],
+  '/relatorio-indicadores': [Scale, 'relatorio'],
+  '/relatorio-margem': [Percent, 'relatorio'],
+  '/relatorio-lucro': [PiggyBank, 'relatorio'],
+  '/meta-mensal': [Target, 'relatorio'],
+  '/relatorio-meta': [Goal, 'relatorio'],
+  // Administração
+  '/relatorios': [BarChart3, 'relatorio'],
+  '/sync-status': [Activity, 'marca'],
+  '/log': [Logs, 'marca'],
+  '/saude-banco': [Database, 'marca'],
+  '/sincronizacao': [MonitorDown, 'marca'],
+  '/minha-loja': [Store, 'marca'],
+  '/usuario': [Users, 'marca'],
+  '/cargo': [IdCard, 'marca'],
+  '/loja': [Network, 'marca'],
+}
+
+/** Itens "em breve" (sem endereço): pelo nome. */
+const ICONE_POR_ROTULO: Record<string, Icone> = {
+  'resumo do caixa': [Vault, 'marca'],
+  'contas a receber': [HandCoins, 'marca'],
+  'aprovacao de pagamentos': [BadgeCheck, 'alerta'],
+  'lancamento avulso': [ListPlus, 'novo'],
+  'transferencia entre contas': [Banknote, 'marca'],
+  'importar extrato ofx': [FileUp, 'importar'],
+  'importar contas a pagar (planilha)': [FileSpreadsheet, 'importar'],
+  'contas a pagar em aberto': [TrendingDown, 'relatorio'],
+  'pagamentos realizados': [Wallet, 'relatorio'],
+  'fluxo de caixa': [ChartSpline, 'relatorio'],
+  dre: [Sigma, 'relatorio'],
+}
+
+// Botões de ação dentro de um cadastro (Incluir, Importar planilha, Exibir todos): o verbo manda.
+const ACOES: [RegExp, Icone][] = [
+  [/^incluir/, [Plus, 'novo']],
+  [/^importar/, [FileSpreadsheet, 'importar']],
+  [/^exibir/, [List, 'marca']],
+]
+
+const semQuery = (h: string) => h.split('?')[0]
+
+/** Ícone e tom do item: verbo de ação > endereço da tela > nome (itens em breve) > reserva pelo texto. */
+export function iconeDoItem(label: string, secao?: string, href?: string): { Icon: LucideIcon; tom: Tom } {
   const l = norm(label)
+  for (const [re, [Icon, tom]] of ACOES) if (re.test(l)) return { Icon, tom }
+  if (href) {
+    const e = ICONE_POR_ROTA[href] ?? ICONE_POR_ROTA[semQuery(href)]
+    if (e) return { Icon: e[0], tom: e[1] }
+  }
+  const r = ICONE_POR_ROTULO[l]
+  if (r) return { Icon: r[0], tom: r[1] }
   const comSecao = secao ? norm(`${l} ${secao}`) : l
   for (const [re, Icon, tom] of REGRAS) if (re.test(l)) return { Icon, tom }
-  // "Exibir todos/todas/Incluir" já casaram acima; o resto herda a pista da seção.
   for (const [re, Icon, tom] of REGRAS) if (re.test(comSecao)) return { Icon, tom }
   return { Icon: FileText, tom: 'neutro' }
 }
