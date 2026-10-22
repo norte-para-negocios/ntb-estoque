@@ -1,9 +1,21 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { precisaEnviar } from '@/lib/inventario/contagem-regras'
+import {
+  STATUS_NAO_SALVO,
+  aplicarPendentes,
+  chavePendentes,
+  confirmarPendente,
+  descartarPendentes,
+  ehVersaoVelha,
+  guardarPendente,
+  lerPendentes,
+  podeRecarregar,
+  type Armazenamento,
+} from '@/lib/inventario/contagem-pendente'
 import dynamic from 'next/dynamic'
-import { useRouter } from 'next/navigation' // ainda usado no finalizar
+import { useRouter, unstable_isUnrecognizedActionError } from 'next/navigation' // router ainda usado no finalizar
 import { ProdutoSearch } from '@/components/produtos/ProdutoSearch'
 import { Trash2, CheckCircle, Minus, Plus, Search, Pencil, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -27,6 +39,24 @@ import {
   informarMotivoInventarioItem,
 } from '@/lib/actions/inventario'
 
+const SEM_ARMAZENAMENTO: Armazenamento = { getItem: () => null, setItem: () => {}, removeItem: () => {} }
+
+function armazenamento(): Armazenamento {
+  try {
+    return window.localStorage
+  } catch {
+    return SEM_ARMAZENAMENTO
+  }
+}
+
+// Tela aberta antes de um deploy: o servidor não conhece mais a ação (ver contagem-pendente.ts).
+function versaoVelha(e: unknown): boolean {
+  return unstable_isUnrecognizedActionError(e) || ehVersaoVelha(e)
+}
+
+const CHAVE_ULTIMA_RECARGA = 'ntb:contagem-recarga-em'
+const REENVIO_MS = 30_000
+
 // Base do stepper +/-: prioriza o que esta DIGITADO agora (texto cru, pode ter
 // virgula e ainda nao ter dado blur); se invalido, cai no number ja salvo.
 function stepBase(texto: string, fallback: number): number {
@@ -49,12 +79,14 @@ export type ItemContagem = {
 }
 
 export function ContagemInventario({
+  lojaId,
   inventarioId,
   itensIniciais,
   finalizado,
   podeEditar = true,
   proprio = false,
 }: {
+  lojaId: number
   inventarioId: number
   itensIniciais: ItemContagem[]
   finalizado: boolean
@@ -89,6 +121,56 @@ export function ContagemInventario({
   // Requer tambem podeEditar (permissao Inventarios - Editar).
   const editavel = podeEditar && (!finalizado || editando)
 
+  // Contagem digitada fica no aparelho até o servidor responder (ver contagem-pendente.ts).
+  const chave = chavePendentes(lojaId, inventarioId)
+  const itensRef = useRef(itens)
+  useEffect(() => {
+    itensRef.current = itens
+  }, [itens])
+  const enviandoRef = useRef(enviando)
+  useEffect(() => {
+    enviandoRef.current = enviando
+  }, [enviando])
+  const recarregandoRef = useRef(false)
+  const [reenviando, setReenviando] = useState(false)
+
+  // Versão velha: recarrega (a cópia no aparelho sobrevive) e as pendentes saem sozinhas depois.
+  const recarregarPorVersao = useCallback(() => {
+    if (recarregandoRef.current) return
+    const agora = Date.now()
+    let ultima: number | null = null
+    try {
+      ultima = Number(window.sessionStorage.getItem(CHAVE_ULTIMA_RECARGA)) || null
+    } catch {}
+    if (!podeRecarregar(ultima, agora)) {
+      toast.error('O servidor não aceitou a contagem', {
+        id: 'contagem-nao-salva',
+        duration: Infinity,
+        description: 'Ela está guardada neste aparelho e será enviada sozinha. Se continuar assim, avise o suporte.',
+      })
+      return
+    }
+    recarregandoRef.current = true
+    try {
+      window.sessionStorage.setItem(CHAVE_ULTIMA_RECARGA, String(agora))
+    } catch {}
+    // Campo ainda em edição: o blur guarda o número no aparelho antes de recarregar.
+    ;(document.activeElement as HTMLElement | null)?.blur?.()
+    toast.info('O sistema foi atualizado', {
+      id: 'contagem-recarregar',
+      duration: Infinity,
+      description: 'Recarregando a tela. Suas contagens estão guardadas e serão enviadas sozinhas.',
+    })
+    window.setTimeout(() => window.location.reload(), 1500)
+  }, [])
+
+  // Erro de ação que não é a contagem (adicionar, remover, concluir...): nada é perdido, mas
+  // com versão velha só recarregando volta a funcionar.
+  function tratarFalha(e: unknown, titulo: string) {
+    if (versaoVelha(e)) recarregarPorVersao()
+    else toast.error(titulo, { description: 'Sem resposta do servidor. Tente de novo.' })
+  }
+
   const visiveis = useMemo(() => {
     const q = filtro.trim().toLowerCase()
     if (!q) return itens
@@ -106,12 +188,18 @@ export function ContagemInventario({
       return
     }
     startTransition(async () => {
-      const novo = await addInventarioItem(inventarioId, {
-        produto_codigo_produto: p.codigo_produto,
-        produto_codigo: p.codigo,
-        produto_descricao: p.descricao,
-        produto_familia: p.descricao_familia,
-      })
+      let novo: Awaited<ReturnType<typeof addInventarioItem>>
+      try {
+        novo = await addInventarioItem(inventarioId, {
+          produto_codigo_produto: p.codigo_produto,
+          produto_codigo: p.codigo,
+          produto_descricao: p.descricao,
+          produto_familia: p.descricao_familia,
+        })
+      } catch (e) {
+        tratarFalha(e, 'Não foi possível adicionar o produto')
+        return
+      }
       if (novo) {
         setItens((prev) => [
           {
@@ -129,7 +217,13 @@ export function ContagemInventario({
   }
 
   async function onLeituraQr(codigo: string): Promise<boolean> {
-    const p = await buscarProdutoPorCodigo(codigo)
+    let p: Awaited<ReturnType<typeof buscarProdutoPorCodigo>>
+    try {
+      p = await buscarProdutoPorCodigo(codigo)
+    } catch (e) {
+      tratarFalha(e, 'Não foi possível buscar o produto')
+      return false
+    }
     if (!p) {
       toast.warning('Produto não encontrado', { description: `Código: ${codigo}` })
       return false
@@ -142,15 +236,28 @@ export function ContagemInventario({
   // item ja tinha sido lancado, o servidor exclui o ajuste antigo e relanca
   // (reprocessa ao mexer na quantidade). Erro num item nao trava os outros.
   function salvarQtd(itemId: number, num: number | null) {
+    void enviarQtd(itemId, num)
+  }
+
+  // Devolve true se o servidor respondeu (ou não precisava enviar); false se a contagem ficou
+  // só no aparelho ("Não salvo").
+  async function enviarQtd(itemId: number, num: number | null): Promise<boolean> {
     if (num != null && (Number.isNaN(num) || num < 0)) {
       toast.error('Quantidade inválida')
-      return
+      return true
     }
     // No inventario a contagem 0 e VALIDA (zera o saldo) e vai pro Omie; so o campo
     // VAZIO (null) fica pendente como 'Vazio' (rotulo "Sem quantidade") e e
     // descartado ao finalizar — nao trava o inventario nem conta no placar.
     setTextos((prev) => ({ ...prev, [itemId]: formatNumBR(num) }))
-    if (enviando.has(itemId) || !precisaEnviar(itens.find((i) => i.id === itemId), num)) return
+    if (enviandoRef.current.has(itemId)) return true
+    if (!precisaEnviar(itensRef.current.find((i) => i.id === itemId), num)) {
+      descartarPendentes(armazenamento(), chave, [itemId])
+      return true
+    }
+    // Antes de qualquer envio: o número já está salvo no aparelho.
+    const { em } = guardarPendente(armazenamento(), chave, itemId, num)
+    enviandoRef.current = new Set(enviandoRef.current).add(itemId)
     setEnviando((prev) => new Set(prev).add(itemId))
     setItens((prev) =>
       prev.map((i) =>
@@ -159,21 +266,31 @@ export function ContagemInventario({
           : i
       )
     )
-    void (async () => {
-      let res: Awaited<ReturnType<typeof enviarInventarioItem>>
-      try {
-        res = await enviarInventarioItem(itemId, num)
-      } catch {
-        setItens((prev) => prev.map((i) => (i.id === itemId ? { ...i, status: 'Erro' } : i)))
-        toast.error('Falha ao integrar item', { description: 'Sem resposta do servidor. Tente reenviar.' })
-        return
-      } finally {
-        setEnviando((prev) => {
-          const novo = new Set(prev)
-          novo.delete(itemId)
-          return novo
+    let res: Awaited<ReturnType<typeof enviarInventarioItem>>
+    try {
+      res = await enviarInventarioItem(itemId, num)
+    } catch (e) {
+      setItens((prev) => prev.map((i) => (i.id === itemId ? { ...i, quan: num, status: STATUS_NAO_SALVO } : i)))
+      if (versaoVelha(e)) recarregarPorVersao()
+      else
+        toast.warning('Contagem guardada no aparelho', {
+          id: 'contagem-nao-salva',
+          description: 'O servidor não respondeu. Ela será enviada sozinha assim que ele voltar.',
         })
-      }
+      return false
+    } finally {
+      const novo = new Set(enviandoRef.current)
+      novo.delete(itemId)
+      enviandoRef.current = novo
+      setEnviando((prev) => {
+        const s = new Set(prev)
+        s.delete(itemId)
+        return s
+      })
+    }
+    // O servidor recebeu (mesmo que o Omie tenha recusado: aí o item fica Erro/Sem CMC lá).
+    confirmarPendente(armazenamento(), chave, itemId, em)
+    {
       const statusUi = res.status === 'Iniciado' ? 'Vazio' : res.status
       setItens((prev) =>
         prev.map((i) => (i.id === itemId ? { ...i, status: statusUi, diferenca: res.diferenca ?? null, descricao_status: res.descricao_status ?? null } : i))
@@ -191,8 +308,64 @@ export function ContagemInventario({
       } else if (res.status === 'Concluido') {
         toast.success(proprio ? 'Item lançado no estoque' : 'Item integrado ao Omie')
       }
-    })()
+    }
+    return true
   }
+
+  const enviarQtdRef = useRef(enviarQtd)
+  useEffect(() => {
+    enviarQtdRef.current = enviarQtd
+  })
+
+  // Reenvia, um por vez, o que ficou só no aparelho. Para no 1º que falhar (servidor ainda fora).
+  const reenviarNaoSalvos = useCallback(async () => {
+    if (recarregandoRef.current) return
+    const fila = itensRef.current.filter((i) => i.status === STATUS_NAO_SALVO)
+    if (fila.length === 0) return
+    setReenviando(true)
+    try {
+      for (const i of fila) {
+        if (!(await enviarQtdRef.current(i.id, i.quan))) break
+      }
+    } finally {
+      setReenviando(false)
+    }
+  }, [])
+
+  // Ao abrir (inclusive depois da recarga automática): devolve à tela o que ficou no aparelho
+  // e reenvia sozinho.
+  useEffect(() => {
+    if (!podeEditar) return
+    const st = armazenamento()
+    const { itens: comPendentes, aplicados, descartar } = aplicarPendentes(itensRef.current, lerPendentes(st, chave))
+    descartarPendentes(st, chave, descartar)
+    if (aplicados.length === 0) return
+    itensRef.current = comPendentes
+    setItens(comPendentes)
+    setTextos((prev) => {
+      const t = { ...prev }
+      for (const i of comPendentes) if (aplicados.includes(i.id)) t[i.id] = formatNumBR(i.quan)
+      return t
+    })
+    toast.info(`${aplicados.length} contagem(ns) guardada(s) neste aparelho`, {
+      id: 'contagem-recuperada',
+      description: 'Enviando ao servidor agora.',
+    })
+    void reenviarNaoSalvos()
+  }, [chave, podeEditar, reenviarNaoSalvos])
+
+  // Enquanto houver contagem só no aparelho: tenta de novo a cada 30 s e quando a internet volta.
+  const naoSalvos = itens.filter((i) => i.status === STATUS_NAO_SALVO).length
+  useEffect(() => {
+    if (naoSalvos === 0) return
+    const tentar = () => void reenviarNaoSalvos()
+    const t = window.setInterval(tentar, REENVIO_MS)
+    window.addEventListener('online', tentar)
+    return () => {
+      window.clearInterval(t)
+      window.removeEventListener('online', tentar)
+    }
+  }, [naoSalvos, reenviarNaoSalvos])
 
   function informarMotivo(itemId: number) {
     const texto = (motivos[itemId] ?? '').trim()
@@ -209,9 +382,9 @@ export function ContagemInventario({
         )
         if (res.status === 'Concluido') toast.success('Item lançado no estoque')
         else toast.error('Não foi possível lançar', { description: res.descricao_status ?? undefined })
-      } catch {
-        setItens((prev) => prev.map((i) => (i.id === itemId ? { ...i, status: 'Erro' } : i)))
-        toast.error('Falha ao lançar item')
+      } catch (e) {
+        setItens((prev) => prev.map((i) => (i.id === itemId ? { ...i, status: 'Aguardando motivo' } : i)))
+        tratarFalha(e, 'Falha ao lançar item')
       } finally {
         setEnviando((prev) => {
           const novo = new Set(prev)
@@ -229,7 +402,14 @@ export function ContagemInventario({
     const anterior = itens
     setItens((prev) => prev.filter((i) => i.id !== itemId))
     startTransition(async () => {
-      const res = await removeInventarioItem(itemId)
+      let res: Awaited<ReturnType<typeof removeInventarioItem>>
+      try {
+        res = await removeInventarioItem(itemId)
+      } catch (e) {
+        setItens(anterior)
+        tratarFalha(e, 'Erro ao remover')
+        return
+      }
       if (res?.error) {
         setItens(anterior) // desfaz o otimismo se o servidor recusar
         toast.error('Erro ao remover', { description: res.error })
@@ -240,6 +420,12 @@ export function ContagemInventario({
   }
 
   function finalizar() {
+    if (naoSalvos > 0) {
+      toast.error('Ainda há contagens não salvas', {
+        description: 'Espere elas serem enviadas (ou toque em "Enviar agora") antes de concluir.',
+      })
+      return
+    }
     // Avisa antes de fechar se ha item sem quantidade (sera ignorado) ou com erro
     // (nao integrou). Evita concluir sem querer deixando produto de fora.
     const semQtd = itens.filter((i) => i.status === 'Vazio' || i.quan == null).length
@@ -251,7 +437,13 @@ export function ContagemInventario({
       if (!window.confirm(`Concluir o inventário?\n\n${partes.join('\n')}.\n\nDeseja continuar mesmo assim?`)) return
     }
     startTransition(async () => {
-      const res = await finishInventario(inventarioId)
+      let res: Awaited<ReturnType<typeof finishInventario>>
+      try {
+        res = await finishInventario(inventarioId)
+      } catch (e) {
+        tratarFalha(e, 'Não foi possível concluir o inventário')
+        return
+      }
       if (res?.error) toast.error('Erro', { description: res.error })
       else {
         toast.success(proprio ? 'Inventário concluído' : 'Inventário enviado ao Omie')
@@ -262,7 +454,13 @@ export function ContagemInventario({
 
   function reenviar() {
     startTransition(async () => {
-      const res = await forceSyncInventario(inventarioId)
+      let res: Awaited<ReturnType<typeof forceSyncInventario>>
+      try {
+        res = await forceSyncInventario(inventarioId)
+      } catch (e) {
+        tratarFalha(e, 'Não foi possível reenviar')
+        return
+      }
       if (res?.error) toast.error('Erro', { description: res.error })
       else {
         toast.success(proprio ? 'Pendentes reenviados' : 'Reenviado ao Omie')
@@ -364,6 +562,27 @@ export function ContagemInventario({
               </button>
             )}
           </span>
+        </div>
+      )}
+
+      {naoSalvos > 0 && (
+        <div
+          role="status"
+          className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[var(--r-lg)] bg-surface px-4 py-3 shadow-[var(--shadow-sm)]"
+        >
+          <span className="flex items-start gap-2 text-[14px] text-text">
+            <span aria-hidden className="mt-[6px] size-2 shrink-0 rounded-full bg-warn" />
+            <span>
+              <span className="font-semibold">
+                <span className="num">{naoSalvos}</span> contagem{naoSalvos > 1 ? 'ns' : ''} ainda não salva{naoSalvos > 1 ? 's' : ''} no servidor.
+              </span>{' '}
+              <span className="text-text-muted">Está{naoSalvos > 1 ? 'ão' : ''} guardada{naoSalvos > 1 ? 's' : ''} neste aparelho e será{naoSalvos > 1 ? 'ão' : ''} enviada{naoSalvos > 1 ? 's' : ''} sozinha{naoSalvos > 1 ? 's' : ''}. Não conclua o inventário até este aviso sumir.</span>
+            </span>
+          </span>
+          <button onClick={() => void reenviarNaoSalvos()} disabled={reenviando} className={btnClass('outline')}>
+            {reenviando && <Spinner />}
+            {reenviando ? 'Enviando...' : 'Enviar agora'}
+          </button>
         </div>
       )}
 
@@ -543,7 +762,7 @@ export function ContagemInventario({
           <div className="flex justify-end">
             <button
               onClick={finalizar}
-              disabled={pending || enviando.size > 0}
+              disabled={pending || enviando.size > 0 || naoSalvos > 0}
               className={`${btnClass('primary')} h-11 w-full sm:h-10 sm:w-auto`}
             >
               {pending ? <Spinner /> : <CheckCircle className="size-4" />}

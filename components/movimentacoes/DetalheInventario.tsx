@@ -30,6 +30,7 @@ export function DetalheInventario({ dados }: { dados: DetalheInventarioData }) {
         {dados.responsavel && <span>por {dados.responsavel}</span>}
       </div>
       <ContagemInventario
+        lojaId={dados.lojaId}
         inventarioId={dados.id}
         itensIniciais={dados.itens}
         finalizado={dados.finalizado}

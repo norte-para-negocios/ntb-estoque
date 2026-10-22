@@ -41,7 +41,11 @@ export async function GET(request: Request) {
     {
       ...base,
       lote: 'OP-1234',
-      quantidade: '1 de 10 (UN)',
+      // Exemplo de etiqueta de entrada de nota: o número da NF vai na linha "Prod:".
+      quantidade: '',
+      nf_numero: '000007046',
+      nf_serie: '1',
+      nf_entrada: '20/06/2026',
       qtde_nf: '10 (CX)',
       qtde_etiqueta: '1 (CX)',
       validade: '28/06/2026',

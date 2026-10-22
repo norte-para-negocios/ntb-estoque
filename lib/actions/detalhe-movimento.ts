@@ -224,6 +224,7 @@ export type DetalheInventario = {
   data: string
   responsavel: string | null
   status: string
+  lojaId: number
   finalizado: boolean
   podeEditar: boolean
   itens: import('@/components/inventario/ContagemInventario').ItemContagem[]
@@ -291,6 +292,7 @@ export async function buscarDetalheInventario(id: number): Promise<{ error: stri
     responsavel: responsavel?.name ?? null,
     status: inventario.status,
     finalizado: inventario.status === 'Finalizado',
+    lojaId,
     podeEditar,
     itens: itensRaw.map((i) => ({
       ...i,

@@ -58,6 +58,8 @@ const STATUS: Record<string, { label: string; token: CorToken; vivo?: true }> = 
   Vazio: { label: 'Sem quantidade', token: 'neutro' },
   'Sem CMC': { label: 'Sem CMC', token: 'warn' },
   Erro: { label: 'Erro', token: 'err' },
+  // Contagem de inventário guardada só no aparelho, esperando o servidor (contagem-pendente.ts).
+  'Não salvo': { label: 'Não salvo', token: 'warn', vivo: true },
   Pendente: { label: 'Pendente', token: 'warn' },
   // Perfis de usuario (selo na tela de Usuarios)
   Admin: { label: 'Admin', token: 'brand' },

@@ -60,7 +60,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const { data: nf } = await supabase
     .from('notas_fiscais')
-    .select('c_numero_nfe, c_nome')
+    .select('c_numero_nfe, c_serie_nfe, c_nome, full_object')
     .eq('id', id)
     .eq('loja_id', lojaId)
     .single()
@@ -125,6 +125,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       inclusao: fo.infoCadastro?.dRec ?? '',
       produzido: '',
       fornecedor: nf.c_nome ?? '',
+      nf_numero: nf.c_numero_nfe ?? '',
+      nf_serie: nf.c_serie_nfe ?? '',
+      // Data de entrada: fica na NOTA (o item não tem infoCadastro).
+      nf_entrada: (nf.full_object as { infoCadastro?: { dRec?: string } } | null)?.infoCadastro?.dRec ?? '',
       cnpj: loja?.cnpj ?? '',
       qr,
       nome_loja: loja?.nome_fantasia || loja?.nome || '',

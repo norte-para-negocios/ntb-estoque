@@ -79,7 +79,7 @@ function Preview({ f }: { f: EtiquetaFormValores }) {
             <div style={{ fontSize: px(10), fontWeight: f.negrito_descricao ? 700 : 400, lineHeight: 1.2, marginBottom: 3 }}>
               CHOPP BRAHMA CLARO BARRIL KEG 50L
             </div>
-            <div style={{ fontSize: px(8), marginBottom: 2, color: '#333' }}>Prod: 90629 &nbsp; 1 de 10 (UN)</div>
+            <div style={{ fontSize: px(8), marginBottom: 2, color: '#333' }}>Prod: 90629 &nbsp; <b>NF nº 7046 série 1 · 20/06</b></div>
             {visiveis.map((k) => (
               <div key={k} style={{ fontSize: px(8.5), marginBottom: 1.5 }}>
                 {EXEMPLO[k].label && <span style={{ color: '#666' }}>{EXEMPLO[k].label}: </span>}

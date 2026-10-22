@@ -1,6 +1,7 @@
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import { NTB_LOGO_DATA_URL } from '@/lib/etiqueta-logo'
 import { formatNumBR } from '@/lib/num-br'
+import { larguraTextoPt, textoNfEtiqueta } from '@/lib/etiqueta-nf'
 
 // Fator de conversao mm -> pt (1 mm = 2.83465 pt)
 const MM = 2.83465
@@ -65,6 +66,10 @@ export interface Etiqueta {
   cnpj: string
   qr: string // data URL do QR code
   nome_loja?: string
+  // Só na etiqueta de entrada de nota (pedido do Ramon, 22/10/2026). Avulsa não manda nada.
+  nf_numero?: string
+  nf_serie?: string
+  nf_entrada?: string // data de entrada (dRec do Omie), vai ao lado do número se couber
 }
 
 export interface EtiquetaPDFProps {
@@ -196,6 +201,10 @@ export function EtiquetaPDF({ etiquetas, config = {} }: EtiquetaPDFProps) {
   }
 
   const s = buildStyles({ larguraCm, alturaCm, offsetX, offsetY, escala, fontScale, cor, corFilete, borda })
+  // Largura útil da coluna de texto (mesma conta do buildStyles), para o número da NF caber na linha.
+  const larguraTexto =
+    larguraCm * CM - Math.max((3 * escala + offsetX) * MM, 0) - 2.5 * MM * escala - 46 * escala - 3
+  const fonteLinha = 7.25 * escala * fontScale
   const bold = (b: boolean) => ({ fontFamily: b ? 'Helvetica-Bold' : 'Helvetica' })
 
   return (
@@ -221,6 +230,16 @@ export function EtiquetaPDF({ etiquetas, config = {} }: EtiquetaPDFProps) {
           fornecedor: mostrar.fornecedor && e.fornecedor ? { label: '', valor: e.fornecedor.trim().slice(0, 30) } : null,
         }
         const linhas = ordem.map((k) => valores[k]).filter(Boolean) as { label: string; valor: string }[]
+        // NF na metade livre da linha "Prod:" (a etiqueta de nota não usa `quantidade`): não
+        // aumenta a altura. Com quantidade preenchida, vira uma linha própria logo abaixo.
+        const prod = `Prod: ${e.codigo_produto.trim().slice(0, 8)}`
+        const nfNaLinhaProd = e.quantidade === ''
+        const nf = textoNfEtiqueta(
+          { numero: e.nf_numero, serie: e.nf_serie, entrada: e.nf_entrada },
+          nfNaLinhaProd ? larguraTexto - larguraTextoPt(prod, fonteLinha) - 6 : larguraTexto,
+          fonteLinha,
+          true
+        )
         const temRodape = mostrar.cnpj || mostrarLogo
 
         return (
@@ -238,11 +257,13 @@ export function EtiquetaPDF({ etiquetas, config = {} }: EtiquetaPDFProps) {
 
                   {/* Produto + quantidade (linha fixa) */}
                   <View style={s.campoLinha}>
-                    <Text style={[s.linha, { flex: 1 }]}>Prod: {e.codigo_produto.trim().slice(0, 8)}</Text>
+                    <Text style={[s.linha, nf && nfNaLinhaProd ? { marginRight: 6 } : { flex: 1 }]}>{prod}</Text>
                     {e.quantidade !== '' && (
                       <Text style={[s.linha, { flex: 1 }]}>{e.quantidade.trim().slice(0, 14)}</Text>
                     )}
+                    {nf !== '' && nfNaLinhaProd && <Text style={[s.linha, bold(true), { flex: 1 }]}>{nf}</Text>}
                   </View>
+                  {nf !== '' && !nfNaLinhaProd && <Text style={[s.linha, bold(true)]}>{nf}</Text>}
 
                   {/* Campos opcionais na ordem escolhida */}
                   {linhas.map((c, idx) => (

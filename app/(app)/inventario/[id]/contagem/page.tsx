@@ -131,6 +131,7 @@ export default async function ContagemPage({ params }: { params: Promise<{ id: s
       />
 
       <ContagemInventario
+        lojaId={lojaId}
         inventarioId={inventario.id}
         itensIniciais={(itens ?? []) as ItemContagem[]}
         finalizado={finalizado}
