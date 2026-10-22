@@ -11,6 +11,7 @@ import { MODULOS, moduloDoPath } from '@/lib/central/modulos'
 import { modulosVisiveis, type ModuloPronto } from '@/lib/central/visibilidade'
 import { destinosDoMenu } from '@/lib/central/organizar'
 import { iconeDoItem } from '@/lib/central/icones'
+import { hrefAtivo } from '@/lib/nav-ativo'
 import type { CtxVisibilidade } from '@/lib/nav-visivel'
 
 type Destino = { href: string; label: string; Icon: LucideIcon }
@@ -57,6 +58,8 @@ export function MenuModulos({ ctx, compacto = false }: { ctx: CtxVisibilidade; c
         const Icon = m.icone
         const on = ativo === m.id
         const destinos = destinosDoModulo(m)
+        // Mais específico vence: em /estoque/ajustes só "Ajustes de estoque" acende, não "Estoque".
+        const destinoAtivo = hrefAtivo(pathname, destinos.map((d) => d.href))
         const aberto = abertos.has(m.id)
         return (
           <div key={m.id}>
@@ -90,7 +93,7 @@ export function MenuModulos({ ctx, compacto = false }: { ctx: CtxVisibilidade; c
                   className="overflow-hidden"
                 >
                   {destinos.map((d) => {
-                    const sel = pathname === d.href || pathname.startsWith(d.href + '/')
+                    const sel = d.href === destinoAtivo
                     return (
                       <li key={d.href}>
                         <Link

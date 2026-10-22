@@ -144,9 +144,12 @@ test('visibilidade herda as regras do menu atual (loja, admin, superAdmin, permi
   assert.equal(itemVisivel(kardex, NAV_ITEMS, dev), false) // /estoque exige comEstoque
   assert.equal(itemVisivel(kardex, NAV_ITEMS, { ...dev, temEstoque: true }), true)
 
+  const pedidos = todosItens.find((i) => i.href === '/pedido-compra')!
+  assert.equal(itemVisivel(pedidos, NAV_ITEMS, dev), false) // soEstoqueProprio
+  assert.equal(itemVisivel(pedidos, NAV_ITEMS, { ...dev, pedidosOmie: true }), true) // ouPedidosOmie (lista)
   const pedido = todosItens.find((i) => i.href === '/pedido-compra/novo')!
-  assert.equal(itemVisivel(pedido, NAV_ITEMS, dev), false) // soEstoqueProprio
-  assert.equal(itemVisivel(pedido, NAV_ITEMS, { ...dev, pedidosOmie: true }), true) // ouPedidosOmie
+  // Criar pedido na loja Omie exige a gravação no Omie (C1, desligada): o botão é só de estoque próprio.
+  assert.equal(itemVisivel(pedido, NAV_ITEMS, { ...dev, pedidosOmie: true }), false)
   assert.equal(itemVisivel(pedido, NAV_ITEMS, { ...dev, estoqueProprio: true }), true)
   assert.equal(itemVisivel(pedido, NAV_ITEMS, { ...dev, isSuperAdmin: false, estoqueProprio: true }), false)
 
@@ -221,7 +224,7 @@ test('Cargos herdam /usuario; Sincronização só no desktop; Produtos substitut
 
 test('"Minha loja" mantém o cadeado para quem não é admin global', () => {
   const m = modulosVisiveis(MODULOS, NAV_ITEMS, { ...dev, podeGerirUsuarios: true }).find((x) => x.id === 'administracao')!
-  const item = m.secoes.flatMap((s) => s.itens).find((i) => i.href === '/minha-loja')!
+  const item = m.telas.find((i) => i.href === '/minha-loja')!
   assert.equal(item.cadeado, true)
 })
 

@@ -97,3 +97,16 @@ test('itensDoModulo cobre novos, telas e seções', () => {
   const m = MODULOS.find((x) => x.id === 'compras')!
   assert.equal(itensDoModulo(m).length, m.novos.length + m.telas.length + m.secoes.reduce((n, s) => n + s.itens.length, 0))
 })
+
+test('menu lateral: toda tela do menu antigo visível na loja está a 1 clique, com o nome do menu antigo', async () => {
+  const { navItemVisivel } = await import('../nav-visivel.ts')
+  const { modulosVisiveis } = await import('./visibilidade.ts')
+  for (const ctx of [proprio, omie, { ...omie, pedidosOmie: true }]) {
+    const destinos = modulosVisiveis(MODULOS, NAV_ITEMS, ctx).flatMap((m) => [{ href: m.href, label: m.nome }, ...destinosDoMenu(m)])
+    for (const n of NAV_ITEMS.filter((x) => navItemVisivel(x, ctx))) {
+      const d = destinos.find((x) => x.href === n.href)
+      assert.ok(d, `${n.href} (${n.label}) fora do menu lateral`)
+      if (n.href !== '/home') assert.equal(d.label, n.label, `${n.href}: nome diferente do menu antigo`)
+    }
+  }
+})

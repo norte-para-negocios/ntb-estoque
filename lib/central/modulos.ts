@@ -87,7 +87,7 @@ export const MODULOS: ModuloCentral[] = [
     novos: [],
     telas: [
       { label: 'Painel do dia', href: '/home', desc: 'Vendas, estoque e pendências num olhar', principal: true },
-      { label: 'Resumo operacional', href: '/resumo', desc: 'O que entrou, saiu e deu erro' },
+      { label: 'Resumo Operacional', href: '/resumo', desc: 'O que entrou, saiu e deu erro' },
       { label: 'Feito pelo robô', href: '/correcoes', desc: 'Correções automáticas do dia' },
     ],
     secoes: [],
@@ -122,7 +122,7 @@ export const MODULOS: ModuloCentral[] = [
           { label: 'Substitutos', href: '/produto-substituicao', regra: '/produto' },
         ],
       },
-      { nome: 'Locais de estoque', desc: 'Câmara, depósito, balcão', itens: [criar('Incluir', '/local-estoque'), { label: 'Exibir todos', href: '/local-estoque' }] },
+      { nome: 'Locais de Estoque', desc: 'Câmara, depósito, balcão', itens: [criar('Incluir', '/local-estoque'), { label: 'Exibir todos', href: '/local-estoque' }] },
       { nome: 'Famílias', desc: 'Agrupam produtos parecidos', itens: [criar('Incluir', '/familia'), { label: 'Exibir todas', href: '/familia' }] },
       { nome: 'Grupos e subgrupos', desc: 'Árvore de classificação dos produtos', itens: [{ label: 'Exibir todos', href: '/grupo-produto' }] },
       {
@@ -145,7 +145,8 @@ export const MODULOS: ModuloCentral[] = [
     desc: 'Do pedido ao recebimento da nota.',
     icone: ShoppingCart,
     novos: [
-      { label: 'Pedido de compra', href: '/pedido-compra/novo' },
+      // Loja Omie: o pedido só é criado com a gravação no Omie ligada (C1, desligada); até lá, só estoque próprio.
+      { label: 'Pedido de compra', href: '/pedido-compra/novo', soEstoqueProprio: true },
       { label: 'Requisição', href: '/requisicao-compra/novo' },
       { label: 'Importar XML de nota', href: '/nota-fiscal/importar', soEstoqueProprio: true },
       { label: 'Nota sem XML', href: '/nota-fiscal/nova', soEstoqueProprio: true },
@@ -195,7 +196,7 @@ export const MODULOS: ModuloCentral[] = [
     ],
     telas: [
       { label: 'Ordens de Produção', href: '/ordem-producao', desc: 'Abertas e concluídas', principal: true },
-      { label: 'Ordens abertas', href: '/ordem-producao/abertas', desc: 'O que ainda está para produzir' },
+      { label: 'OPs abertas', href: '/ordem-producao/abertas', desc: 'O que ainda está para produzir' },
       { label: 'Inventários', href: '/inventario', desc: 'Contagens feitas e em andamento' },
       { label: 'Transferências', href: '/transferencia', desc: 'Entre locais da loja' },
       { label: 'Impressões', href: '/impressoes', desc: 'Etiquetas e listas de contagem' },
@@ -220,7 +221,7 @@ export const MODULOS: ModuloCentral[] = [
       { label: 'Contador e fechamento', href: '/contador', desc: 'Pacote do mês' },
     ],
     secoes: [
-      { nome: 'Categorias contábeis', desc: 'Como as notas entram na contabilidade', itens: [criar('Incluir', '/categoria-contabil'), { label: 'Exibir todas', href: '/categoria-contabil' }] },
+      { nome: 'Categorias Contábeis', desc: 'Como as notas entram na contabilidade', itens: [criar('Incluir', '/categoria-contabil'), { label: 'Exibir todas', href: '/categoria-contabil' }] },
       {
         nome: 'Relatórios',
         tipo: 'relatorio',
@@ -288,9 +289,10 @@ export const MODULOS: ModuloCentral[] = [
     telas: [
       { label: 'Relatórios', href: '/relatorios', desc: 'Todos os relatórios num lugar só', principal: true },
       { label: 'Saúde da integração', href: '/sync-status', desc: 'Omie e SEFAZ' },
-      { label: 'Logs de integração', href: '/log', desc: 'Erros e envios' },
-      { label: 'Saúde do banco', href: '/saude-banco', desc: 'Espaço, lentidão e erros do banco' },
+      { label: 'Logs de Integração', href: '/log', desc: 'Erros e envios' },
+      { label: 'Saúde do Banco', href: '/saude-banco', desc: 'Espaço, lentidão e erros do banco' },
       { label: 'Sincronização', href: '/sincronizacao', soDesktop: true, desc: 'Dados do computador com a nuvem' },
+      { label: 'Minha loja', href: '/minha-loja', desc: 'Dados e preferências desta loja' },
     ],
     secoes: [
       { nome: 'Usuários', desc: 'Quem acessa o sistema', itens: [criar('Incluir', '/usuario'), { label: 'Exibir todos', href: '/usuario' }] },
@@ -302,7 +304,7 @@ export const MODULOS: ModuloCentral[] = [
       {
         nome: 'Lojas',
         desc: 'Unidades da rede',
-        itens: [criar('Incluir', '/loja'), { label: 'Exibir todas', href: '/loja' }, { label: 'Minha loja', href: '/minha-loja' }],
+        itens: [criar('Incluir', '/loja'), { label: 'Exibir todas', href: '/loja' }],
       },
     ],
   },

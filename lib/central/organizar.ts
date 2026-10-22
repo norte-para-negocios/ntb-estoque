@@ -42,7 +42,8 @@ export function organizar(m: ModuloPronto): Organizado {
 
 /** Telas do módulo no menu lateral: as telas e, de cada cadastro, a lista ("Exibir todos") com o nome do cadastro. */
 export function destinosDoMenu(m: ModuloPronto): { href: string; label: string }[] {
-  const out = m.telas.filter(util).map((i) => ({ href: i.href!, label: i.label }))
+  // A tela que o próprio nome do módulo abre (Dashboard -> /home) não se repete embaixo dele.
+  const out = m.telas.filter((i) => util(i) && i.href !== m.href).map((i) => ({ href: i.href!, label: i.label }))
   for (const s of m.secoes) {
     if (s.tipo === 'relatorio') continue
     const lista = s.itens.find((i) => util(i) && /^exibir /i.test(i.label))
