@@ -27,7 +27,8 @@ test('nenhum href duplicado dentro de um módulo (comparando com a query)', () =
     const hrefs = itensDoModulo(m).filter((i) => i.href).map((i) => i.href!)
     const repetidos = hrefs.filter((h, k) => hrefs.indexOf(h) !== k)
     assert.deepEqual(repetidos, [], `${m.id} repete href`)
-    const rotas = hrefs.map(semQuery)
+    // "?criar=1" é outra ação (abre o formulário de criação) sobre a mesma tela da lista.
+    const rotas = hrefs.filter((h) => !h.endsWith('?criar=1')).map(semQuery)
     assert.deepEqual(rotas.filter((h, k) => rotas.indexOf(h) !== k), [], `${m.id} repete a mesma rota com query diferente`)
   }
 })

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 import { Plus, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
@@ -36,6 +36,15 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
   const [vezes, setVezes] = useState('4')
   const [obs, setObs] = useState('')
   const router = useRouter()
+
+  // Atalho da Central ("Criar ..."): /rota?criar=1 abre este formulário direto e limpa o endereço.
+  const pathname = usePathname()
+  const veioDaCentral = useSearchParams().get('criar') === '1'
+  useEffect(() => {
+    if (!veioDaCentral) return
+    setOpen(true)
+    router.replace(pathname, { scroll: false })
+  }, [veioDaCentral, pathname, router])
 
   function avancar() {
     if (!data) {

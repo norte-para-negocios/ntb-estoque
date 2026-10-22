@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState, useTransition } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -47,6 +47,15 @@ export function NovoInventario({
   const [mostrarFiltros, setMostrarFiltros] = useState(false)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
+
+  // Atalho da Central ("Criar ..."): /rota?criar=1 abre este formulário direto e limpa o endereço.
+  const pathname = usePathname()
+  const veioDaCentral = useSearchParams().get('criar') === '1'
+  useEffect(() => {
+    if (!veioDaCentral) return
+    setOpen(true)
+    router.replace(pathname, { scroll: false })
+  }, [veioDaCentral, pathname, router])
 
   function toggleTipo(v: string) {
     setTiposSel((prev) => (prev.includes(v) ? prev.filter((t) => t !== v) : [...prev, v]))

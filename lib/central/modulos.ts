@@ -83,7 +83,7 @@ export const MODULOS: ModuloCentral[] = [
       { label: 'Ver o estoque de hoje', href: '/estoque', desc: 'Saldo e custo de cada produto' },
       { label: 'Corrigir diferenças', href: '/estoque/correcoes', desc: 'Central de correções' },
       { label: 'Ver movimentações', href: '/movimentacoes', desc: 'Todas as entradas e saídas' },
-      { label: 'Fazer um inventário', href: '/inventario', desc: 'Contar e acertar o saldo' },
+      { label: 'Fazer um inventário', href: '/inventario', desc: 'Contar e acertar o saldo', ref: true },
       { label: 'Ver o que vence', href: '/validade', desc: 'Lotes a vencer' },
     ],
     secoes: [
@@ -96,6 +96,7 @@ export const MODULOS: ModuloCentral[] = [
           { label: 'Fichas que usam o insumo', href: '/estoque/fichas', desc: 'Onde cada insumo é consumido' },
           { label: 'Quem mexeu', href: '/estoque/quem-mexeu', desc: 'Quem alterou o estoque e quando' },
           { label: 'Reposição', href: '/reposicao', desc: 'O que está abaixo do mínimo' },
+          { label: 'Transferências', href: '/transferencia', desc: 'Entre locais da loja', ref: true },
         ],
       },
       {
@@ -113,8 +114,6 @@ export const MODULOS: ModuloCentral[] = [
       { nome: 'Famílias', desc: 'Agrupam produtos parecidos', itens: [{ label: 'Exibir todas', href: '/familia' }] },
       { nome: 'Grupos e subgrupos', desc: 'Classificação dos produtos', itens: [{ label: 'Exibir todos', href: '/grupo-produto' }] },
       { nome: 'Sincronização do catálogo', tipo: 'consulta', itens: [{ label: 'Sincronização Vendas', href: '/sync-catalogo', desc: 'Catálogo enviado ao Norte Vendas' }] },
-      { nome: 'Transferências', desc: 'Entre locais da loja', itens: [{ label: 'Exibir todas', href: '/transferencia' }] },
-      { nome: 'Impressões', tipo: 'consulta', itens: [{ label: 'Etiquetas e listas', href: '/impressoes', desc: 'Imprimir etiquetas e listas de contagem' }] },
       {
         nome: 'Relatórios',
         tipo: 'relatorio',
@@ -190,10 +189,14 @@ export const MODULOS: ModuloCentral[] = [
   {
     id: 'producao',
     nome: 'Produção',
-    desc: 'Fichas técnicas e ordens de produção.',
+    desc: 'Ordens de produção, inventários e transferências.',
     icone: Factory,
     atalhos: [
+      // ?criar=1 abre o formulário direto (a tela /ordem-producao/nova sozinha só funciona depois do passo 1).
+      { label: 'Criar uma ordem de produção', href: '/ordem-producao?criar=1', desc: 'Escolher data, local e produtos', regra: '/ordem-producao', soEstoqueProprio: true },
       { label: 'Ver ordens de produção', href: '/ordem-producao', desc: 'Abertas e concluídas' },
+      { label: 'Criar um inventário', href: '/inventario?criar=1', desc: 'Contar e acertar o saldo', regra: '/inventario' },
+      { label: 'Ver inventários', href: '/inventario', desc: 'Contagens feitas e em andamento' },
       {
         label: 'Ver fichas técnicas',
         href: '/produto',
@@ -204,13 +207,14 @@ export const MODULOS: ModuloCentral[] = [
     ],
     secoes: [
       {
-        nome: 'Ordem de produção',
-        desc: 'Produzir e dar baixa nos insumos',
+        nome: 'Consultas da produção',
+        tipo: 'consulta',
         itens: [
-          { label: 'Incluir', href: '/ordem-producao/nova' },
-          { label: 'Abertas', href: '/ordem-producao/abertas' },
+          { label: 'Ordens abertas', href: '/ordem-producao/abertas', desc: 'O que ainda está para produzir' },
+          { label: 'Etiquetas e listas', href: '/impressoes', desc: 'Imprimir etiquetas e listas de contagem' },
         ],
       },
+      { nome: 'Transferências', desc: 'Entre locais da loja', itens: [{ label: 'Exibir todas', href: '/transferencia' }] },
       {
         nome: 'Relatórios',
         tipo: 'relatorio',
