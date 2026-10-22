@@ -172,25 +172,27 @@ function CartaoAcao({ item, principal, favs, alternar }: { item: ItemPronto; pri
 function CartaoConsulta({ item, secao, favs, alternar }: { item: ItemPronto; secao?: string; favs: string[]; alternar: (h: string) => void }) {
   const v = useVariantes()
   return (
-    <motion.div variants={v.entra}>
+    <motion.div variants={v.entra} className="h-full min-w-0">
       <motion.div
         whileHover={v.reduzir ? undefined : { y: -2 }}
         whileTap={v.reduzir ? undefined : { scale: 0.985 }}
         transition={SPRING_UI}
-        className="group flex items-center gap-1 rounded-[18px] bg-surface pr-2 shadow-[var(--shadow-sm)] transition-shadow duration-200 hover:shadow-[var(--shadow-md)]"
+        className="group relative h-full rounded-[18px] bg-surface shadow-[var(--shadow-sm)] transition-shadow duration-200 hover:shadow-[var(--shadow-md)]"
       >
-        <Link href={item.href!} className="flex min-h-[68px] flex-1 items-center gap-3.5 p-3.5">
+        <Link href={item.href!} className="flex h-full min-h-[68px] items-center gap-3.5 rounded-[18px] p-3.5 pr-9 [@media(hover:none)]:pr-14">
           <Bloco label={item.label} secao={secao} href={item.href} />
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-2">
-              <span className="truncate text-[15px] font-semibold text-text group-hover:text-brand">{item.label}</span>
+              <span className="text-[15px] leading-snug font-semibold text-text group-hover:text-brand">{item.label}</span>
               <Etiquetas item={item} />
             </span>
-            {item.desc && <span className="block truncate text-[13px] text-text-muted">{item.desc}</span>}
+            {item.desc && <span className="line-clamp-2 text-[13px] text-text-muted">{item.desc}</span>}
           </span>
           <ChevronRight className="size-4 shrink-0 text-text-muted/40 u-motion group-hover:translate-x-0.5 group-hover:text-brand" strokeWidth={2} aria-hidden />
         </Link>
-        <Estrela href={item.href!} favs={favs} alternar={alternar} />
+        <div className="absolute right-1 top-1">
+          <Estrela href={item.href!} favs={favs} alternar={alternar} />
+        </div>
       </motion.div>
     </motion.div>
   )
