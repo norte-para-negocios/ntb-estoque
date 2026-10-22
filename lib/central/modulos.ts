@@ -32,7 +32,14 @@ export type ItemCentral = {
   ref?: boolean
 }
 
-export type SecaoCentral = { nome: string; itens: ItemCentral[] }
+/**
+ * Como a seção aparece na tela do módulo:
+ * - 'cadastro' (padrão): uma linha com o nome da coisa e um botão por ação (+ Novo, Importar, Ver todos);
+ * - 'consulta': cada item vira uma linha própria, com ícone e frase (telas de consulta/uso);
+ * - 'relatorio': chips numa faixa só.
+ */
+export type TipoSecao = 'cadastro' | 'consulta' | 'relatorio'
+export type SecaoCentral = { nome: string; itens: ItemCentral[]; tipo?: TipoSecao; desc?: string }
 
 export type ModuloCentral = {
   id: string
@@ -59,11 +66,11 @@ export const MODULOS: ModuloCentral[] = [
     desc: 'Resumo da loja e pendências do dia.',
     icone: LayoutDashboard,
     atalhos: [
-      { label: 'Painel inicial', href: '/home', desc: 'O dia da loja num olhar' },
-      { label: 'Resumo operacional', href: '/resumo', desc: 'O que entrou, saiu e deu erro' },
-      { label: 'Feito pelo robô', href: '/correcoes', desc: 'Correções automáticas' },
-      { label: 'Central de correções', href: '/estoque/correcoes', desc: 'Diferenças a corrigir', ref: true },
-      { label: 'Notas Fiscais', href: '/nota-fiscal', desc: 'Entradas para conferir', ref: true },
+      { label: 'Ver o dia da loja', href: '/home', desc: 'Painel inicial, num olhar' },
+      { label: 'Ver o resumo operacional', href: '/resumo', desc: 'O que entrou, saiu e deu erro' },
+      { label: 'Ver o que o robô corrigiu', href: '/correcoes', desc: 'Correções automáticas' },
+      { label: 'Corrigir diferenças', href: '/estoque/correcoes', desc: 'Central de correções', ref: true },
+      { label: 'Conferir notas de entrada', href: '/nota-fiscal', desc: 'Entradas para conferir', ref: true },
     ],
     secoes: [],
   },
@@ -73,25 +80,27 @@ export const MODULOS: ModuloCentral[] = [
     desc: 'Saldo, movimentos, inventário e transferências.',
     icone: Boxes,
     atalhos: [
-      { label: 'Estoque', href: '/estoque', desc: 'Saldo e custo de hoje' },
-      { label: 'Central de correções', href: '/estoque/correcoes', desc: 'Diferenças a corrigir' },
-      { label: 'Movimentações', href: '/movimentacoes', desc: 'Entradas e saídas' },
-      { label: 'Inventários', href: '/inventario', desc: 'Contagens' },
-      { label: 'Validade', href: '/validade', desc: 'Lotes a vencer' },
+      { label: 'Ver o estoque de hoje', href: '/estoque', desc: 'Saldo e custo de cada produto' },
+      { label: 'Corrigir diferenças', href: '/estoque/correcoes', desc: 'Central de correções' },
+      { label: 'Ver movimentações', href: '/movimentacoes', desc: 'Todas as entradas e saídas' },
+      { label: 'Fazer um inventário', href: '/inventario', desc: 'Contar e acertar o saldo' },
+      { label: 'Ver o que vence', href: '/validade', desc: 'Lotes a vencer' },
     ],
     secoes: [
       {
         nome: 'Consultas do estoque',
+        tipo: 'consulta',
         itens: [
-          { label: 'Kardex da loja', href: '/estoque/kardex', soOmie: true },
-          { label: 'Ajustes de estoque', href: '/estoque/ajustes' },
-          { label: 'Fichas que usam o insumo', href: '/estoque/fichas' },
-          { label: 'Quem mexeu', href: '/estoque/quem-mexeu' },
-          { label: 'Reposição', href: '/reposicao' },
+          { label: 'Kardex da loja', href: '/estoque/kardex', soOmie: true, desc: 'Histórico de um produto, dia a dia' },
+          { label: 'Ajustes de estoque', href: '/estoque/ajustes', desc: 'Acertos manuais de saldo' },
+          { label: 'Fichas que usam o insumo', href: '/estoque/fichas', desc: 'Onde cada insumo é consumido' },
+          { label: 'Quem mexeu', href: '/estoque/quem-mexeu', desc: 'Quem alterou o estoque e quando' },
+          { label: 'Reposição', href: '/reposicao', desc: 'O que está abaixo do mínimo' },
         ],
       },
       {
         nome: 'Produtos',
+        desc: 'Ficha, preço e unidade',
         itens: [
           { label: 'Incluir', href: '/produto/novo' },
           { label: 'Importar planilha', href: '/produto/importar', soEstoqueProprio: true },
@@ -100,14 +109,15 @@ export const MODULOS: ModuloCentral[] = [
           { label: 'Produtos substitutos', href: '/produto-substituicao', regra: '/produto' },
         ],
       },
-      { nome: 'Locais de estoque', itens: [{ label: 'Exibir todos', href: '/local-estoque' }] },
-      { nome: 'Famílias', itens: [{ label: 'Exibir todas', href: '/familia' }] },
-      { nome: 'Grupos e subgrupos', itens: [{ label: 'Exibir todos', href: '/grupo-produto' }] },
-      { nome: 'Sincronização do catálogo', itens: [{ label: 'Sincronização Vendas', href: '/sync-catalogo' }] },
-      { nome: 'Transferências', itens: [{ label: 'Exibir todas', href: '/transferencia' }] },
-      { nome: 'Impressões', itens: [{ label: 'Etiquetas e listas', href: '/impressoes' }] },
+      { nome: 'Locais de estoque', desc: 'Câmara, depósito, balcão', itens: [{ label: 'Exibir todos', href: '/local-estoque' }] },
+      { nome: 'Famílias', desc: 'Agrupam produtos parecidos', itens: [{ label: 'Exibir todas', href: '/familia' }] },
+      { nome: 'Grupos e subgrupos', desc: 'Classificação dos produtos', itens: [{ label: 'Exibir todos', href: '/grupo-produto' }] },
+      { nome: 'Sincronização do catálogo', tipo: 'consulta', itens: [{ label: 'Sincronização Vendas', href: '/sync-catalogo', desc: 'Catálogo enviado ao Norte Vendas' }] },
+      { nome: 'Transferências', desc: 'Entre locais da loja', itens: [{ label: 'Exibir todas', href: '/transferencia' }] },
+      { nome: 'Impressões', tipo: 'consulta', itens: [{ label: 'Etiquetas e listas', href: '/impressoes', desc: 'Imprimir etiquetas e listas de contagem' }] },
       {
         nome: 'Relatórios',
+        tipo: 'relatorio',
         itens: [
           rel('Posição de estoque', '/relatorio-posicao-estoque'),
           rel('Estoque valorizado', '/relatorio-estoque-valorizado'),
@@ -125,13 +135,14 @@ export const MODULOS: ModuloCentral[] = [
     desc: 'Do pedido à nota de entrada.',
     icone: ShoppingCart,
     atalhos: [
-      { label: 'Sugestão de compra', href: '/sugestao-compra', desc: 'O que comprar' },
-      { label: 'Tarefas de compras', href: '/tarefas-compras', desc: 'Pendências do comprador' },
-      { label: 'Notas Fiscais', href: '/nota-fiscal', desc: 'Notas recebidas e importação de XML' },
+      { label: 'Ver o que comprar', href: '/sugestao-compra', desc: 'Sugestão de compra' },
+      { label: 'Ver tarefas de compras', href: '/tarefas-compras', desc: 'Pendências do comprador' },
+      { label: 'Conferir notas recebidas', href: '/nota-fiscal', desc: 'Notas de entrada e importação de XML' },
     ],
     secoes: [
       {
         nome: 'Fornecedores',
+        desc: 'Quem vende para a loja',
         itens: [
           { label: 'Importar planilha', href: '/fornecedor/importar', soEstoqueProprio: true },
           { label: 'Exibir todos', href: '/fornecedor' },
@@ -141,6 +152,7 @@ export const MODULOS: ModuloCentral[] = [
       },
       {
         nome: 'Pedidos de compra',
+        desc: 'O que foi pedido e ainda não chegou',
         itens: [
           { label: 'Incluir', href: '/pedido-compra/novo' },
           { label: 'Importar planilha', href: '/pedido-compra/importar', soEstoqueProprio: true },
@@ -149,6 +161,7 @@ export const MODULOS: ModuloCentral[] = [
       },
       {
         nome: 'Requisições',
+        desc: 'Pedidos internos de reposição',
         itens: [
           { label: 'Incluir', href: '/requisicao-compra/novo' },
           { label: 'Exibir todas', href: '/requisicao-compra' },
@@ -156,15 +169,17 @@ export const MODULOS: ModuloCentral[] = [
       },
       {
         nome: 'Notas de entrada',
+        desc: 'Receber a mercadoria no estoque',
         itens: [
           { label: 'Importar XML', href: '/nota-fiscal/importar', soEstoqueProprio: true },
           { label: 'Lançar sem XML', href: '/nota-fiscal/nova', soEstoqueProprio: true },
           { label: 'Etapas do recebimento', href: '/nota-fiscal/etapas', soEstoqueProprio: true },
         ],
       },
-      { nome: 'Devolução ao fornecedor', itens: [{ label: 'Exibir todas', href: '/devolucao-fornecedor' }] },
+      { nome: 'Devolução ao fornecedor', desc: 'Mercadoria devolvida e nota de devolução', itens: [{ label: 'Exibir todas', href: '/devolucao-fornecedor' }] },
       {
         nome: 'Relatórios',
+        tipo: 'relatorio',
         itens: [
           rel('Compras por fornecedor', '/relatorio-compras'),
           rel('Produtos por fornecedor', '/relatorio-produtos-fornecedor', { comEstoque: true }),
@@ -178,11 +193,11 @@ export const MODULOS: ModuloCentral[] = [
     desc: 'Fichas técnicas e ordens de produção.',
     icone: Factory,
     atalhos: [
-      { label: 'Ordens de Produção', href: '/ordem-producao', desc: 'Abertas e concluídas' },
+      { label: 'Ver ordens de produção', href: '/ordem-producao', desc: 'Abertas e concluídas' },
       {
-        label: 'Estrutura dos produtos',
+        label: 'Ver fichas técnicas',
         href: '/produto',
-        desc: 'Ficha técnica: ícone de camadas na lista de Produtos',
+        desc: 'Estrutura dos produtos (ícone de camadas na lista)',
         soEstoqueProprio: true,
         ref: true,
       },
@@ -190,6 +205,7 @@ export const MODULOS: ModuloCentral[] = [
     secoes: [
       {
         nome: 'Ordem de produção',
+        desc: 'Produzir e dar baixa nos insumos',
         itens: [
           { label: 'Incluir', href: '/ordem-producao/nova' },
           { label: 'Abertas', href: '/ordem-producao/abertas' },
@@ -197,6 +213,7 @@ export const MODULOS: ModuloCentral[] = [
       },
       {
         nome: 'Relatórios',
+        tipo: 'relatorio',
         itens: [rel('Produção por produto', '/relatorio-ops', { comEstoque: true }), rel('Dashboard de produção', '/relatorio-producao')],
       },
     ],
@@ -207,15 +224,16 @@ export const MODULOS: ModuloCentral[] = [
     desc: 'Notas, categorias contábeis e pacote do contador.',
     icone: FileText,
     atalhos: [
-      { label: 'Notas Fiscais', href: '/nota-fiscal', desc: 'Entradas', ref: true },
-      { label: 'NF-e de saída', href: '/nfe-saida', desc: 'Emitir e acompanhar' },
-      { label: 'Contador e fechamento', href: '/contador', desc: 'Pacote do mês' },
+      { label: 'Conferir notas de entrada', href: '/nota-fiscal', desc: 'Entradas', ref: true },
+      { label: 'Emitir NF-e de saída', href: '/nfe-saida', desc: 'Emitir e acompanhar' },
+      { label: 'Fechar o mês com o contador', href: '/contador', desc: 'Pacote do mês' },
     ],
     secoes: [
-      { nome: 'Transferências entre lojas', itens: [{ label: 'Exibir todas', href: '/transferencia-loja' }] },
-      { nome: 'Categorias contábeis', itens: [{ label: 'Exibir todas', href: '/categoria-contabil' }] },
+      { nome: 'Transferências entre lojas', desc: 'Notas de transferência', itens: [{ label: 'Exibir todas', href: '/transferencia-loja' }] },
+      { nome: 'Categorias contábeis', desc: 'Como as notas entram na contabilidade', itens: [{ label: 'Exibir todas', href: '/categoria-contabil' }] },
       {
         nome: 'Relatórios',
+        tipo: 'relatorio',
         itens: [rel('Auditoria fiscal', '/auditoria-fiscal'), rel('Pendências de classificação', '/pendencias-classificacao')],
       },
     ],
@@ -226,8 +244,9 @@ export const MODULOS: ModuloCentral[] = [
     desc: 'Contas a pagar, a receber e caixa.',
     icone: Wallet,
     atalhos: [
+      { label: 'Lançar uma conta a pagar', href: '/financeiro/contas-pagar/nova', desc: 'Fornecedor, valor e vencimento', regra: '/financeiro/contas-pagar', soEstoqueProprio: true },
       breve('Resumo', 'Caixa de hoje e vencimentos'),
-      { label: 'Contas a pagar', href: '/financeiro/contas-pagar', desc: 'Em aberto e atrasadas', soEstoqueProprio: true },
+      { label: 'Ver contas a pagar', href: '/financeiro/contas-pagar', desc: 'Em aberto e atrasadas', soEstoqueProprio: true },
       breve('Contas a receber', 'Cartões e convênios'),
       breve('Aprovação de pagamentos', 'Aguardando o dono'),
     ],
@@ -235,13 +254,15 @@ export const MODULOS: ModuloCentral[] = [
       {
         // Exibir todas = o atalho acima; registrar e estornar pagamento são ações da própria lista e da ficha do título.
         nome: 'Contas a pagar',
-        itens: [{ label: 'Incluir', href: '/financeiro/contas-pagar/nova', regra: '/financeiro/contas-pagar', soEstoqueProprio: true }, breve('Importar planilha')],
+        desc: 'Boletos e compromissos',
+        itens: [breve('Importar planilha')],
       },
       { nome: 'Contas a receber', itens: [breve('Incluir'), breve('Exibir todas'), breve('Registrar recebimentos')] },
-      { nome: 'Contas correntes', itens: [{ label: 'Exibir todas', href: '/financeiro/contas-correntes', soEstoqueProprio: true }] },
-      { nome: 'Categorias financeiras', itens: [{ label: 'Exibir todas', href: '/financeiro/categorias', soEstoqueProprio: true }] },
+      { nome: 'Contas correntes', desc: 'Caixa, banco e cartão', itens: [{ label: 'Exibir todas', href: '/financeiro/contas-correntes', soEstoqueProprio: true }] },
+      { nome: 'Categorias financeiras', desc: 'Onde cada despesa cai no DRE', itens: [{ label: 'Exibir todas', href: '/financeiro/categorias', soEstoqueProprio: true }] },
       {
         nome: 'Movimentação',
+        desc: 'Entradas e saídas das contas',
         itens: [
           breve('Incluir lançamento'),
           breve('Incluir transferência'),
@@ -251,6 +272,7 @@ export const MODULOS: ModuloCentral[] = [
       },
       {
         nome: 'Relatórios',
+        tipo: 'relatorio',
         itens: [breve('Contas a pagar em aberto'), breve('Pagamentos realizados'), breve('Fluxo de caixa'), breve('DRE')],
       },
     ],
@@ -261,29 +283,32 @@ export const MODULOS: ModuloCentral[] = [
     desc: 'Lojas, pessoas, relatórios e saúde do sistema.',
     icone: Settings,
     atalhos: [
-      { label: 'Usuários', href: '/usuario', desc: 'Quem acessa o quê' },
-      { label: 'Relatórios', href: '/relatorios', desc: 'Todos num lugar só' },
-      { label: 'Saúde da integração', href: '/sync-status', desc: 'Omie e SEFAZ' },
-      { label: 'Logs de integração', href: '/log', desc: 'Erros e envios' },
+      { label: 'Gerenciar usuários', href: '/usuario', desc: 'Quem acessa o quê' },
+      { label: 'Ver todos os relatórios', href: '/relatorios', desc: 'Todos num lugar só' },
+      { label: 'Ver a saúde da integração', href: '/sync-status', desc: 'Omie e SEFAZ' },
+      { label: 'Ver logs de integração', href: '/log', desc: 'Erros e envios' },
     ],
     secoes: [
       {
         nome: 'Lojas',
+        desc: 'Unidades da rede',
         itens: [
           { label: 'Exibir todas', href: '/loja' },
           { label: 'Minha loja', href: '/minha-loja' },
         ],
       },
-      { nome: 'Usuários', itens: [{ label: 'Cargos', href: '/cargo', regra: '/usuario' }] },
+      { nome: 'Usuários', desc: 'Quem acessa o sistema', itens: [{ label: 'Cargos', href: '/cargo', regra: '/usuario' }] },
       {
         nome: 'Sistema',
+        tipo: 'consulta',
         itens: [
-          { label: 'Saúde do banco', href: '/saude-banco' },
-          { label: 'Sincronização', href: '/sincronizacao', soDesktop: true },
+          { label: 'Saúde do banco', href: '/saude-banco', desc: 'Espaço, lentidão e erros do banco' },
+          { label: 'Sincronização', href: '/sincronizacao', soDesktop: true, desc: 'Dados do computador com a nuvem' },
         ],
       },
       {
         nome: 'Relatórios',
+        tipo: 'relatorio',
         itens: [
           rel('Relatório mensal', '/relatorio-mensal'),
           rel('Faturamento', '/faturamento'),

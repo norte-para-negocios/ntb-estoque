@@ -1,4 +1,4 @@
-import type { ItemCentral, ModuloCentral } from './modulos'
+import type { ItemCentral, ModuloCentral, TipoSecao } from './modulos'
 // @ts-expect-error: o import com extensão .ts é exigido pelo node --test (type stripping); o tsc do Next não o aceita
 import { navItemVisivel } from '../nav-visivel.ts'
 import type { CtxVisibilidade, NavRegra } from '../nav-visivel'
@@ -61,7 +61,7 @@ export function itemSoDev(item: ItemCentral, nav: readonly NavRegra[]): boolean 
 }
 
 export type ItemPronto = ItemCentral & { soDev: boolean; cadeado: boolean }
-export type SecaoPronta = { nome: string; itens: ItemPronto[] }
+export type SecaoPronta = { nome: string; itens: ItemPronto[]; tipo?: TipoSecao; desc?: string }
 export type ModuloPronto = {
   id: string
   nome: string
@@ -87,7 +87,7 @@ export function moduloVisivel(m: ModuloCentral, nav: readonly NavRegra[], ctx: C
     icone: m.icone,
     atalhos: m.atalhos.filter(ok).map(pronto),
     secoes: m.secoes
-      .map((s) => ({ nome: s.nome, itens: s.itens.filter(ok).map(pronto) }))
+      .map((s) => ({ nome: s.nome, tipo: s.tipo, desc: s.desc, itens: s.itens.filter(ok).map(pronto) }))
       .filter((s) => s.itens.length > 0),
   }
 }

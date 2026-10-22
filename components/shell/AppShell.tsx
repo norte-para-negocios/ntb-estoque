@@ -98,7 +98,8 @@ export function AppShell({
             rola e descia junto com o body. clip mantem o sticky preso ao body
             (cabecalho de tabela congelado tipo Excel). */}
         <main className="flex-1 min-w-0 overflow-x-clip pb-20 lg:pb-0">
-          <div className="mx-auto w-full max-w-6xl px-4 lg:px-8 py-6">
+          {/* Central (só dev): usa a largura toda da tela, sem a coluna estreita das demais telas. */}
+          <div className={`mx-auto w-full px-4 lg:px-8 py-6 ${pathname.startsWith('/central') ? 'max-w-[1560px]' : 'max-w-6xl'}`}>
             <div className="mb-2 hidden items-center justify-end gap-2 lg:flex">
               <Sininho tela="desktop" />
               {/* Celular: a busca fica na barra superior (MobileNav). Desktop: botao completo com texto e atalho de teclado */}
