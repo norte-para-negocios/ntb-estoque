@@ -156,7 +156,7 @@ test('Finanças aparece sempre no menu; módulos sem nenhum item visível somem'
   // sem nenhuma permissão e sem ser dev/admin: só sobra Finanças (itens "em breve" não dependem de permissão)
   const nada: CtxVisibilidade = { ...dev, isSuperAdmin: false, rotasVisiveis: [] }
   assert.deepEqual(modulosVisiveis(MODULOS, NAV_ITEMS, nada).map((m) => m.id), ['financas'])
-  // com só /home liberado volta o Início e nada mais
+  // com só /home liberado volta o Dashboard e nada mais
   const soHome: CtxVisibilidade = { ...nada, rotasVisiveis: ['/home'] }
   assert.deepEqual(modulosVisiveis(MODULOS, NAV_ITEMS, soHome).map((m) => m.id), ['inicio', 'financas'])
 })

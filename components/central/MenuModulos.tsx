@@ -35,15 +35,11 @@ export function MenuModulos({ ctx, compacto = false }: { ctx: CtxVisibilidade; c
       {modulos.map((m) => {
         const Icon = m.icone
         const on = ativo === m.id
-        const soBreve = m.id === 'financas'
         return (
           <Link key={m.id} href={`/central/${m.id}`} className={cls(on)} aria-current={on ? 'page' : undefined}>
             {on && <Pilula id={pilulaId} />}
             <Icon className="relative size-[17px] shrink-0" strokeWidth={1.9} />
             <span className="relative flex-1">{m.nome}</span>
-            {soBreve && (
-              <span className="relative rounded-full bg-white/[0.18] px-1.5 py-px text-[10px] font-semibold text-text">em breve</span>
-            )}
           </Link>
         )
       })}

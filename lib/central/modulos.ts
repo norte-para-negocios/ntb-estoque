@@ -55,7 +55,7 @@ const breve = (label: string, desc?: string): ItemCentral => ({ label, desc, emB
 export const MODULOS: ModuloCentral[] = [
   {
     id: 'inicio',
-    nome: 'Início',
+    nome: 'Dashboard',
     desc: 'Resumo da loja e pendências do dia.',
     icone: LayoutDashboard,
     atalhos: [
