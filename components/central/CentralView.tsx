@@ -2,7 +2,8 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { ArrowUpRight, Lock, Search, Star } from 'lucide-react'
+import { ArrowUpRight, ChevronRight, Lock, Search, Star } from 'lucide-react'
+import { CLASSE_TOM, iconeDaSecao, iconeDoItem } from '@/lib/central/icones'
 import { NAV_ITEMS } from '@/components/shell/NavItems'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { SegmentedControl } from '@/components/ui-kit/SegmentedControl'
@@ -37,6 +38,18 @@ function Etiquetas({ item }: { item: ItemPronto }) {
   )
 }
 
+function Bloco({ label, secao, grande = false }: { label: string; secao?: string; grande?: boolean }) {
+  const { Icon, tom } = iconeDoItem(label, secao)
+  return (
+    <span
+      className={`flex shrink-0 items-center justify-center ${grande ? 'size-11 rounded-[14px]' : 'size-8 rounded-[10px]'} ${CLASSE_TOM[tom]}`}
+      aria-hidden
+    >
+      <Icon className={grande ? 'size-[22px]' : 'size-[17px]'} strokeWidth={1.9} />
+    </span>
+  )
+}
+
 function Estrela({ href, favs, alternar }: { href: string; favs: string[]; alternar: (h: string) => void }) {
   const on = favs.includes(href)
   return (
@@ -55,11 +68,12 @@ function Estrela({ href, favs, alternar }: { href: string; favs: string[]; alter
   )
 }
 
-/** Item de seção: link em forma de "chip" (ou texto desabilitado quando ainda não existe). */
-function LinhaItem({ item, favs, alternar }: { item: ItemPronto; favs: string[]; alternar: (h: string) => void }) {
+/** Item de seção: bloco com ícone + nome, seta à direita (ou texto apagado quando ainda não existe). */
+function LinhaItem({ item, secao, favs, alternar }: { item: ItemPronto; secao?: string; favs: string[]; alternar: (h: string) => void }) {
   if (item.emBreve || !item.href) {
     return (
-      <li className="flex min-h-9 items-center gap-2 rounded-[10px] px-2.5 text-[14px] text-text-muted/70">
+      <li className="flex min-h-11 items-center gap-3 rounded-[12px] px-2 py-1.5 text-[14px] text-text-muted/70 opacity-70">
+        <Bloco label={item.label} secao={secao} />
         <span className="flex-1" aria-disabled="true">
           {item.label}
         </span>
@@ -68,10 +82,12 @@ function LinhaItem({ item, favs, alternar }: { item: ItemPronto; favs: string[];
     )
   }
   return (
-    <li className="group flex min-h-9 items-center gap-1 rounded-[10px] pl-2.5 pr-1 u-motion hover:bg-surface-2">
-      <Link href={item.href} className="flex min-h-9 flex-1 items-center gap-2 text-[14px] font-medium text-text group-hover:text-brand">
-        <span>{item.label}</span>
+    <li className="group flex min-h-11 items-center gap-1 rounded-[12px] pr-1 u-motion hover:bg-surface-2">
+      <Link href={item.href} className="flex min-h-11 flex-1 items-center gap-3 px-2 py-1.5 text-[14px] font-medium text-text group-hover:text-brand">
+        <Bloco label={item.label} secao={secao} />
+        <span className="flex-1">{item.label}</span>
         <Etiquetas item={item} />
+        <ChevronRight className="size-4 shrink-0 text-text-muted/40 u-motion group-hover:translate-x-0.5 group-hover:text-brand" strokeWidth={2} aria-hidden />
       </Link>
       <Estrela href={item.href} favs={favs} alternar={alternar} />
     </li>
@@ -80,13 +96,16 @@ function LinhaItem({ item, favs, alternar }: { item: ItemPronto; favs: string[];
 
 function CartaoAtalho({ item, favs, alternar }: { item: ItemPronto; favs: string[]; alternar: (h: string) => void }) {
   const corpo = (
-    <>
-      <div className="flex items-center gap-2">
-        <span className="font-semibold text-text">{item.label}</span>
-        <Etiquetas item={item} />
+    <div className="flex items-center gap-3.5">
+      <Bloco label={item.label} grande />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold text-text">{item.label}</span>
+          <Etiquetas item={item} />
+        </div>
+        {item.desc && <p className="mt-0.5 text-[13px] leading-snug text-text-muted">{item.desc}</p>}
       </div>
-      {item.desc && <p className="mt-0.5 text-[13px] text-text-muted">{item.desc}</p>}
-    </>
+    </div>
   )
   if (item.emBreve || !item.href) {
     return (
@@ -96,7 +115,7 @@ function CartaoAtalho({ item, favs, alternar }: { item: ItemPronto; favs: string
     )
   }
   return (
-    <div className="group relative rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)] u-motion hover:shadow-[var(--shadow-md)]">
+    <div className="group relative rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)] u-motion hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)]">
       <Link href={item.href} className="block p-4 pr-12">
         {corpo}
       </Link>
@@ -104,6 +123,16 @@ function CartaoAtalho({ item, favs, alternar }: { item: ItemPronto; favs: string
         <Estrela href={item.href} favs={favs} alternar={alternar} />
       </div>
     </div>
+  )
+}
+
+function SecaoTitulo({ nome }: { nome: string }) {
+  const Icon = iconeDaSecao(nome)
+  return (
+    <h2 className="mb-2 flex items-center gap-2 border-b border-border/60 px-1.5 pb-2.5 pt-1 text-[14px] font-semibold text-text">
+      <Icon className="size-[18px] text-brand" strokeWidth={2} aria-hidden />
+      {nome}
+    </h2>
   )
 }
 
@@ -193,7 +222,7 @@ export function CentralModulo({ id }: { id: string }) {
             {resultados.map(({ m, secao, i }, k) => (
               <div key={`${m.id}-${secao}-${i.label}-${k}`} className="flex items-center gap-2">
                 <ul className="flex-1">
-                  <LinhaItem item={{ ...i, label: `${secao === 'Atalhos' ? '' : secao + ' › '}${i.label}` }} favs={favs} alternar={alternar} />
+                  <LinhaItem item={{ ...i, label: `${secao === 'Atalhos' ? '' : secao + ' › '}${i.label}` }} secao={secao === 'Atalhos' ? undefined : secao} favs={favs} alternar={alternar} />
                 </ul>
                 <span className="hidden pr-2 text-[12px] text-text-muted sm:block">{m.nome}</span>
               </div>
@@ -206,7 +235,7 @@ export function CentralModulo({ id }: { id: string }) {
         <>
           {atalhos.length > 0 && (
             <section>
-              <h2 className="mb-2 text-[13px] font-semibold text-text-muted">Atalhos</h2>
+              <h2 className="mb-2.5 text-[13px] font-semibold uppercase tracking-wide text-text-muted">Atalhos</h2>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {atalhos.map((i, k) => (
                   <CartaoAtalho key={`${i.label}-${k}`} item={i} favs={favs} alternar={alternar} />
@@ -218,10 +247,10 @@ export function CentralModulo({ id }: { id: string }) {
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {secoes.map((s) => (
                 <section key={s.nome} className="rounded-[var(--r-lg)] bg-surface p-3 shadow-[var(--shadow-sm)]">
-                  <h2 className="mb-1 px-2.5 pt-1 text-[13px] font-semibold text-text-muted">{s.nome}</h2>
-                  <ul>
+                  <SecaoTitulo nome={s.nome} />
+                  <ul className="space-y-0.5">
                     {s.itens.map((i, k) => (
-                      <LinhaItem key={`${i.label}-${k}`} item={i} favs={favs} alternar={alternar} />
+                      <LinhaItem key={`${i.label}-${k}`} item={i} secao={s.nome} favs={favs} alternar={alternar} />
                     ))}
                   </ul>
                 </section>
@@ -252,15 +281,12 @@ export function CentralGeral() {
           return (
             <section key={m.id} className="group relative rounded-[var(--r-lg)] bg-surface p-4 shadow-[var(--shadow-sm)] u-motion hover:shadow-[var(--shadow-md)]">
               <Link href={`/central/${m.id}`} className="flex items-start gap-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-brand-soft text-brand">
-                  <Icon className="size-[18px]" strokeWidth={2} />
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-[14px] bg-brand-soft text-brand">
+                  <Icon className="size-[22px]" strokeWidth={1.9} />
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-text group-hover:text-brand">{m.nome}</span>
-                    {m.id === 'financas' && (
-                      <span className="rounded-full bg-surface-2 px-1.5 py-px text-[10px] font-semibold text-warn">em breve</span>
-                    )}
                     <ArrowUpRight className="ml-auto size-4 text-text-muted/30 group-hover:text-brand" />
                   </div>
                   <p className="mt-0.5 text-[13px] text-text-muted">{m.desc}</p>
@@ -271,7 +297,8 @@ export function CentralGeral() {
                 {m.atalhos.slice(0, 4).map((i, k) =>
                   i.href && !i.emBreve ? (
                     <li key={`${i.label}-${k}`}>
-                      <Link href={i.href} className="rounded-full bg-surface-2 px-2.5 py-1 text-[12px] font-medium text-text-muted u-motion hover:text-brand">
+                      <Link href={i.href} className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-2.5 py-1 text-[12px] font-medium text-text-muted u-motion hover:text-brand">
+                        {React.createElement(iconeDoItem(i.label).Icon, { className: 'size-3.5', strokeWidth: 2, 'aria-hidden': true })}
                         {i.label}
                       </Link>
                     </li>
