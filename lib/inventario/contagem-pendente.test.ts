@@ -8,6 +8,7 @@ import {
   aplicarPendentes,
   ehVersaoVelha,
   podeRecarregar,
+  pendenteRecente,
   type Armazenamento,
 } from './contagem-pendente.ts'
 
@@ -118,4 +119,9 @@ test('não recarrega em loop: no máximo uma vez por minuto', () => {
   assert.equal(podeRecarregar(100_000, 130_000), false)
   assert.equal(podeRecarregar(100_000, 160_001), true)
   assert.equal(podeRecarregar(Number.NaN, 1), true)
+})
+
+test('pendente recente (até 2 min) não é reenviada na hora ao abrir', () => {
+  assert.equal(pendenteRecente({ quan: 1, em: 1_000_000 }, 1_000_000 + 60_000), true)
+  assert.equal(pendenteRecente({ quan: 1, em: 1_000_000 }, 1_000_000 + 121_000), false)
 })

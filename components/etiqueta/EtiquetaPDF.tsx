@@ -261,9 +261,9 @@ export function EtiquetaPDF({ etiquetas, config = {} }: EtiquetaPDFProps) {
                     {e.quantidade !== '' && (
                       <Text style={[s.linha, { flex: 1 }]}>{e.quantidade.trim().slice(0, 14)}</Text>
                     )}
-                    {nf !== '' && nfNaLinhaProd && <Text style={[s.linha, bold(true), { flex: 1 }]}>{nf}</Text>}
+                    {nf !== '' && nfNaLinhaProd && <Text style={[s.linha, bold(true), { flex: 1, maxLines: 1 }]}>{nf}</Text>}
                   </View>
-                  {nf !== '' && !nfNaLinhaProd && <Text style={[s.linha, bold(true)]}>{nf}</Text>}
+                  {nf !== '' && !nfNaLinhaProd && <Text style={[s.linha, bold(true), { maxLines: 1 }]}>{nf}</Text>}
 
                   {/* Campos opcionais na ordem escolhida */}
                   {linhas.map((c, idx) => (

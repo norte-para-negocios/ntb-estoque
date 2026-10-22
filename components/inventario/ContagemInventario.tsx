@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { precisaEnviar } from '@/lib/inventario/contagem-regras'
 import {
+  ENVIO_EM_ANDAMENTO,
   STATUS_NAO_SALVO,
   aplicarPendentes,
   chavePendentes,
@@ -11,6 +12,7 @@ import {
   ehVersaoVelha,
   guardarPendente,
   lerPendentes,
+  pendenteRecente,
   podeRecarregar,
   type Armazenamento,
 } from '@/lib/inventario/contagem-pendente'
@@ -132,6 +134,9 @@ export function ContagemInventario({
     enviandoRef.current = enviando
   }, [enviando])
   const recarregandoRef = useRef(false)
+  const reenviandoRef = useRef(false)
+  // Número digitado enquanto o mesmo item ainda estava sendo enviado: vai logo depois.
+  const proximoRef = useRef(new Map<number, number | null>())
   const [reenviando, setReenviando] = useState(false)
 
   // Versão velha: recarrega (a cópia no aparelho sobrevive) e as pendentes saem sozinhas depois.
@@ -161,7 +166,11 @@ export function ContagemInventario({
       duration: Infinity,
       description: 'Recarregando a tela. Suas contagens estão guardadas e serão enviadas sozinhas.',
     })
-    window.setTimeout(() => window.location.reload(), 1500)
+    window.setTimeout(() => {
+      // De novo: a pessoa pode ter tocado noutro campo durante o aviso.
+      ;(document.activeElement as HTMLElement | null)?.blur?.()
+      window.location.reload()
+    }, 1500)
   }, [])
 
   // Erro de ação que não é a contagem (adicionar, remover, concluir...): nada é perdido, mas
@@ -250,7 +259,11 @@ export function ContagemInventario({
     // VAZIO (null) fica pendente como 'Vazio' (rotulo "Sem quantidade") e e
     // descartado ao finalizar — nao trava o inventario nem conta no placar.
     setTextos((prev) => ({ ...prev, [itemId]: formatNumBR(num) }))
-    if (enviandoRef.current.has(itemId)) return true
+    if (enviandoRef.current.has(itemId)) {
+      guardarPendente(armazenamento(), chave, itemId, num)
+      proximoRef.current.set(itemId, num)
+      return true
+    }
     if (!precisaEnviar(itensRef.current.find((i) => i.id === itemId), num)) {
       descartarPendentes(armazenamento(), chave, [itemId])
       return true
@@ -270,7 +283,9 @@ export function ContagemInventario({
     try {
       res = await enviarInventarioItem(itemId, num)
     } catch (e) {
-      setItens((prev) => prev.map((i) => (i.id === itemId ? { ...i, quan: num, status: STATUS_NAO_SALVO } : i)))
+      const ultimo = proximoRef.current.has(itemId) ? proximoRef.current.get(itemId)! : num
+      proximoRef.current.delete(itemId)
+      setItens((prev) => prev.map((i) => (i.id === itemId ? { ...i, quan: ultimo, status: STATUS_NAO_SALVO } : i)))
       if (versaoVelha(e)) recarregarPorVersao()
       else
         toast.warning('Contagem guardada no aparelho', {
@@ -288,8 +303,23 @@ export function ContagemInventario({
         return s
       })
     }
+    const temProximo = proximoRef.current.has(itemId)
+    const proximo = proximoRef.current.get(itemId) ?? null
+    proximoRef.current.delete(itemId)
+    // Outro envio do mesmo item em andamento (outra aba): continua guardado e tenta depois.
+    if (res.error === ENVIO_EM_ANDAMENTO) {
+      setItens((prev) => prev.map((i) => (i.id === itemId ? { ...i, quan: temProximo ? proximo : num, status: STATUS_NAO_SALVO } : i)))
+      return false
+    }
     // O servidor recebeu (mesmo que o Omie tenha recusado: aí o item fica Erro/Sem CMC lá).
     confirmarPendente(armazenamento(), chave, itemId, em)
+    if (temProximo) {
+      if (proximo === num) descartarPendentes(armazenamento(), chave, [itemId])
+      else {
+        void enviarQtdRef.current(itemId, proximo)
+        return true
+      }
+    }
     {
       const statusUi = res.status === 'Iniciado' ? 'Vazio' : res.status
       setItens((prev) =>
@@ -319,15 +349,19 @@ export function ContagemInventario({
 
   // Reenvia, um por vez, o que ficou só no aparelho. Para no 1º que falhar (servidor ainda fora).
   const reenviarNaoSalvos = useCallback(async () => {
-    if (recarregandoRef.current) return
+    if (recarregandoRef.current || reenviandoRef.current) return
     const fila = itensRef.current.filter((i) => i.status === STATUS_NAO_SALVO)
     if (fila.length === 0) return
+    reenviandoRef.current = true
     setReenviando(true)
     try {
       for (const i of fila) {
-        if (!(await enviarQtdRef.current(i.id, i.quan))) break
+        const atual = itensRef.current.find((x) => x.id === i.id)
+        if (atual?.status !== STATUS_NAO_SALVO || enviandoRef.current.has(i.id)) continue
+        if (!(await enviarQtdRef.current(i.id, atual.quan))) break
       }
     } finally {
+      reenviandoRef.current = false
       setReenviando(false)
     }
   }, [])
@@ -337,7 +371,8 @@ export function ContagemInventario({
   useEffect(() => {
     if (!podeEditar) return
     const st = armazenamento()
-    const { itens: comPendentes, aplicados, descartar } = aplicarPendentes(itensRef.current, lerPendentes(st, chave))
+    const pendentes = lerPendentes(st, chave)
+    const { itens: comPendentes, aplicados, descartar } = aplicarPendentes(itensRef.current, pendentes)
     descartarPendentes(st, chave, descartar)
     if (aplicados.length === 0) return
     itensRef.current = comPendentes
@@ -347,11 +382,21 @@ export function ContagemInventario({
       for (const i of comPendentes) if (aplicados.includes(i.id)) t[i.id] = formatNumBR(i.quan)
       return t
     })
+    // Digitada há pouco pode ainda estar a caminho (outra aba, resposta lenta): espera o
+    // reenvio de 30 s em vez de mandar de novo na hora.
+    // Exceção: esta aba acabou de recarregar por versão velha (o servidor recusou de vez o envio
+    // daqui, nada está a caminho) -> manda na hora.
+    let recarregouAgora = false
+    try {
+      const em = Number(window.sessionStorage.getItem(CHAVE_ULTIMA_RECARGA)) || null
+      recarregouAgora = em != null && !podeRecarregar(em, Number(new Date()))
+    } catch {}
+    const recente = !recarregouAgora && aplicados.some((id) => pendenteRecente(pendentes[id]))
     toast.info(`${aplicados.length} contagem(ns) guardada(s) neste aparelho`, {
       id: 'contagem-recuperada',
-      description: 'Enviando ao servidor agora.',
+      description: recente ? 'Serão enviadas ao servidor em instantes.' : 'Enviando ao servidor agora.',
     })
-    void reenviarNaoSalvos()
+    if (!recente) void reenviarNaoSalvos()
   }, [chave, podeEditar, reenviarNaoSalvos])
 
   // Enquanto houver contagem só no aparelho: tenta de novo a cada 30 s e quando a internet volta.

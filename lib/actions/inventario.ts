@@ -9,6 +9,8 @@ import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
 import { omieRequest, logIntegrationAttempt, OmieError, type LojaOmie } from '@/lib/omie/client'
 import { decidirErroItemInventario } from '@/lib/omie/erros-omie'
 import { excluirAjusteEstoque } from '@/lib/omie/ajuste'
+import { pegarTravaSync, soltarTravaSync } from '@/lib/omie/trava-sync'
+import { ENVIO_EM_ANDAMENTO } from '@/lib/inventario/contagem-pendente'
 import { dataCriacaoBahia, dataOmieBR, hojeBahiaISO } from '@/lib/data-bahia'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { modoDaLoja } from '@/lib/estoque/ledger'
@@ -167,12 +169,25 @@ export async function enviarInventarioItem(
   const travadoEnvio = await travaDoInventario(lojaId, { itemId })
   if (travadoEnvio) return { status: 'Erro', descricao_status: travadoEnvio, valor: null, id_ajuste: null, error: travadoEnvio }
   if ((await modoDaLoja(lojaId)) === 'proprio') return enviarItemProprio(lojaId, itemId, quan, motivo)
+  // Um envio por item de cada vez (22/10/2026): a tela reenvia sozinha o que ficou guardado no
+  // aparelho, e dois envios juntos do mesmo item lançariam o ajuste duas vezes no Omie.
+  if (!(await pegarTravaSync(lojaId, `inv-item:${itemId}`, 180))) {
+    return { status: 'Processando', descricao_status: 'Este item já está sendo enviado. Aguarde.', valor: null, id_ajuste: null, error: ENVIO_EM_ANDAMENTO }
+  }
+  try {
+    return await enviarItemOmie(lojaId, itemId, quan)
+  } finally {
+    await soltarTravaSync(lojaId, `inv-item:${itemId}`)
+  }
+}
+
+async function enviarItemOmie(lojaId: number, itemId: number, quan: number | null): Promise<EnvioInventarioResult> {
   const supabase = createServiceClient()
 
   const { data: item } = await supabase
     .from('inventario_items')
     .select(
-      'id, produto_codigo, produto_codigo_produto, id_ajuste, tentativas, inventario:inventarios(id, codigo_local_estoque, tipo, origem, motivo, data, status, loja:lojas(id, omie_app_key, omie_app_secret, is_test))'
+      'id, produto_codigo, produto_codigo_produto, id_ajuste, tentativas, quan, status, inventario:inventarios(id, codigo_local_estoque, tipo, origem, motivo, data, status, loja:lojas(id, omie_app_key, omie_app_secret, is_test))'
     )
     .eq('id', itemId)
     .eq('loja_id', lojaId)
@@ -182,6 +197,8 @@ export async function enviarInventarioItem(
       produto_codigo_produto: number
       id_ajuste: number | null
       tentativas: number | null
+      quan: number | string | null
+      status: string | null
       inventario: {
         id: number
         codigo_local_estoque: number
@@ -196,6 +213,12 @@ export async function enviarInventarioItem(
 
   if (!item?.inventario?.loja) {
     return { status: 'Erro', descricao_status: 'Item não encontrado', valor: null, id_ajuste: null, error: 'Item não encontrado' }
+  }
+
+  // Reenvio do mesmo número que já está lançado (a tela reenvia o que guardou no aparelho quando
+  // não viu a resposta): não exclui e relança no Omie, só confirma.
+  if (quan !== null && item.id_ajuste && item.status === 'Concluido' && item.quan != null && Number(item.quan) === quan) {
+    return { status: 'Concluido', descricao_status: null, valor: null, id_ajuste: item.id_ajuste }
   }
 
   // Ja lancado -> exclui o ajuste antigo antes de relancar (reprocessa ao mexer).

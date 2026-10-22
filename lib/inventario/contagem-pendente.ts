@@ -19,6 +19,16 @@ export type Pendentes = Record<number, Pendente>
 
 export const STATUS_NAO_SALVO = 'Não salvo'
 
+// Resposta de `enviarInventarioItem` quando outro envio do mesmo item está em andamento
+// (trava por item no servidor): a contagem continua guardada e a tela tenta depois.
+export const ENVIO_EM_ANDAMENTO = 'envio_em_andamento'
+
+/** Pendente digitada há pouco pode ainda estar a caminho do servidor (outra aba, resposta lenta). */
+export const PENDENTE_RECENTE_MS = 2 * 60_000
+export function pendenteRecente(p: Pendente, agora: number = Date.now()): boolean {
+  return agora - p.em < PENDENTE_RECENTE_MS
+}
+
 export function chavePendentes(lojaId: number, inventarioId: number): string {
   return `ntb:contagem-pendente:v1:${lojaId}:${inventarioId}`
 }
