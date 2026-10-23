@@ -19,8 +19,8 @@ export const paramsBaseCmv = (p: ParamsCmv): Record<string, string> =>
   ({ ini: p.ini, fim: p.fim, aba: p.aba === 'produtos' ? '' : p.aba, tipo: p.tipos.join(','), familia: p.familias.join(','), q: p.q })
 
 const fmt = (iso: string) => iso.split('-').reverse().join('/')
-export function textoFonte(fonte: 'proprio' | 'kardex' | 'estimado', cobertura: { desde: string; ate: string } | null, dataFoto: string | null): string {
+export function textoFonte(fonte: 'proprio' | 'kardex' | 'estimado', cobertura: { desde: string; ate: string } | null, dataFoto: string | null, custoTrocado = false): string {
   if (fonte === 'proprio') return 'Custo real de cada baixa do estoque (saída de cada venda pelo custo médio da hora).'
-  if (fonte === 'kardex') return `Kardex do Omie: cada saída pelo valor do próprio movimento (histórico completo de ${fmt(cobertura!.desde)} a ${fmt(cobertura!.ate)}).`
+  if (fonte === 'kardex') return `Kardex do Omie: cada saída pelo valor do próprio movimento (histórico completo de ${fmt(cobertura!.desde)} a ${fmt(cobertura!.ate)}).${custoTrocado ? ' Quando o Omie gravou um custo fora do normal (ex.: milhões num suco), o movimento vale o custo normal do produto e aparece no aviso.' : ''}`
   return `Estimado: quantidade vendida × custo médio de hoje${dataFoto ? ` (foto de ${fmt(dataFoto)})` : ''}. ${cobertura ? `O kardex do Omie desta loja só cobre de ${fmt(cobertura.desde)} a ${fmt(cobertura.ate)}; escolha um período dentro dele para ver o custo de cada movimento.` : 'O espelho do kardex do Omie não está ligado nesta loja, então o custo da hora de cada venda não está disponível.'}`
 }

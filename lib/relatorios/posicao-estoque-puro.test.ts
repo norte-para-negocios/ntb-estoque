@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { locaisSumidos, custoValido, escolherFoto, montarPosicao, textoAvisoSuspeito, type LinhaFoto, type MetaProduto, type OpcoesPosicao } from './posicao-estoque-puro.ts'
+import { locaisSumidos, custoValido, escolherFoto, montarPosicao, textoAvisoSuspeito, motivoSuspeita, foraDaEscalaDaUnidade, resumirSaldoConferir, type LinhaFoto, type MetaProduto, type OpcoesPosicao } from './posicao-estoque-puro.ts'
 
 const P = (o: Partial<MetaProduto> & { codigo_produto: number }): MetaProduto => ({
   codigo: String(o.codigo_produto), descricao: `Produto ${o.codigo_produto}`, familia: 'Insumos', tipo: '01', unidade: 'KG', ncm: '0000.00.00', inativo: false, ...o,
@@ -122,7 +122,7 @@ test('linhas valorizadas pelo banco: custo suspeito usa a referência e entra no
   assert.equal(r.total.suspeitas[1].referencia, 3.253298)
   assert.equal(Math.round((r.total.valor + r.total.ajusteOmie) * 100) / 100, Math.round((-105826283.37 - 8871.24 + 325.33) * 100) / 100) // total + ajuste = Omie
   assert.equal(montarPosicao(fotoBanco, prods, locais, op()).total.valor, -517.27) // mesmo total por produto
-  assert.equal(textoAvisoSuspeito(2, -105834312.01)?.startsWith('2 linhas com custo médio suspeito no Omie ('), true)
+  assert.equal(textoAvisoSuspeito(2, -105834312.01), '2 linhas com custo médio errado no Omie: o total usa o custo de referência nelas (pelo custo do Omie o total daria R$\u00a0105.834.312,01 a menos)')
   assert.equal(textoAvisoSuspeito(0, 0), null)
 })
 
@@ -139,4 +139,46 @@ test('SPED: aviso de custo suspeito só com os produtos do Bloco H', () => {
   assert.deepEqual(sped.total.suspeitas.map((l) => l.codigo), ['80292'])
   assert.equal(sped.total.ajusteOmie, 26.87)
   assert.equal(montarPosicao(fotoBanco, prods, locais, op({ ver: 'local' })).total.suspeitas.length, 2)
+})
+
+// Auditoria 23/10/2026 (migration 295): custo do quilo/litro/garrafa gravado na unidade menor. Casos reais da loja 5.
+test('custo fora da escala da unidade: motivo em português e mesmos limites da 295', () => {
+  assert.equal(foraDaEscalaDaUnidade('G', '01', 99.716), true) // café solúvel
+  assert.equal(foraDaEscalaDaUnidade('ML', '01', 49.75), true) // Monin 700 ml
+  assert.equal(foraDaEscalaDaUnidade('ML', '99', 16.318), false) // cabo: ML = metro linear
+  assert.equal(foraDaEscalaDaUnidade('ML', '01', 3.38), false) // whisky caro fica
+  assert.equal(foraDaEscalaDaUnidade('L', '03', 6241.31), true) // molho de legumes (PI)
+  assert.equal(foraDaEscalaDaUnidade('KG', '01', 240.96), false) // polvo
+  assert.equal(foraDaEscalaDaUnidade('UN', '04', 9999), false)
+  assert.equal(motivoSuspeita({ unidade: 'G', tipo: '01', cmcOmie: 99.716, referencia: 0.099716, fonte: 'unidade' }), 'Custo por g parece ser o de 1 quilo: usado o custo ÷ 1.000')
+  assert.equal(motivoSuspeita({ unidade: 'ML', tipo: '01', cmcOmie: 49.75, referencia: 0.071071, fonte: 'unidade' }), 'Custo por ml parece ser o de 700 ml (a embalagem): usado o custo ÷ 700')
+  assert.match(motivoSuspeita({ unidade: 'L', tipo: '03', cmcOmie: 6241.31, referencia: null, fonte: null }), /fora da escala.*vale 0/)
+  assert.match(motivoSuspeita({ unidade: 'UN', tipo: '04', cmcOmie: 5031.17, referencia: null, fonte: null }), /^Sem custo de referência/)
+  assert.match(motivoSuspeita({ unidade: 'UN', tipo: '04', cmcOmie: 194533049.59, referencia: null, fonte: null }), /absurdo/)
+  assert.match(motivoSuspeita({ unidade: 'G', tipo: '01', cmcOmie: 26.9, referencia: 0.024288, fonte: 'locais' }), /fora da escala para g: usado o custo de referência/)
+  assert.match(motivoSuspeita({ unidade: 'UN', tipo: '01', cmcOmie: 40, referencia: 3, fonte: 'locais' }), /10× o custo de referência \(outros locais\)/)
+})
+
+test('café solúvel 1.000 g: linha do banco com fonte unidade entra no aviso com o motivo', () => {
+  const foto: LinhaFoto[] = [{ n_cod_prod: 2654807722, codigo_local_estoque: 10, n_saldo: 1000, n_cmc: 99.716, reservado: 0, cmc_usado: 0.099716, valor: 99.72, suspeito: true, referencia: 0.099716, valor_omie: 99716, fonte_referencia: 'unidade' }]
+  const r = montarPosicao(foto, [P({ codigo_produto: 2654807722, codigo: '80284', descricao: 'CAFE SOLUVEL (MP)', unidade: 'G', tipo: '01' })], locais, op())
+  assert.equal(r.total.valor, 99.72)
+  assert.equal(r.total.ajusteOmie, 99616.28)
+  assert.equal(r.total.suspeitas[0].motivo, 'Custo por g parece ser o de 1 quilo: usado o custo ÷ 1.000')
+})
+
+// Migration 296: saldos do Omie a conferir (não mudam o total). GLP da loja 5: 16.027 kg com 7.432 kg comprados em 12 meses.
+test('saldos a conferir: só os produtos da tela, maior valor primeiro', () => {
+  const meta = new Map([[1, { codigo: '60037', descricao: 'GLP (MC)', unidade: 'KG' }], [2, { codigo: '13190', descricao: 'CAMARAO CONG BLOCO CRU PPV 61/70', unidade: 'KG' }], [3, { codigo: '80157', descricao: 'MAIONESE (MP)', unidade: 'KG' }]])
+  const linhas = [
+    { n_cod_prod: 3, saldo: 11199.36, valor: 186144.39, comprado_12m: 154.2, acumulado: true, inativo: false },
+    { n_cod_prod: 1, saldo: 16027, valor: 226468.98, comprado_12m: 7432, acumulado: true, inativo: false },
+    { n_cod_prod: 2, saldo: 720, valor: 30053, comprado_12m: null, acumulado: false, inativo: true },
+  ]
+  const r = resumirSaldoConferir(linhas, meta, null)
+  assert.deepEqual(r.acumulados.map((l) => l.codigo), ['60037', '80157'])
+  assert.equal(r.valorAcumulados, 412613.37)
+  assert.deepEqual(r.inativos.map((l) => l.codigo), ['13190'])
+  assert.equal(resumirSaldoConferir(linhas, meta, new Set([1])).acumulados.length, 1)
+  assert.equal(resumirSaldoConferir(linhas, meta, new Set([1])).inativos.length, 0)
 })

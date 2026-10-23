@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     fornecedor: l.fornecedor, fantasia: l.fornecedor_fantasia ?? '', codForn: l.codigo_fornecedor ?? '',
     data: dataBR(l.ultima_data), nota: l.ultima_nota ?? '', itensNota: Number(l.itens_ultima_nota) || 1, qtde: Number(l.qtde) || 0, unidade: l.unidade ?? '',
     preco: Number(l.preco_unit) || 0, total: Number(l.total) || 0, custo: Number(l.custo_unit) || 0,
-    custoMedio: l.custoMedio ?? '', estoque: l.estoque, compras: l.compras, totalComprado: Number(l.total_comprado) || 0, primeira: dataBR(l.primeira_data),
+    custoMedio: l.custoMedio ?? '', estoque: l.estoque, compras: l.compras, totalComprado: Number(l.total_comprado) || 0, primeira: dataBR(l.primeira_data), alerta: l.alerta ?? '',
   }))
   const buffer = await gerarPlanilhaMulti([{
     rows,
@@ -49,6 +49,7 @@ export async function GET(request: Request) {
       { key: 'compras', label: 'Nº de compras', tipo: 'numero', largura: 10 },
       { key: 'totalComprado', label: 'Total comprado', tipo: 'moeda', largura: 14, somar: true },
       { key: 'primeira', label: 'Primeira compra', tipo: 'texto', largura: 12 },
+      { key: 'alerta', label: 'Alerta', tipo: 'texto', largura: 50 },
     ],
     opts: {
       titulo: 'Produtos por fornecedor',

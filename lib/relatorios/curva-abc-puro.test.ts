@@ -70,3 +70,26 @@ test('resumo por classe soma 100% e conta itens', () => {
   const vazio = resumoAbc([], 'valor')
   assert.deepEqual(vazio.A, { itens: 0, total: 0, pct: 0 })
 })
+
+test('taxas e serviços ficam fora da curva por padrão (auditoria 23/10/2026: Taxa de Serviço 90660 era o 2º da classe A)', async () => {
+  const { naoEProduto, separarTaxas } = await import('./curva-abc-puro.ts')
+  assert.equal(naoEProduto({ rotulo: 'Taxa de Serviço', tipoCod: '99' }), true)
+  assert.equal(naoEProduto({ rotulo: 'TAXA ROLHA', tipoCod: '99' }), true)
+  assert.equal(naoEProduto({ rotulo: 'Taxa Frete 12', tipoCod: '99' }), true)
+  assert.equal(naoEProduto({ rotulo: 'Couvert', tipoCod: '09' }), true)
+  assert.equal(naoEProduto({ rotulo: 'Gorjeta' }), true)
+  assert.equal(naoEProduto({ rotulo: 'COUVERT DE PAES', tipoCod: '04' }), false)
+  assert.equal(naoEProduto({ rotulo: 'Moqueca de Camarão', tipoCod: '04' }), false)
+  assert.equal(naoEProduto({ rotulo: 'EMBALAGEM QUENTINHA DELIVERY', tipoCod: '04' }), false)
+  const itens = [
+    item({ chave: '1', rotulo: 'Moqueca', valor: 47704.2, tipoCod: '04' }),
+    item({ chave: '2', rotulo: 'Taxa de Serviço', valor: 53433.95, tipoCod: '99' }),
+    item({ chave: '3', rotulo: 'Taxa de rolha', valor: 320, tipoCod: '99' }),
+    item({ chave: '4', rotulo: 'Suco', valor: 100, tipoCod: '04' }),
+  ]
+  const { curva, fora } = separarTaxas(itens, false)
+  assert.deepEqual(curva.map((i) => i.chave), ['1', '4'])
+  assert.deepEqual(fora.map((i) => i.chave), ['2', '3'])
+  assert.equal(curvaAbc(curva, 'valor')[0].chave, '1')
+  assert.equal(separarTaxas(itens, true).curva.length, 4)
+})

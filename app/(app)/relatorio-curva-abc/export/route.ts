@@ -2,7 +2,7 @@ import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
 import { hojeBahiaISO } from '@/lib/data-bahia'
 import { gerarPlanilhaMulti, planilhaResponse } from '@/lib/excel'
 import { carregarBaseAbc } from '@/lib/relatorios/curva-abc-loader'
-import { curvaAbc, ROTULO_CLASSE } from '@/lib/relatorios/curva-abc-puro'
+import { curvaAbc, separarTaxas, ROTULO_CLASSE } from '@/lib/relatorios/curva-abc-puro'
 import { lerParamsAbc } from '@/lib/relatorios/curva-abc-params'
 
 export const dynamic = 'force-dynamic'
@@ -14,7 +14,8 @@ export async function GET(request: Request) {
   const sp = Object.fromEntries(new URL(request.url).searchParams.entries())
   const p = lerParamsAbc(sp, hojeBahiaISO())
   const { itens, aviso } = await carregarBaseAbc(lojaId, p.ini, p.fim, p.base, { tipos: p.tipos, familias: p.familias })
-  const curva = curvaAbc(itens, p.medida).filter((l) => !p.classe || l.classe === p.classe)
+  const { curva: produtos, fora } = separarTaxas(itens, p.base !== 'vendas' || p.taxas)
+  const curva = curvaAbc(produtos, p.medida).filter((l) => !p.classe || l.classe === p.classe)
   if (!curva.length) return new Response('Sem dados no período/filtro selecionado', { status: 404 })
   const rows = curva.map((l) => ({
     classe: ROTULO_CLASSE[l.classe], ordem: l.ordem, codigo: l.codigo, produto: l.rotulo, familia: l.familia, tipo: l.tipo,
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
     ],
     opts: {
       titulo: `Curva ABC de ${p.base === 'vendas' ? 'vendas' : 'compras'} por ${porValor ? 'valor' : 'quantidade'}`,
-      subtitulo: `${p.ini} a ${p.fim} · A = até 20% acumulado, B = até 80%, C = resto${aviso ? ` · ATENÇÃO: ${aviso}` : ''}`,
+      subtitulo: `${p.ini} a ${p.fim} · A = até 20% acumulado, B = até 80%, C = resto${fora.length ? ` · fora da curva (não são produtos): ${fora.map((f) => `${f.rotulo} ${porValor ? f.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : f.quant}`).join(', ')}` : ''}${p.base === 'vendas' && p.taxas ? ' · taxas incluídas na curva, como no Omie' : ''}${aviso ? ` · ATENÇÃO: ${aviso}` : ''}`,
       autoFiltro: true,
     },
     nome: 'Curva ABC',

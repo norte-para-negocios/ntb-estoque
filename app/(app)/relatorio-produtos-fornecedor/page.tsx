@@ -119,7 +119,9 @@ export default async function ProdutosFornecedorPage({ searchParams }: { searchP
                       </td>
                       <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">
                         {l.custoMedio == null ? '—' : <Money value={l.custoMedio} />}
-                        {l.variacaoPct != null && Math.abs(l.variacaoPct) >= 0.1 && <div className={`text-[12px] ${l.variacaoPct > 0 ? 'text-err' : 'text-text-muted'}`}>{fmtPct(l.variacaoPct)} na última</div>}
+                        {l.alerta
+                          ? <div className="max-w-[200px] whitespace-normal text-[12px] text-warn">{l.alerta}</div>
+                          : l.variacaoPct != null && Math.abs(l.variacaoPct) >= 0.1 && <div className={`text-[12px] ${l.variacaoPct > 0 ? 'text-err' : 'text-text-muted'}`}>{fmtPct(l.variacaoPct)} na última</div>}
                       </td>
                       <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">
                         {l.compras}

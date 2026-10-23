@@ -22,6 +22,8 @@ import { buscarFatCupons, buscarFatCupomItens } from '@/lib/faturamento-frio'
 import { descreverCFOP } from '@/lib/cfop'
 import { labelTipoItem } from '@/lib/constants-omie'
 import { statusNF } from '@/lib/nf-status'
+import { rpcTodos } from '@/lib/supabase/rpc-todos'
+import { valorDoAjuste, type RefCusto } from '@/lib/relatorios/ajuste-valor-puro'
 
 export type LinhaOperAuto = {
   origem: string
@@ -34,6 +36,9 @@ export type LinhaOperAuto = {
   inventario: boolean
   qtde: number
   valor: number
+  /** ajuste com custo fora do normal no Omie (valor = custo normal do produto); valorOmie = quantidade × custo do Omie */
+  foraDoNormal?: boolean
+  valorOmie?: number
 }
 
 
@@ -237,6 +242,14 @@ export async function gerarMovimentacaoOperacaoAutomatica(lojaId: number, produt
   }
 
   // ---------- Ajustes manuais / inventário (linhas de fato) ----------
+  // Custo normal por produto (migration 290) para pegar ajuste com custo absurdo do Omie; sem a 290, sem essa troca.
+  // só os produtos dos ajustes (a função roda inteira a cada página de 1.000: lista curta = 1 chamada)
+  const prodsAjuste = [...new Set(ajustes.filter((a) => a.tipo !== 'SLD' && a.motivo !== 'PDV' && a.origem !== 'PDV' && a.id_prod != null).map((a) => Number(a.id_prod)))]
+  const refs = new Map<number, RefCusto>()
+  for (const r of prodsAjuste.length ? await rpcTodos<{ n_cod_prod: number; referencia: number | null; limite: number | null }>(
+    supabase, 'custo_referencia_produto', { p_loja_id: lojaId, p_ate: hoje, p_produtos: prodsAjuste }) : []) {
+    refs.set(Number(r.n_cod_prod), { referencia: r.referencia == null ? null : Number(r.referencia), limite: r.limite == null ? null : Number(r.limite) })
+  }
   for (const a of ajustes) {
     // Achado real (loja 5: 50739 linhas / R$2.309.414,19): a baixa de estoque
     // gerada por venda no PDV chega aqui como origem='AJU'/motivo='PDV' (não
@@ -248,21 +261,18 @@ export async function gerarMovimentacaoOperacaoAutomatica(lojaId: number, produt
     const data = String(a.data).slice(0, 10)
     if (data < DESDE || data > hoje) continue
     if (!produtoCasa(a.id_prod)) continue
+    // 23/10/2026: `valor` é o custo UNITÁRIO e SLD é o saldo contado (não entrada/saída) — regra em
+    // lib/relatorios/ajuste-valor-puro.ts. Antes a matriz somava o unitário e tratava a contagem como saída.
+    const v = valorDoAjuste(a, a.id_prod != null ? refs.get(Number(a.id_prod)) : null)
+    if (!v.incluir) continue
     const meta = a.id_prod != null ? metaPorCodigo.get(Number(a.id_prod)) : undefined
-    // SUPERSEDED (auditoria 2026-08-05): sentido/valor abaixo tratam
-    // tipo='SLD' como se fosse um movimento assinado (ENT/SAI) -- PROVADO
-    // ERRADO, SLD e o SALDO CONTADO no inventario (foto de um instante, nao
-    // fluxo real de estoque). Ver lib/movimentacao-manual.ts (achado real #4
-    // no cabecalho do arquivo, codigo corrigido) e AGENTS.md. Nao corrigido
-    // aqui de proposito -- fix de verdade fica pra depois, fora de escopo
-    // desta rodada; comportamento inalterado.
     const sentido: 'E' | 'S' = a.tipo === 'ENT' ? 'E' : 'S'
     add({
       origem: 'Movimento Manual de Estoque', sentido, local: nomeLocal(a.codigo_local_estoque),
       tipo_sped: tipoSpedLabel(meta?.tipo ?? null), familia: meta?.familia || 'N/D',
       produto: meta?.descricao || meta?.codigo || String(a.id_prod ?? ''),
       mes: data.slice(0, 7), inventario: a.motivo === 'INV',
-      qtde: Number(a.quan) || 0, valor: Number(a.valor) || 0,
+      qtde: v.qtde, valor: v.valor, ...(v.foraDoNormal ? { foraDoNormal: true, valorOmie: v.valorOmie } : {}),
     })
   }
 

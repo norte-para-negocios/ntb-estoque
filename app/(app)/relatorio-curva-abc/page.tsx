@@ -11,7 +11,7 @@ import { PeriodoBar } from '@/components/faturamento/PeriodoBar'
 import { FiltrosFaturamento } from '@/components/faturamento/FiltrosFaturamento'
 import { CartaoResumo } from '@/components/faturamento/CartaoResumo'
 import { carregarBaseAbc } from '@/lib/relatorios/curva-abc-loader'
-import { curvaAbc, resumoAbc, ROTULO_CLASSE, type Classe } from '@/lib/relatorios/curva-abc-puro'
+import { curvaAbc, resumoAbc, separarTaxas, ROTULO_CLASSE, type Classe } from '@/lib/relatorios/curva-abc-puro'
 import { lerParamsAbc, paramsBaseAbc, type SpAbc } from '@/lib/relatorios/curva-abc-params'
 
 const LIMITE = 1000
@@ -26,7 +26,10 @@ export default async function CurvaAbcPage({ searchParams }: { searchParams: Pro
   const hoje = hojeBahiaISO()
   const p = lerParamsAbc(await searchParams, hoje)
   const { itens, aviso, opcoes } = await carregarBaseAbc(lojaId, p.ini, p.fim, p.base, { tipos: p.tipos, familias: p.familias })
-  const curva = curvaAbc(itens, p.medida)
+  // taxa de serviço/rolha/troca/frete não é produto: fora da curva por padrão (só na base vendas), mostrada à parte
+  const { curva: produtos, fora } = separarTaxas(itens, p.base !== 'vendas' || p.taxas)
+  const curva = curvaAbc(produtos, p.medida)
+  const totalFora = fora.reduce((s, l) => s + l[p.medida], 0)
   const resumo = resumoAbc(curva, p.medida)
   const total = curva.reduce((s, l) => s + l[p.medida], 0)
   const termo = semAcento(p.q.trim())
@@ -51,7 +54,7 @@ export default async function CurvaAbcPage({ searchParams }: { searchParams: Pro
         title="Curva ABC"
         icon={ChartColumnDecreasing}
         voltarHref="/relatorios"
-        description="Quais produtos fazem a maior parte das vendas ou das compras. A = até 20% do acumulado, B = até 80%, C = o resto (mesma regra do Omie). Vendas pelo valor bruto (quantidade × preço, antes do desconto), como o Omie."
+        description="Quais produtos fazem a maior parte das vendas ou das compras. A = até 20% do acumulado, B = até 80%, C = o resto (mesma regra do Omie). Vendas pelo valor bruto (quantidade × preço, antes do desconto), como o Omie: por isso o total fica acima do faturamento líquido (o do CMV e do Faturamento) pelo valor dos descontos."
         actions={curva.length > 0 ? <a href={`/relatorio-curva-abc/export?${exportQs}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')}><Download className="size-4" /> Baixar</a> : undefined}
       />
 
@@ -68,13 +71,20 @@ export default async function CurvaAbcPage({ searchParams }: { searchParams: Pro
 
       {p.cortado && <p className="text-[13px] text-text-muted">Período limitado a 366 dias: mostrando os dias mais recentes.</p>}
       {aviso && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">{aviso}</p>}
+      {p.base === 'vendas' && (fora.length > 0 || p.taxas) && (
+        <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
+          {p.taxas
+            ? <>Taxas e serviços (taxa de serviço, rolha, troca, frete) estão dentro da curva, como no Omie. <Link href={href({ taxas: '' })} className="font-semibold text-brand hover:underline">Tirar da curva</Link></>
+            : <>Fora da curva por não serem produtos: {fora.slice(0, 4).map((f) => `${f.rotulo} (${p.medida === 'valor' ? f.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : fmtQtd(f.quant)})`).join(', ')}{fora.length > 4 ? ` e mais ${fora.length - 4}` : ''}. Total {p.medida === 'valor' ? totalFora.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : fmtQtd(totalFora)}. <Link href={href({ taxas: '1' })} className="font-semibold text-brand hover:underline">Incluir na curva (como o Omie)</Link></>}
+        </p>
+      )}
 
       {curva.length === 0 ? (
         <EmptyState icon={ChartColumnDecreasing} title={p.base === 'vendas' ? 'Sem vendas no período' : 'Sem compras no período'} hint="Mude o período, a base ou limpe os filtros de tipo e família." />
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <CartaoResumo titulo={p.medida === 'valor' ? 'Total' : 'Quantidade total'} valor={fmtMedida(total)} sub={`${curva.length.toLocaleString('pt-BR')} produtos · ${nomeBase}`} />
+            <CartaoResumo titulo={p.medida === 'valor' ? 'Total' : 'Quantidade total'} valor={fmtMedida(total)} sub={`${curva.length.toLocaleString('pt-BR')} produtos · ${nomeBase}${fora.length ? ' · sem taxas' : ''}`} />
             {(['A', 'B', 'C'] as Classe[]).map((c) => (
               <CartaoResumo key={c} titulo={`Classe ${c}`} valor={`${resumo[c].itens.toLocaleString('pt-BR')} produtos`} sub={`${fmtPct(resumo[c].pct)} do total`} />
             ))}

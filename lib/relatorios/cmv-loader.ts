@@ -13,6 +13,8 @@ import {
 export type CmvCarregado = {
   fonte: FonteCmv; linhas: LinhaCmv[]; avisos: string[]; cobertura: CoberturaKardex | null
   dataFoto: string | null; opcoes: { tipos: Opcao[]; familias: Opcao[] }; filtrosIgnorados: boolean
+  /** a RPC já troca o custo fora do normal (migration 290): só então a tela fala da troca */
+  custoTrocado: boolean
 }
 
 /**
@@ -28,6 +30,15 @@ export async function coberturaKardex(lojaId: number): Promise<CoberturaKardex |
   ])
   if (est.error || !est.data) return null
   return coberturaDoEstado(lerEstado(est.data.estado), (loja.data as { espelho_completo?: boolean } | null)?.espelho_completo === true)
+}
+
+/** CMV pelo kardex numa chamada só (relatorio_cmv_kardex_json, migration 290); sem ela, a RPC em páginas (como antes). */
+async function lerCmvKardex(supabase: Awaited<ReturnType<typeof createClient>>, lojaId: number, ini: string, fim: string, onErro: (e: { message: string }) => void): Promise<LinhaRpcCmv[]> {
+  const { data, error } = await supabase.rpc('relatorio_cmv_kardex_json', { p_loja_id: lojaId, p_ini: ini, p_fim: fim })
+  if (!error) return (data ?? []) as LinhaRpcCmv[]
+  const semFuncao = (error as { code?: string }).code === 'PGRST202' || /relatorio_cmv_kardex_json/.test(error.message)
+  if (!semFuncao) { onErro(error); return [] }
+  return rpcTodos<LinhaRpcCmv>(supabase, 'relatorio_cmv_kardex', { p_loja_id: lojaId, p_ini: ini, p_fim: fim }, onErro)
 }
 
 const rotuloTipo = (c: string) => (c ? (TIPO_NOME[c] ?? `Tipo ${c}`) : 'Não classificado')
@@ -51,7 +62,7 @@ export async function carregarCmv(lojaId: number, ini: string, fim: string, filt
       quant: Number(r.quantidade) || 0, faturamento: Number(r.faturamento) || 0, cmv: Number(r.cmv) || 0,
       semCusto: (Number(r.itens_sem_baixa) || 0) + (Number(r.itens_sem_custo) || 0),
     }))
-    return { fonte, linhas, avisos, cobertura: null, dataFoto: null, opcoes: { tipos: [], familias: [] }, filtrosIgnorados: filtros.tipos.length + filtros.familias.length > 0 }
+    return { fonte, linhas, avisos, cobertura: null, dataFoto: null, opcoes: { tipos: [], familias: [] }, filtrosIgnorados: filtros.tipos.length + filtros.familias.length > 0, custoTrocado: false }
   }
 
   const vendas = await carregarItens(lojaId, ini, fim, { tipos: filtros.tipos, familias: filtros.familias, situacao: 'validas' })
@@ -59,8 +70,7 @@ export async function carregarCmv(lojaId: number, ini: string, fim: string, filt
 
   if (fonte === 'kardex') {
     const [rpc, prods] = await Promise.all([
-      rpcTodos<LinhaRpcCmv>(supabase, 'relatorio_cmv_kardex', { p_loja_id: lojaId, p_ini: ini, p_fim: fim },
-        (e) => avisos.push(`Falha ao ler o kardex (${e.message}). Os valores podem estar incompletos.`)),
+      lerCmvKardex(supabase, lojaId, ini, fim, (e) => avisos.push(`Falha ao ler o kardex (${e.message}). Os valores podem estar incompletos.`)),
       buscarTodasLinhas<{ codigo_produto: number; descricao: string | null; codigo: string | null; descricao_familia: string | null; tipo_item: string | null }>(
         (from, to) => supabase.from('produtos').select('codigo_produto, descricao, codigo, descricao_familia, tipo_item').eq('loja_id', lojaId).order('id').range(from, to),
         undefined, (e) => avisos.push(`Falha ao ler o cadastro (${e.message}).`)),
@@ -73,7 +83,7 @@ export async function carregarCmv(lojaId: number, ini: string, fim: string, filt
       return (!filtros.tipos.length || filtros.tipos.includes(m?.tipoCod || '_')) && (!filtros.familias.length || filtros.familias.includes(m?.familia || 'Sem família'))
     }
     const linhas = montarLinhasKardex(rpc.filter((r) => passa(Number(r.n_cod_prod))), vendas.linhas, meta)
-    return { fonte, linhas, avisos, cobertura, dataFoto: null, opcoes: vendas.opcoes, filtrosIgnorados: false }
+    return { fonte, linhas, avisos, cobertura, dataFoto: null, opcoes: vendas.opcoes, filtrosIgnorados: false, custoTrocado: rpc.some((r) => 'vendas_omie' in r) }
   }
 
   // estimado: custo médio da foto mais recente que tem local real
@@ -85,5 +95,5 @@ export async function carregarCmv(lojaId: number, ini: string, fim: string, filt
         undefined, (e) => avisos.push(`Falha ao ler o custo médio (${e.message}). O CMV pode estar incompleto.`))
     : []
   const linhas = montarLinhasEstimado(vendas.linhas, custoMedioAtual(foto))
-  return { fonte, linhas, avisos, cobertura, dataFoto, opcoes: vendas.opcoes, filtrosIgnorados: false }
+  return { fonte, linhas, avisos, cobertura, dataFoto, opcoes: vendas.opcoes, filtrosIgnorados: false, custoTrocado: false }
 }

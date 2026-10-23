@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { AvisoCustoSuspeito } from '@/components/relatorios/AvisoCustoSuspeito'
+import { AvisoSaldoConferir } from '@/components/relatorios/AvisoSaldoConferir'
 import { notFound } from 'next/navigation'
 import { Download, Warehouse } from 'lucide-react'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
@@ -69,6 +70,7 @@ export default async function PosicaoEstoquePage({ searchParams }: { searchParam
           totalAjustado={r.total.valor}
         />
       )}
+      {r.saldoConferir && !sped && <AvisoSaldoConferir resumo={r.saldoConferir} total={r.total.valor} />}
 
       {!r.dataFoto ? (
         <EmptyState icon={Warehouse} title="Sem foto do estoque" hint="Aguarde a sincronização da posição de estoque." />
@@ -117,7 +119,7 @@ export default async function PosicaoEstoquePage({ searchParams }: { searchParam
                     <td className={`num whitespace-nowrap px-3 py-2 text-right ${l.quant < 0 ? 'text-err' : 'text-text'}`}>{fmtQtd(l.quant)} {l.unidade}</td>
                     {temReservado && !sped && <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{fmtQtd(l.reservado)}</td>}
                     {temReservado && !sped && <td className="num whitespace-nowrap px-3 py-2 text-right text-text">{fmtQtd(l.disponivel)}</td>}
-                    <td className={`num whitespace-nowrap px-3 py-2 text-right ${l.custoSuspeito ? 'text-warn' : 'text-text'}`} title={l.custoSuspeito ? 'Custo médio suspeito no Omie: usado o custo de referência do produto (veja o aviso acima)' : undefined}>{formatCustoUnit(l.cmc)}{l.custoSuspeito ? ' *' : ''}</td>
+                    <td className={`num whitespace-nowrap px-3 py-2 text-right ${l.custoSuspeito ? 'text-warn' : 'text-text'}`} title={l.custoSuspeito ? 'Custo médio errado no Omie: usado o custo de referência do produto (veja o aviso acima)' : undefined}>{formatCustoUnit(l.cmc)}{l.custoSuspeito ? ' *' : ''}</td>
                     <td className={`num whitespace-nowrap px-3 py-2 text-right font-medium ${l.valor < 0 ? 'text-err' : 'text-text'}`}><Money value={l.valor} /></td>
                   </tr>
                 ))}

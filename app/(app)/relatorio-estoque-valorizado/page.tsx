@@ -1,5 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { AvisoCustoSuspeito } from '@/components/relatorios/AvisoCustoSuspeito'
+import { AvisoSaldoConferir } from '@/components/relatorios/AvisoSaldoConferir'
+import { motivoSuspeita, resumirSaldoConferir } from '@/lib/relatorios/posicao-estoque-puro'
+import { lerSaldoConferir } from '@/lib/relatorios/posicao-estoque-loader'
 import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { notFound } from 'next/navigation'
@@ -105,7 +108,7 @@ export default async function RelatorioEstoqueValorizadoPage({
     console.error(`relatorio-estoque-valorizado: RPC ${fn} falhou -- total pode estar incompleto`, error.message)
   }
 
-  const [linhasTodas, linhasLocalTodas, familiasOpcoes, locaisOpcoes, suspeitasRaw] = await Promise.all([
+  const [linhasTodas, linhasLocalTodas, familiasOpcoes, locaisOpcoes, suspeitasRaw, saldoConferirRaw] = await Promise.all([
     // rpcTodos ao inves de .rpc() direto: o PostgREST corta em 1000 linhas por
     // padrao, sem erro -- lojas com catalogo grande tinham o "Total valorizado"
     // subcontado (so somava as linhas que vinham na 1a pagina), mesma classe de
@@ -149,15 +152,20 @@ export default async function RelatorioEstoqueValorizadoPage({
     // pela referência de custo; aqui só a lista para o aviso. Sem a 282: sem aviso.
     supabase
       .rpc('posicao_valorizada', { p_loja_id: lojaId })
-      .select('n_cod_prod, codigo_local_estoque, n_saldo, n_cmc, referencia, valor_omie, valor')
+      .select('n_cod_prod, codigo_local_estoque, n_saldo, n_cmc, referencia, valor_omie, valor, fonte_referencia')
       .eq('suspeito', true)
       .limit(5000)
-      .then((r) => (r.error ? [] : (r.data ?? []) as { n_cod_prod: number; codigo_local_estoque: number; n_saldo: number; n_cmc: number; referencia: number | null; valor_omie: number; valor: number }[])),
+      .then((r) => (r.error ? [] : (r.data ?? []) as { n_cod_prod: number; codigo_local_estoque: number; n_saldo: number; n_cmc: number; referencia: number | null; valor_omie: number; valor: number; fonte_referencia: string | null }[])),
+    // saldos do Omie a conferir (migration 296): só aviso, o total não muda; sem a 296 = sem aviso
+    lerSaldoConferir(supabase, lojaId, null, () => (e) => console.error('relatorio-estoque-valorizado: saldos a conferir', e.message)),
   ])
 
   // filtros da tela valem para a lista do aviso (local direto; produto/família/tipo pelas linhas que a RPC devolveu)
   const prodsNaTela = new Set([...linhasTodas, ...linhasLocalTodas].map((l) => Number(l.codigo_produto)))
-  const nomeProd = new Map([...linhasTodas, ...linhasLocalTodas].map((l) => [Number(l.codigo_produto), { codigo: l.codigo ?? String(l.codigo_produto), descricao: l.descricao ?? '' }]))
+  const nomeProd = new Map([...linhasLocalTodas, ...linhasTodas].map((l) => [Number(l.codigo_produto), {
+    codigo: l.codigo ?? String(l.codigo_produto), descricao: l.descricao ?? '',
+    unidade: 'unidade' in l ? l.unidade : null, tipo: 'tipo_item' in l ? l.tipo_item : null,
+  }]))
   const nomeLocal = new Map((locaisOpcoes.data ?? []).map((l) => [Number(l.codigo_local_estoque), l.descricao ?? String(l.codigo_local_estoque)]))
   const suspeitas = suspeitasRaw
     .filter((x) => prodsNaTela.has(Number(x.n_cod_prod)) && (!locais.length || locais.includes(Number(x.codigo_local_estoque))))
@@ -165,9 +173,11 @@ export default async function RelatorioEstoqueValorizadoPage({
       chave: `${x.n_cod_prod}:${x.codigo_local_estoque}`, codigo: nomeProd.get(Number(x.n_cod_prod))?.codigo ?? String(x.n_cod_prod),
       descricao: nomeProd.get(Number(x.n_cod_prod))?.descricao ?? '', local: nomeLocal.get(Number(x.codigo_local_estoque)) ?? String(x.codigo_local_estoque),
       quant: Number(x.n_saldo), cmcOmie: Number(x.n_cmc), referencia: x.referencia == null ? null : Number(x.referencia), valorOmie: Number(x.valor_omie), valor: Number(x.valor),
+      motivo: motivoSuspeita({ unidade: nomeProd.get(Number(x.n_cod_prod))?.unidade ?? null, tipo: nomeProd.get(Number(x.n_cod_prod))?.tipo ?? null, cmcOmie: Number(x.n_cmc), referencia: x.referencia == null ? null : Number(x.referencia), fonte: x.fonte_referencia ?? null }),
     }))
     .sort((a, b) => Math.abs(b.valorOmie - b.valor) - Math.abs(a.valorOmie - a.valor))
   const ajusteOmie = Math.round(suspeitas.reduce((s, l) => s + l.valorOmie - l.valor, 0) * 100) / 100
+  const saldoConferir = saldoConferirRaw ? resumirSaldoConferir(saldoConferirRaw, nomeProd, prodsNaTela) : null
   const dataFoto = linhasTodas[0]?.data_foto ?? linhasLocalTodas[0]?.data_foto ?? null
   const totalValor = linhasTodas.reduce((s, l) => s + Number(l.valor_total), 0)
   const totalProdutos = linhasTodas.length
@@ -258,6 +268,7 @@ export default async function RelatorioEstoqueValorizadoPage({
       {suspeitas.length > 0 && (
         <AvisoCustoSuspeito suspeitas={suspeitas} ajusteOmie={ajusteOmie} totalAjustado={verLocal ? totalValorLocal : totalValor} />
       )}
+      {saldoConferir && <AvisoSaldoConferir resumo={saldoConferir} total={verLocal ? totalValorLocal : totalValor} />}
 
       {!verLocal ? (
         <>

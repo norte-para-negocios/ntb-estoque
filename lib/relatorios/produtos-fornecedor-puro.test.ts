@@ -73,3 +73,13 @@ test('aviso de vários itens do produto na última nota', () => {
   assert.equal(avisoItensNota(null), null)
   assert.equal(avisoItensNota(undefined), null)
 })
+
+test('alerta da última compra: unidade sem conversão ou custo 10× fora do médio (auditoria 23/10/2026)', async () => {
+  const { alertaCompra } = await import('./produtos-fornecedor-puro.ts')
+  assert.equal(alertaCompra('GF', 'ML', 49.75, 49.75), 'Comprado em GF, estoque em ML: confira a conversão no Omie') // Monin 80405
+  assert.equal(alertaCompra('ML', 'ML', 28.9, 0.0283), 'Custo da compra 1.021× maior que o custo médio: unidade ou custo errado no Omie') // Vodka 80164
+  assert.equal(alertaCompra('UN', 'UN', 0.01, 6.79), 'Custo da compra 679× menor que o custo médio: unidade ou custo errado no Omie') // copo 60260
+  assert.equal(alertaCompra('UND', 'UN', 10, 9), null)
+  assert.equal(alertaCompra('KG', 'KG', 16.5, 14.13), null)
+  assert.equal(alertaCompra(null, 'KG', 16.5, null), null)
+})

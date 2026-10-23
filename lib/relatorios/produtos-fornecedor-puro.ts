@@ -17,6 +17,8 @@ export type OpcoesPF = { ver: 'produto' | 'fornecedor'; q: string; fornecedor: s
 export type LinhaPF = BrutoPF & {
   codigo: string; descricao: string; familia: string; tipo: string; inativo: boolean; custoMedio: number | null; estoque: number
   nFornecedores: number; maisBarato: boolean; variacaoPct: number | null
+  /** auditoria 23/10/2026: unidade da compra diferente da do estoque, ou custo da compra 10× fora do custo médio */
+  alerta: string | null
 }
 export type ResumoPF = { produtos: number; fornecedores: number; pares: number; multiFornecedor: number }
 
@@ -59,6 +61,7 @@ export function montarProdutosFornecedor(brutas: BrutoPF[], meta: Map<number, Me
       nFornecedores: porProduto.get(cod)?.length ?? 1,
       maisBarato: menor != null && custo != null && custo === menor,
       variacaoPct: custo != null && custoMedio != null && custoMedio > 0 ? Math.round(((custo - custoMedio) / custoMedio) * 1000) / 10 : null,
+      alerta: alertaCompra(b.unidade, m?.unidade ?? null, custo, custoMedio),
     })
   }
   linhas.sort(op.ver === 'fornecedor'
@@ -83,4 +86,22 @@ export function montarProdutosFornecedor(brutas: BrutoPF[], meta: Map<number, Me
 export function avisoItensNota(n: number | null | undefined): string | null {
   const k = Number(n) || 0
   return k > 1 ? `${k} itens deste produto na nota` : null
+}
+
+const GRUPO_UN: Record<string, string> = {
+  UN: 'UN', UND: 'UN', UNID: 'UN', UNIDADE: 'UN', '1UN': 'UN', KG: 'KG', KGS: 'KG', L: 'L', LT: 'L', LTS: 'L', LITRO: 'L', G: 'G', GR: 'G', GRS: 'G', ML: 'ML',
+}
+const grupoUn = (u: string | null | undefined) => { const x = (u ?? '').trim().toUpperCase(); return GRUPO_UN[x] ?? x }
+
+/** Sinal de dado errado no Omie na última compra (auditoria 23/10/2026, loja 5): a nota entrou numa unidade diferente da
+ *  do estoque sem conversão (Monin 700 ml: 2 GF a R$ 49,75 entraram como 2 ml → custo da garrafa "por ml"), ou o custo
+ *  da compra está 10× acima/abaixo do custo médio de hoje (Vodka Orloff: 4 ml a R$ 28,90/ml). */
+export function alertaCompra(unCompra: string | null, unEstoque: string | null, custo: number | null, custoMedio: number | null): string | null {
+  const a = grupoUn(unCompra), b = grupoUn(unEstoque)
+  if (a && b && a !== b) return `Comprado em ${unCompra!.trim()}, estoque em ${unEstoque!.trim()}: confira a conversão no Omie`
+  if (custo != null && custo > 0 && custoMedio != null && custoMedio > 0) {
+    const r = custo / custoMedio
+    if (r >= 10 || r <= 0.1) return `Custo da compra ${r >= 10 ? `${Math.round(r).toLocaleString('pt-BR')}× maior` : `${Math.round(1 / r).toLocaleString('pt-BR')}× menor`} que o custo médio: unidade ou custo errado no Omie`
+  }
+  return null
 }

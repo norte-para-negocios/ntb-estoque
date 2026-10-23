@@ -13,6 +13,7 @@ import {
 } from '@/lib/historico-contabo'
 import { gerarMovimentacaoValorMovimento } from '@/lib/relatorios/movimentacao-valor-mov-loader'
 import { gerarMovimentacaoOperacaoAutomatica, type LinhaOperAuto } from '@/lib/movimentacao-operacao-auto'
+import { mapaUnidades, tirarDesfeitos, type ExtrasQtd } from '@/lib/relatorios/movimentacao-qtd-puro'
 
 export const dynamic = 'force-dynamic'
 
@@ -90,7 +91,7 @@ export async function GET(request: Request) {
     const rowsOper = [...porOper.values()]
       .sort((a, b) => (b.conf ? b.valor : 0) - (a.conf ? a.valor : 0))
       .map((o) => ({ origem: o.origem, sentido: o.sentido, qtde: o.qtde, valor: o.conf ? o.valor : 0 }))
-    abas.push({ rows: rowsOper, colunas: colsOper, opts: { titulo: 'Movimentação por operação', subtitulo: [locsSel.length ? `Local: ${locsSel.join(', ')}` : 'Todos os locais', vm?.aviso ? `AVISO: ${vm.aviso}` : ''].filter(Boolean).join(' · '), autoFiltro: true }, nome: 'Por operação' })
+    abas.push({ rows: rowsOper, colunas: colsOper, opts: { titulo: 'Movimentação por operação', subtitulo: [locsSel.length ? `Local: ${locsSel.join(', ')}` : 'Todos os locais', vm?.aviso ? `AVISO: ${vm.aviso}` : '', !usarValorMov && rows.some((r) => 'foraDoNormal' in r && r.foraDoNormal) ? `ATENÇÃO: ${rows.filter((r) => 'foraDoNormal' in r && r.foraDoNormal).length} linha(s) de ajuste com custo fora do normal no Omie valem o custo normal do produto` : '', usarAutomatico && !usarValorMov ? 'Ajuste = quantidade × custo do ajuste; contagem de inventário não entra em R$' : '', usarValorMov && vm!.foraDoNormal.movimentos > 0 ? `ATENÇÃO: ${vm!.foraDoNormal.movimentos} movimento(s) com custo fora do normal no Omie valem o custo normal do produto (R$ ${vm!.foraDoNormal.valorOmie.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} pelo Omie, R$ ${vm!.foraDoNormal.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} usado)` : ''].filter(Boolean).join(' · '), autoFiltro: true }, nome: 'Por operação' })
 
     // Aba 2: Perdas reais (manual saída, fora inventário) por família e mês.
     const perdas = rows.filter((r) => r.origem === 'Movimento Manual de Estoque' && r.sentido === 'S' && !r.inventario)
@@ -275,6 +276,11 @@ export async function GET(request: Request) {
   }
 
   const abas: AbaPlanilha[] = []
+  // Unidade e lançamentos desfeitos (migration 291), mesma regra da tela; sem ela, como antes.
+  const { data: extrasRaw, error: erroExtras } = await supabase.rpc('relatorio_movimentacao_qtd_extras', { p_loja_id: lojaId, p_ini: ini, p_fim: fim })
+  if (erroExtras) console.error('relatorio-movimentacao/export: relatorio_movimentacao_qtd_extras', erroExtras)
+  const extras = (erroExtras ? null : extrasRaw) as ExtrasQtd | null
+  const unidades = mapaUnidades(extras)
   for (const [sentido, nome, label] of [
     ['saidas', 'Saídas por produto', 'Saídas (consumo/venda)'],
     ['entradas', 'Entradas por produto', 'Entradas'],
@@ -302,8 +308,16 @@ export async function GET(request: Request) {
       }
       q = [...combinados.values()]
     }
-    const linhas = q.map((r) => ({ rotulo: formatarNomeProduto(r.rotulo) || r.rotulo, mes: r.mes, valor: Number(r.qtde) || 0 }))
-    if (linhas.length) abas.push(abaMatrizMensal({ titulo: `Movimentação — ${label} (quantidade)`, dimLabel: 'Produto', linhas, nome, moeda: false }))
+    const sem = tirarDesfeitos(q.map((r) => ({ ...r, valor: 0 })), extras?.desfeitos ?? [], sentido, ini, fim)
+    const linhas = sem.matriz.map((r) => {
+      const u = unidades.get(r.rotulo) ?? { divisor: 1, rotulo: '' }
+      return { rotulo: `${formatarNomeProduto(r.rotulo) || r.rotulo}${u.rotulo ? ` (${u.rotulo})` : ''}`, mes: r.mes, valor: (Number(r.qtde) || 0) / u.divisor }
+    })
+    const subtitulo = [
+      'Quantidade na unidade de cada produto (o que o cadastro tem em ml está em litros e em g, em kg).',
+      sem.tirados.length ? `Não somados (lançamento errado e desfeito no Omie): ${sem.tirados.map((d) => `${d.descricao} ${d.quantidade.toLocaleString('pt-BR')} em ${d.data.split('-').reverse().join('/')}`).join('; ')}.` : '',
+    ].filter(Boolean).join(' ')
+    if (linhas.length) abas.push(abaMatrizMensal({ titulo: `Movimentação — ${label} (quantidade)`, dimLabel: 'Produto', linhas, nome, moeda: false, subtitulo }))
   }
 
   if (!abas.length) return new Response('Sem movimentação no período', { status: 404 })

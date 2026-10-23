@@ -11,7 +11,8 @@ import { PeriodoBar } from '@/components/faturamento/PeriodoBar'
 import { FiltrosFaturamento } from '@/components/faturamento/FiltrosFaturamento'
 import { CartaoResumo } from '@/components/faturamento/CartaoResumo'
 import { carregarCmv } from '@/lib/relatorios/cmv-loader'
-import { agruparCmv, cmvFormulaOmie, resumoCmv, totaisFormula } from '@/lib/relatorios/cmv-puro'
+import { agruparCmv, cmvFormulaOmie, custoForaDoNormal, resumoCmv, totaisFormula } from '@/lib/relatorios/cmv-puro'
+import { AvisoCustoForaDoNormal } from '@/components/relatorios/AvisoCustoForaDoNormal'
 import { DIM_DA_ABA, lerParamsCmv, paramsBaseCmv, textoFonte, type SpCmv } from '@/lib/relatorios/cmv-params'
 
 const LIMITE = 500
@@ -49,6 +50,7 @@ export default async function CmvPage({ searchParams }: { searchParams: Promise<
     { value: 'produtos', label: 'Produtos' }, { value: 'familias', label: 'Famílias' }, { value: 'tipos', label: 'Tipos' },
     ...(kardex ? [{ value: 'estoque', label: 'Pelo estoque (EI + C + P − EF)' }] : []),
   ]
+  const foraDoNormal = kardex && d.custoTrocado ? custoForaDoNormal(d.linhas) : null
   const formulaOmie = totaisFormula(d.linhas, (t) => TIPOS_OMIE.includes(t))
   const formulaTodos = totaisFormula(d.linhas, () => true)
 
@@ -64,9 +66,10 @@ export default async function CmvPage({ searchParams }: { searchParams: Promise<
       <PeriodoBar basePath="/relatorio-cmv" params={base} ini={p.ini} fim={p.fim} hoje={hoje} />
       {d.fonte !== 'proprio' && <FiltrosFaturamento tipos={d.opcoes.tipos} familias={d.opcoes.familias} />}
 
-      <p className={`rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] shadow-[var(--shadow-sm)] ${d.fonte === 'estimado' ? 'text-warn' : 'text-text-muted'}`}>{textoFonte(d.fonte, d.cobertura, d.dataFoto)}</p>
+      <p className={`rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] shadow-[var(--shadow-sm)] ${d.fonte === 'estimado' ? 'text-warn' : 'text-text-muted'}`}>{textoFonte(d.fonte, d.cobertura, d.dataFoto, d.custoTrocado)}</p>
       {p.cortado && <p className="text-[13px] text-text-muted">Período limitado a 366 dias: mostrando os dias mais recentes.</p>}
       {d.avisos.map((a) => <p key={a} className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">{a}</p>)}
+      {foraDoNormal && <AvisoCustoForaDoNormal dados={foraDoNormal} />}
       {resumo.custoSuspeito > 0 && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">{resumo.custoSuspeito.toLocaleString('pt-BR')} produto(s) com custo médio de hoje acima do preço de venda (custo fora do normal no Omie) ficaram com custo zero: <Money value={resumo.faturamentoSuspeito} /> de faturamento sem custo. O CMV estimado fica abaixo do real.</p>}
       {resumo.semCusto > 0 && <p className="text-[13px] text-text-muted">{resumo.semCusto.toLocaleString('pt-BR')} item(ns) vendido(s) sem custo ({d.fonte === 'kardex' ? 'sem saída no kardex, ex.: taxa de serviço' : d.fonte === 'proprio' ? 'sem baixa ou com baixa sem custo' : 'sem custo médio na foto, ex.: taxa de serviço'}): entram com custo zero.</p>}
 

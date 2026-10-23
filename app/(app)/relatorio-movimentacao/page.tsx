@@ -25,6 +25,7 @@ import {
 } from '@/lib/historico-contabo'
 import { gerarMovimentacaoOperacaoAutomatica, type LinhaOperAuto } from '@/lib/movimentacao-operacao-auto'
 import { gerarMovimentacaoValorMovimento } from '@/lib/relatorios/movimentacao-valor-mov-loader'
+import { mapaUnidades, tirarDesfeitos, unidadeExibicao, type ExtrasQtd } from '@/lib/relatorios/movimentacao-qtd-puro'
 import {
   buscarMovimentosManuais,
   buscarMetaProdutosMovManual,
@@ -231,6 +232,16 @@ export default async function RelatorioMovimentacaoPage({
         {vm?.periodo?.cortado && <p className="text-[13px] text-text-muted">Valor do movimento só existe no período coberto pelo kardex: mostrando de {fmtData(vm.periodo.ini)} a {fmtData(vm.periodo.fim)}.</p>}
         {vm?.aviso && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">{vm.aviso}</p>}
         {vm?.erro && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">Falha ao ler o kardex ({vm.erro}). Os valores podem estar incompletos.</p>}
+        {usarValorMov && vm!.foraDoNormal.movimentos > 0 && (
+          <details className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">
+            <summary className="cursor-pointer">
+              {vm!.foraDoNormal.movimentos.toLocaleString('pt-BR')} movimento(s) com custo fora do normal no Omie (ex.: milhões num suco) valem o custo normal do produto: {fmtMoeda(vm!.foraDoNormal.valorOmie)} pelo Omie, {fmtMoeda(vm!.foraDoNormal.valor)} usado. Toque para ver os produtos e corrija o custo ou a unidade no Omie.
+            </summary>
+            <ul className="mt-1 list-disc pl-5 text-text-muted">
+              {vm!.foraDoNormal.produtos.slice(0, 20).map((x) => <li key={x.produto}>{x.produto}: {fmtMoeda(x.valorOmie)} pelo Omie · {fmtMoeda(x.valor)} usado</li>)}
+            </ul>
+          </details>
+        )}
         {usarValorMov && vm!.semCusto > 0 && <p className="text-[13px] text-text-muted">{vm!.semCusto.toLocaleString('pt-BR')} movimento(s) sem custo no kardex entram com valor zero.</p>}
       </div>
     )
@@ -249,6 +260,11 @@ export default async function RelatorioMovimentacaoPage({
         </div>
       )
     }
+
+    // Ajustes com custo fora do normal no Omie (modo automático, lib/relatorios/ajuste-valor-puro.ts): valem o custo normal.
+    const foraAuto = usarValorMov ? [] : rows.filter((r): r is LinhaOperAuto => 'foraDoNormal' in r && !!r.foraDoNormal)
+    const foraAutoOmie = foraAuto.reduce((t, r) => t + (r.valorOmie ?? 0), 0)
+    const foraAutoUsado = foraAuto.reduce((t, r) => t + r.valor, 0)
 
     // --- Cards executivos (sempre sobre TODOS os dados, visão de gestão) ---
     const somaSe = (fn: (r: LinhaOper) => boolean) => rows.filter(fn).reduce((s, r) => s + Number(r.valor), 0)
@@ -325,6 +341,12 @@ export default async function RelatorioMovimentacaoPage({
         {seg}
         {segValor}
 
+        {foraAuto.length > 0 && (
+          <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">
+            {foraAuto.length.toLocaleString('pt-BR')} linha(s) de ajuste com custo fora do normal no Omie valem o custo normal do produto: {fmtMoeda(foraAutoOmie)} pelo Omie, {fmtMoeda(foraAutoUsado)} usado ({[...new Set(foraAuto.map((r) => r.produto))].slice(0, 8).join(', ')}). Corrija o custo ou a unidade desses produtos no Omie.
+          </p>
+        )}
+
         {/* Cards executivos */}
         <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
           <div className={cardCls}>
@@ -384,7 +406,7 @@ export default async function RelatorioMovimentacaoPage({
           {usarValorMov
             ? 'Cada movimento pelo seu valor no kardex: saída = custo médio da hora; compra = custo da nota (mesmo valor do relatório "Resumido por produto" do Omie).'
             : usarAutomatico
-            ? 'Valor do PDV vem do fato de cupom (item a item, valor real de venda).'
+            ? 'Valor do PDV vem do fato de cupom (item a item, valor real de venda). Ajuste = quantidade × custo do ajuste; a contagem de inventário não entra em R$ (ela guarda o saldo contado, não quanto entrou ou saiu).'
             : 'O valor do PDV na saída não é confiável (custo médio de produto acabado fica distorcido no Omie) — use o modo "Em quantidade" para volume de venda.'}
           {metaRow?.importado_em && <> · Importado em {fmtQuando(metaRow.importado_em as string)}.</>}
         </p>
@@ -1015,6 +1037,16 @@ export default async function RelatorioMovimentacaoPage({
     matriz = [...combinados.values()]
   }
 
+  // Unidade de cada produto e lançamentos errados desfeitos (migration 291; sem ela, a matriz fica como antes).
+  const { data: extrasRaw, error: erroExtras } = await supabase.rpc('relatorio_movimentacao_qtd_extras', { p_loja_id: lojaId, p_ini: ini, p_fim: fim })
+  if (erroExtras) console.error('relatorio-movimentacao: relatorio_movimentacao_qtd_extras', erroExtras)
+  const extras = (erroExtras ? null : extrasRaw) as ExtrasQtd | null
+  const unidades = mapaUnidades(extras)
+  const semDesfeitos = tirarDesfeitos(matriz, extras?.desfeitos ?? [], sentido, ini, fim)
+  matriz = semDesfeitos.matriz
+  const desfeitosTirados = semDesfeitos.tirados
+  const unDe = (rotulo: string) => unidades.get(rotulo) ?? { divisor: 1, rotulo: '' }
+
   const meses = [...new Set(matriz.map((m) => m.mes))].sort()
   const porRotulo = new Map<string, { total: number; meses: Record<string, number> }>()
   for (const r of matriz) {
@@ -1024,8 +1056,9 @@ export default async function RelatorioMovimentacaoPage({
     ent.total += q
     porRotulo.set(r.rotulo, ent)
   }
-  const ordenadas = [...porRotulo.entries()].sort((a, b) => b[1].total - a[1].total)
-  const linhas = ordenadas.slice(0, LIMITE_LINHAS).map(([rotulo, ent]) => ({ rotuloRaw: rotulo, rotulo: formatarNomeProduto(rotulo) || rotulo, meses: ent.meses, total: ent.total }))
+  // ordem pela quantidade já na unidade de exibição (ml em litros), senão o que é cadastrado em ml fica sempre no topo
+  const ordenadas = [...porRotulo.entries()].sort((a, b) => b[1].total / unDe(b[0]).divisor - a[1].total / unDe(a[0]).divisor)
+  const linhas = ordenadas.slice(0, LIMITE_LINHAS).map(([rotulo, ent]) => ({ rotuloRaw: rotulo, rotulo: formatarNomeProduto(rotulo) || rotulo, meses: ent.meses, total: ent.total, un: unDe(rotulo) }))
   const ocultadas = ordenadas.length - linhas.length
   const totalPorMes: Record<string, number> = {}
   for (const [, ent] of porRotulo) for (const m of meses) totalPorMes[m] = (totalPorMes[m] ?? 0) + (ent.meses[m] ?? 0)
@@ -1042,6 +1075,18 @@ export default async function RelatorioMovimentacaoPage({
           Produtos <span className={KPI_NUM}>{ordenadas.length}</span>
         </span>
       </div>
+
+      {desfeitosTirados.length > 0 && (
+        <div className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">
+          <p>{desfeitosTirados.length.toLocaleString('pt-BR')} lançamento(s) errado(s) e desfeito(s) no Omie não foram somados (entrou e saiu quase o mesmo tanto em poucos dias, muito acima do normal do produto; ex.: contagem de inventário digitada errada e refeita):</p>
+          <ul className="mt-1 list-disc pl-5 text-text-muted">
+            {desfeitosTirados.map((d) => {
+              const u = unidadeExibicao(d.unidade)
+              return <li key={`${d.cod_prod}-${d.data_entrada}-${d.data_saida}`}>{formatarNomeProduto(d.descricao) || d.descricao}: entrou {fmtQtd(d.quantidade_entrada / u.divisor)} {u.rotulo} em {fmtData(d.data_entrada)} e saiu {fmtQtd(d.quantidade_saida / u.divisor)} {u.rotulo} em {fmtData(d.data_saida)}</li>
+            })}
+          </ul>
+        </div>
+      )}
 
       {falhouMatrizRecente && (
         <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
@@ -1069,6 +1114,7 @@ export default async function RelatorioMovimentacaoPage({
               <thead>
                 <tr className="border-b border-border bg-surface">
                   <th className={`sticky left-0 z-20 bg-surface text-left ${th}`}>Produto</th>
+                  <th className={`text-left ${th}`}>Un.</th>
                   {meses.map((m) => (<th key={m} className={`text-right ${th}`}>{mesLabel(m)}</th>))}
                   <th className={`bg-surface text-right ${th} ${STICKY_TOTAL}`}>Total</th>
                 </tr>
@@ -1083,8 +1129,9 @@ export default async function RelatorioMovimentacaoPage({
                         <Link href={`/movimentacoes?produto=${encodeURIComponent(l.rotuloRaw)}`} className="hover:underline">{l.rotulo}</Link>
                       </div>
                     </td>
-                    {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-[13px] text-text">{fmtQtd(l.meses[m] ?? 0)}</td>))}
-                    <td className={`num whitespace-nowrap bg-surface px-2 py-1.5 text-right text-[13px] font-semibold text-text ${STICKY_TOTAL}`}>{fmtQtd(l.total)}</td>
+                    <td className="whitespace-nowrap px-2 py-1.5 text-[13px] text-text-muted">{l.un.rotulo}</td>
+                    {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-[13px] text-text">{fmtQtd((l.meses[m] ?? 0) / l.un.divisor)}</td>))}
+                    <td className={`num whitespace-nowrap bg-surface px-2 py-1.5 text-right text-[13px] font-semibold text-text ${STICKY_TOTAL}`}>{fmtQtd(l.total / l.un.divisor)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1093,7 +1140,7 @@ export default async function RelatorioMovimentacaoPage({
           <p className="px-1 text-[13px] text-text-muted">
             {/* Sem linha de total geral de propósito: somar kg + un + cx de produtos
                 diferentes dava um numero gigante sem significado (feedback 18/07). */}
-            Quantidades na unidade de cada produto (kg, un, cx...) — por isso não há total geral. Para R$, use o modo &quot;Por operação&quot;.
+            Quantidades na unidade de cada produto (coluna Un.; o que o cadastro tem em ml aparece em litros e o que tem em g aparece em kg) — por isso não há total geral. Para R$, use o modo &quot;Por operação&quot;.
             {ocultadas > 0 && ` Mostrando os ${LIMITE_LINHAS} maiores de ${ordenadas.length}.`}
           </p>
         </div>

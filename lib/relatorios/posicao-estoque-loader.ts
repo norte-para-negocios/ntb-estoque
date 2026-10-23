@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
-import { escolherFoto, locaisSumidos, montarPosicao, SEM_FAMILIA, type InfoLocal, type LinhaFoto, type MetaProduto, type OpcoesPosicao, type VerPosicao } from '@/lib/relatorios/posicao-estoque-puro'
+import { escolherFoto, locaisSumidos, montarPosicao, resumirSaldoConferir, SEM_FAMILIA, type InfoLocal, type LinhaFoto, type LinhaSaldoConferir, type MetaProduto, type OpcoesPosicao, type ResumoSaldoConferir, type VerPosicao } from '@/lib/relatorios/posicao-estoque-puro'
 
 export type SpPosicao = Record<string, string | undefined>
 const lista = (v?: string) => (v ?? '').split(',').map((x) => x.trim()).filter(Boolean)
@@ -27,7 +27,7 @@ export async function lerFotoValorizada(supabase: Cliente, lojaId: number, dataF
       (from, to) => supabase.from('posicao_estoques').select('n_cod_prod, codigo_local_estoque, n_saldo, n_cmc, reservado').eq('loja_id', lojaId).eq('data_posicao', dataFoto).order('id').range(from, to),
       undefined, anotar('posição de estoque')),
     supabase.rpc('posicao_valorizada', { p_loja_id: lojaId, p_data: dataFoto })
-      .select('n_cod_prod, codigo_local_estoque, cmc_usado, valor, suspeito, referencia, valor_omie').eq('suspeito', true).limit(5000),
+      .select('n_cod_prod, codigo_local_estoque, cmc_usado, valor, suspeito, referencia, valor_omie, fonte_referencia').eq('suspeito', true).limit(5000),
   ])
   if (susp.error) {
     const semFuncao = (susp.error as { code?: string }).code === 'PGRST202' || /posicao_valorizada/.test(susp.error.message)
@@ -39,10 +39,22 @@ export async function lerFotoValorizada(supabase: Cliente, lojaId: number, dataF
   return crua.map((f) => {
     if (Number(f.codigo_local_estoque) === 0) return f
     const x = suspeitas.get(chave(f.n_cod_prod, f.codigo_local_estoque))
-    if (x) return { ...f, cmc_usado: x.cmc_usado, valor: x.valor, suspeito: true, referencia: x.referencia, valor_omie: x.valor_omie }
+    if (x) return { ...f, cmc_usado: x.cmc_usado, valor: x.valor, suspeito: true, referencia: x.referencia, valor_omie: x.valor_omie, fonte_referencia: x.fonte_referencia ?? null }
     const cmc = Number(f.n_cmc) > 0 ? Number(f.n_cmc) : 0
     return { ...f, cmc_usado: cmc, valor: Math.round((Number(f.n_saldo) || 0) * cmc * 100) / 100, suspeito: false }
   })
+}
+
+// Saldos do Omie a conferir (migration 296): saldo maior que tudo o que entrou por nota em 12 meses (falta de baixa no
+// Omie) e produto inativo com saldo. Não muda o total. Sem a 296 (função ausente) devolve null e a tela não mostra o aviso.
+export async function lerSaldoConferir(supabase: Cliente, lojaId: number, dataFoto: string | null, anotar: (onde: string) => (e: { message: string }) => void): Promise<LinhaSaldoConferir[] | null> {
+  const { data, error } = await supabase.rpc('posicao_saldo_a_conferir', { p_loja_id: lojaId, ...(dataFoto ? { p_data: dataFoto } : {}) }).limit(5000)
+  if (error) {
+    const semFuncao = (error as { code?: string }).code === 'PGRST202' || /posicao_saldo_a_conferir/.test(error.message)
+    if (!semFuncao) anotar('saldos a conferir')(error)
+    return null
+  }
+  return (data ?? []) as LinhaSaldoConferir[]
 }
 
 // Lê a foto mais recente com local real (posicao_estoques: lojas Omie = sync do Omie; estoque próprio = projeção
@@ -71,7 +83,7 @@ export async function carregarPosicao(lojaId: number, op: OpcoesPosicao) {
     : null
   const dataAnterior = anteriorQ?.data?.data_posicao ? String(anteriorQ.data.data_posicao) : null
 
-  const [foto, prods, locs, locaisAnteriores] = await Promise.all([
+  const [foto, prods, locs, locaisAnteriores, saldoConferirRaw] = await Promise.all([
     dataFoto ? lerFotoValorizada(supabase, lojaId, dataFoto, anotar) : Promise.resolve<LinhaFoto[]>([]),
     buscarTodasLinhas<{ codigo_produto: number; codigo: string | null; descricao: string | null; descricao_familia: string | null; tipo_item: string | null; unidade: string | null; ncm: string | null; inativo: boolean | null }>(
       (from, to) => supabase.from('produtos').select('codigo_produto, codigo, descricao, descricao_familia, tipo_item, unidade, ncm, inativo').eq('loja_id', lojaId).order('id').range(from, to),
@@ -84,6 +96,7 @@ export async function carregarPosicao(lojaId: number, op: OpcoesPosicao) {
           (from, to) => supabase.from('posicao_estoques').select('codigo_local_estoque').eq('loja_id', lojaId).eq('data_posicao', dataAnterior).neq('codigo_local_estoque', 0).order('id').range(from, to),
           undefined, anotar('foto anterior'))
       : Promise.resolve<{ codigo_local_estoque: number }[]>([]),
+    dataFoto ? lerSaldoConferir(supabase, lojaId, dataFoto, anotar) : Promise.resolve(null),
   ])
   const produtos: MetaProduto[] = prods.map((p) => ({
     codigo_produto: Number(p.codigo_produto), codigo: p.codigo, descricao: p.descricao, familia: p.descricao_familia, tipo: p.tipo_item,
@@ -96,5 +109,9 @@ export async function carregarPosicao(lojaId: number, op: OpcoesPosicao) {
     .map((c) => locais.get(c)?.descricao ?? String(c))
   const tipos = [...new Set(produtos.map((p) => p.tipo ?? ''))].sort().map((c) => ({ value: c || '_', label: rotuloTipo(c) }))
   const familias = [...new Set(produtos.map((p) => p.familia || SEM_FAMILIA))].sort((a, b) => a.localeCompare(b, 'pt-BR')).map((f) => ({ value: f, label: f }))
-  return { ...r, dataFoto, fotoEmLeitura, locaisSumidos: sumidos, erros: [...new Set(erros)], opcoes: { tipos, familias } }
+  const metaPorCod = new Map(produtos.map((p) => [p.codigo_produto, p]))
+  const saldoConferir: ResumoSaldoConferir | null = saldoConferirRaw
+    ? resumirSaldoConferir(saldoConferirRaw, metaPorCod, new Set(r.linhas.map((l) => l.codProduto)))
+    : null
+  return { ...r, dataFoto, fotoEmLeitura, locaisSumidos: sumidos, saldoConferir, erros: [...new Set(erros)], opcoes: { tipos, familias } }
 }

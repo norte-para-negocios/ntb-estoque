@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { totaisFormula, periodoValorMovimento, agruparCmv, cmvFormulaOmie, custoMedioAtual, escolherFonteCmv, linhaVazia, montarLinhasEstimado, montarLinhasKardex, resumoCmv, type LinhaCmv } from './cmv-puro.ts'
+import { totaisFormula, periodoValorMovimento, agruparCmv, cmvFormulaOmie, custoForaDoNormal, custoMedioAtual, escolherFonteCmv, linhaVazia, montarLinhasEstimado, montarLinhasKardex, resumoCmv, textoCustoForaDoNormal, type LinhaCmv } from './cmv-puro.ts'
 
 test('escolherFonteCmv: próprio, kardex só com o período inteiro coberto, senão estimado', () => {
   const k = { kardexDesde: '2026-09-12', kardexAte: '2026-10-16' }
@@ -120,4 +120,66 @@ test('totaisFormula: produto com quebra na cadeia sai do total da fórmula e é 
   assert.equal(totaisFormula(l, (tipo) => tipo === '04').quebrados.length, 0)
   assert.equal(resumoCmv(l).cmv, 95)
   assert.equal(agruparCmv(l, 'familia').find((x) => x.rotulo === 'Insumos')!.quebra, 2997)
+})
+
+test('custo fora do normal (290): o CMV usa o custo trocado, o cru do Omie fica para o aviso', () => {
+  const zero = { ei: 0, compras: 0, producao: 0, outras_entradas: 0, outras_saidas: 0, ef: 0, sem_custo: 0 }
+  const rpc = [
+    // Suco de Morango Jarra, loja 5, 01–23/10/2026: 74 saídas, 4,5 bilhões pelo Omie
+    { n_cod_prod: 1, ...zero, vendas: 607.28, qtd_vendida: 74, consumo_op: 0, vendas_omie: 4521358032.05, consumo_op_omie: 0, ajustados: 26, sem_referencia: 0, custo_referencia: 8.2069 },
+    // soda artesanal: sem custo confiável (2.488 por unidade, preço 14,90) → zero
+    { n_cod_prod: 2, ...zero, vendas: 0, qtd_vendida: 3, consumo_op: 0, vendas_omie: 7464.56, consumo_op_omie: 0, ajustados: 3, sem_referencia: 3, custo_referencia: null },
+    // normal, sem troca e sem as colunas da 290 (migration ainda não aplicada)
+    { n_cod_prod: 3, ...zero, vendas: 20804.92, qtd_vendida: 321, consumo_op: 0 },
+  ]
+  const meta = new Map([[1, { rotulo: 'Suco de Morango Jarra 730 ML', familia: 'Sucos', tipoCod: '04', tipo: 'Produto Acabado' }],
+    [2, { rotulo: 'SODA ARTESANAL MARACUJA AZUL', familia: 'Drinks', tipoCod: '04', tipo: 'Produto Acabado' }],
+    [3, { rotulo: 'Moqueca de Camarão 600 g', familia: 'Pratos', tipoCod: '04', tipo: 'Produto Acabado' }]])
+  const vendas = [
+    { idProduto: 1, produto: 'Suco', familia: 'Sucos', tipoCod: '04', tipo: 'Produto Acabado', quant: 74, valor: 2123.71 },
+    { idProduto: 2, produto: 'Soda', familia: 'Drinks', tipoCod: '04', tipo: 'Produto Acabado', quant: 3, valor: 44.7 },
+    { idProduto: 3, produto: 'Moqueca', familia: 'Pratos', tipoCod: '04', tipo: 'Produto Acabado', quant: 321, valor: 59216.16 },
+  ]
+  const l = montarLinhasKardex(rpc, vendas, meta)
+  const suco = l.find((x) => x.chave === '1')!
+  assert.equal(suco.cmv, 607.28)
+  assert.equal(suco.cmvOmie, 4521358032.05)
+  const moq = l.find((x) => x.chave === '3')!
+  assert.equal(moq.cmvOmie, moq.cmv)
+  assert.equal(moq.ajustados, 0)
+  const r = resumoCmv(l)
+  assert.equal(r.cmv, 21412.2)
+  const f = custoForaDoNormal(l)
+  assert.deepEqual(f.produtos.map((p) => p.rotulo), ['Suco', 'Soda']) // rótulo da venda (cupom) quando há venda
+  assert.equal(f.movimentos, 29)
+  assert.equal(f.semReferencia, 1)
+  assert.equal(f.faturamentoSemReferencia, 44.7)
+  assert.equal(f.cmvOmie, 4521365496.61)
+  const t = textoCustoForaDoNormal(f, (n) => n.toFixed(2))
+  assert.match(t, /2 produto\(s\) com custo fora do normal/)
+  assert.match(t, /1 sem nenhum custo confiável ficaram com custo zero \(44.70/)
+  assert.equal(textoCustoForaDoNormal(custoForaDoNormal([moq]), String), '')
+  // agrupar por família soma o cru e as contagens
+  const fam = agruparCmv(l, 'familia').find((x) => x.rotulo === 'Drinks')!
+  assert.equal(fam.ajustados, 3)
+  assert.equal(fam.cmvOmie, 7464.56)
+})
+
+test('custo fora do normal (290): troca só no estoque inicial/final aparece no aviso; contagem separa movimento e saldo', () => {
+  const zero = { compras: 0, producao: 0, outras_entradas: 0, outras_saidas: 0, sem_custo: 0, vendas: 0, qtd_vendida: 0, consumo_op: 0 }
+  // Suco com saldo −32 a CMC 194 milhões no fim do período: EF −6,2 bi pelo Omie, −262,62 usado; sem venda trocada
+  const rpc = [{ n_cod_prod: 1, ...zero, ei: 0, ef: -262.62, vendas_omie: 0, consumo_op_omie: 0, ei_omie: 0, ef_omie: -6225057586.84, ajustados: 0, ajustados_estoque: 1, sem_referencia: 0, custo_referencia: 8.2069 }]
+  const l = montarLinhasKardex(rpc, [], new Map([[1, { rotulo: 'Suco', familia: 'Sucos', tipoCod: '04', tipo: 'Produto Acabado' }]]))
+  const f = custoForaDoNormal(l)
+  assert.equal(f.produtos.length, 1)
+  assert.equal(f.movimentos, 0)
+  assert.equal(f.saldosEstoque, 1)
+  assert.equal(f.efOmie, -6225057586.84)
+  const t = textoCustoForaDoNormal(f, (n) => n.toFixed(2))
+  assert.match(t, /1 saldo\(s\) de estoque inicial\/final/)
+  assert.match(t, /estoque final pelo Omie -6225057586.84, usado -262.62/)
+  assert.doesNotMatch(t, /CMV pelo Omie/)
+  // produto com movimento contado mas sem diferença de valor não entra na lista nem na contagem
+  const igual = montarLinhasKardex([{ n_cod_prod: 2, ...zero, ei: 5, ef: 5, vendas_omie: 0, consumo_op_omie: 0, ei_omie: 5, ef_omie: 5, ajustados: 3, ajustados_estoque: 0, sem_referencia: 0, custo_referencia: 1 }], [], new Map())
+  assert.equal(custoForaDoNormal(igual).movimentos, 0)
 })

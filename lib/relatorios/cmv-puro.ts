@@ -13,11 +13,17 @@ export type LinhaCmv = {
   quant: number; faturamento: number; cmv: number; consumo: number
   ei: number; compras: number; producao: number; ef: number; outrasEntradas: number; outrasSaidas: number; semCusto: number; custoSuspeito: number
   quebra: number // quantidade que o saldo do kardex 'pulou' sem movimento no espelho (0 = cadeia íntegra)
+  // custo fora do normal no Omie (migration 290): valores crus do Omie e quantos movimentos tiveram o custo trocado pelo
+  // custo normal do produto (semReferencia = trocados por zero, sem custo confiável). Sem a 290: cru = usado, 0 trocados.
+  cmvOmie: number; consumoOmie: number; eiOmie: number; efOmie: number
+  ajustados: number; ajustadosEstoque: number; semReferencia: number; custoReferencia: number | null
 }
 export type VendaItem = { idProduto: number | null; produto: string; familia: string; tipoCod: string; tipo: string; quant: number; valor: number }
 export type LinhaRpcCmv = {
   n_cod_prod: number; ei: number; compras: number; producao: number; outras_entradas: number; vendas: number
   qtd_vendida: number; consumo_op: number; outras_saidas: number; ef: number; sem_custo: number; quebra?: number
+  vendas_omie?: number; consumo_op_omie?: number; ei_omie?: number; ef_omie?: number
+  ajustados?: number; ajustados_estoque?: number; sem_referencia?: number; custo_referencia?: number | null
 }
 export type MetaCmv = { rotulo: string; familia: string; tipoCod: string; tipo: string }
 
@@ -68,6 +74,7 @@ export function linhaVazia(chave: string, rotulo: string, m?: Partial<MetaCmv>):
   return {
     chave, rotulo, familia: m?.familia ?? 'Sem família', tipoCod: m?.tipoCod ?? '', tipo: m?.tipo ?? 'Não classificado',
     quant: 0, faturamento: 0, cmv: 0, consumo: 0, ei: 0, compras: 0, producao: 0, ef: 0, outrasEntradas: 0, outrasSaidas: 0, semCusto: 0, custoSuspeito: 0, quebra: 0,
+    cmvOmie: 0, consumoOmie: 0, eiOmie: 0, efOmie: 0, ajustados: 0, ajustadosEstoque: 0, semReferencia: 0, custoReferencia: null,
   }
 }
 
@@ -95,6 +102,7 @@ export function montarLinhasEstimado(vendas: VendaItem[], custo: Map<number, num
     if (c != null && preco > 0 && c > preco) { l.custoSuspeito = 1; c = undefined }
     else if (c == null) l.semCusto = 1
     l.cmv = r2((c ?? 0) * l.quant)
+    l.cmvOmie = l.cmv
     l.faturamento = r2(l.faturamento)
     l.quant = r6(l.quant)
   }
@@ -119,6 +127,14 @@ export function montarLinhasKardex(rpc: LinhaRpcCmv[], vendas: VendaItem[], meta
     l.outrasSaidas = Number(r.outras_saidas) || 0
     l.semCusto = Number(r.sem_custo) || 0
     l.quebra = Number(r.quebra) || 0
+    l.cmvOmie = r.vendas_omie == null ? l.cmv : Number(r.vendas_omie) || 0
+    l.consumoOmie = r.consumo_op_omie == null ? l.consumo : Number(r.consumo_op_omie) || 0
+    l.eiOmie = r.ei_omie == null ? l.ei : Number(r.ei_omie) || 0
+    l.efOmie = r.ef_omie == null ? l.ef : Number(r.ef_omie) || 0
+    l.ajustados = Number(r.ajustados) || 0
+    l.ajustadosEstoque = Number(r.ajustados_estoque) || 0
+    l.semReferencia = Number(r.sem_referencia) || 0
+    l.custoReferencia = r.custo_referencia == null ? null : Number(r.custo_referencia)
     m.set(k, l)
   }
   // venda sem nenhuma saída no kardex (ex.: taxa de serviço, produto que não baixa estoque): custo zero, contado
@@ -148,7 +164,8 @@ export function totaisFormula(linhas: LinhaCmv[], incluiTipo: (tipoCod: string) 
   return { semQuebra: r2(semQuebra), foraDoTotal: r2(foraDoTotal), quebrados }
 }
 
-const CAMPOS = ['quant', 'faturamento', 'cmv', 'consumo', 'ei', 'compras', 'producao', 'ef', 'outrasEntradas', 'outrasSaidas', 'semCusto', 'custoSuspeito', 'quebra'] as const
+const CAMPOS = ['quant', 'faturamento', 'cmv', 'consumo', 'ei', 'compras', 'producao', 'ef', 'outrasEntradas', 'outrasSaidas', 'semCusto', 'custoSuspeito', 'quebra', 'cmvOmie', 'consumoOmie', 'eiOmie', 'efOmie', 'ajustados', 'ajustadosEstoque', 'semReferencia'] as const
+const CONTAGENS = new Set<string>(['semCusto', 'custoSuspeito', 'ajustados', 'ajustadosEstoque', 'semReferencia'])
 
 export function agruparCmv(linhas: LinhaCmv[], por: DimCmv): LinhaCmv[] {
   let out: LinhaCmv[]
@@ -159,11 +176,12 @@ export function agruparCmv(linhas: LinhaCmv[], por: DimCmv): LinhaCmv[] {
       const k = por === 'familia' ? l.familia : (l.tipoCod || '_')
       const x = g.get(k) ?? linhaVazia(k, por === 'familia' ? l.familia : l.tipo, { familia: l.familia, tipoCod: l.tipoCod, tipo: l.tipo })
       for (const c of CAMPOS) x[c] += l[c]
+      x.custoReferencia = null
       g.set(k, x)
     }
     out = [...g.values()]
   }
-  for (const l of out) for (const c of CAMPOS) l[c] = c === 'quant' || c === 'quebra' ? r6(l[c]) : c === 'semCusto' || c === 'custoSuspeito' ? l[c] : r2(l[c])
+  for (const l of out) for (const c of CAMPOS) l[c] = c === 'quant' || c === 'quebra' ? r6(l[c]) : CONTAGENS.has(c) ? l[c] : r2(l[c])
   return out.sort((a, b) => b.cmv - a.cmv || b.faturamento - a.faturamento || a.rotulo.localeCompare(b.rotulo, 'pt-BR'))
 }
 
@@ -177,4 +195,63 @@ export function resumoCmv(linhas: LinhaCmv[]): { faturamento: number; cmv: numbe
     faturamento: r2(faturamento), cmv: r2(cmv), margem: r2(faturamento - cmv), consumo: r2(consumo), semCusto, custoSuspeito, faturamentoSuspeito: r2(faturamentoSuspeito),
     margemPct: faturamento > 0 ? Math.round(((faturamento - cmv) / faturamento) * 1000) / 10 : null,
   }
+}
+
+export type CustoForaDoNormal = {
+  /** produtos com algum valor trocado (vendas, consumo, estoque inicial ou final), maior diferença primeiro */
+  produtos: {
+    rotulo: string; quant: number; faturamento: number; cmvOmie: number; cmv: number; consumoOmie: number; consumo: number
+    eiOmie: number; ei: number; efOmie: number; ef: number; movimentos: number; saldosEstoque: number; referencia: number | null; semReferencia: boolean
+  }[]
+  /** movimentos do kardex trocados e saldos de estoque (produto × local, início ou fim) trocados, só dos produtos listados */
+  movimentos: number; saldosEstoque: number
+  cmvOmie: number; cmv: number; consumoOmie: number; consumo: number; eiOmie: number; ei: number; efOmie: number; ef: number
+  /** produtos sem custo confiável (custo trocado por zero) e o faturamento deles */
+  semReferencia: number; faturamentoSemReferencia: number
+}
+
+const difere = (a: number, b: number) => Math.abs(a - b) > 0.005
+
+/** Resumo do custo fora do normal do Omie (migration 290) para o aviso da tela e do Excel. Só olha linhas de produto. */
+export function custoForaDoNormal(linhas: LinhaCmv[]): CustoForaDoNormal {
+  const produtos: CustoForaDoNormal['produtos'] = []
+  const t = { movimentos: 0, saldosEstoque: 0, cmvOmie: 0, cmv: 0, consumoOmie: 0, consumo: 0, eiOmie: 0, ei: 0, efOmie: 0, ef: 0, semReferencia: 0, faturamentoSemReferencia: 0 }
+  for (const l of linhas) {
+    if (l.ajustados + l.ajustadosEstoque <= 0) continue
+    const mudou = difere(l.cmvOmie, l.cmv) || difere(l.consumoOmie, l.consumo) || difere(l.eiOmie, l.ei) || difere(l.efOmie, l.ef)
+    if (!mudou) continue
+    t.movimentos += l.ajustados; t.saldosEstoque += l.ajustadosEstoque
+    t.cmvOmie += l.cmvOmie; t.cmv += l.cmv; t.consumoOmie += l.consumoOmie; t.consumo += l.consumo
+    t.eiOmie += l.eiOmie; t.ei += l.ei; t.efOmie += l.efOmie; t.ef += l.ef
+    const semRef = l.semReferencia > 0 && l.custoReferencia == null
+    if (semRef) { t.semReferencia += 1; t.faturamentoSemReferencia += l.faturamento }
+    produtos.push({
+      rotulo: l.rotulo, quant: l.quant, faturamento: l.faturamento, cmvOmie: l.cmvOmie, cmv: l.cmv, consumoOmie: l.consumoOmie, consumo: l.consumo,
+      eiOmie: l.eiOmie, ei: l.ei, efOmie: l.efOmie, ef: l.ef, movimentos: l.ajustados, saldosEstoque: l.ajustadosEstoque, referencia: l.custoReferencia, semReferencia: semRef,
+    })
+  }
+  const dif = (p: CustoForaDoNormal['produtos'][number]) => Math.abs(p.cmvOmie - p.cmv) + Math.abs(p.consumoOmie - p.consumo) + Math.abs(p.eiOmie - p.ei) + Math.abs(p.efOmie - p.ef)
+  produtos.sort((a, b) => dif(b) - dif(a) || a.rotulo.localeCompare(b.rotulo, 'pt-BR'))
+  return {
+    produtos, movimentos: t.movimentos, saldosEstoque: t.saldosEstoque,
+    cmvOmie: r2(t.cmvOmie), cmv: r2(t.cmv), consumoOmie: r2(t.consumoOmie), consumo: r2(t.consumo),
+    eiOmie: r2(t.eiOmie), ei: r2(t.ei), efOmie: r2(t.efOmie), ef: r2(t.ef),
+    semReferencia: t.semReferencia, faturamentoSemReferencia: r2(t.faturamentoSemReferencia),
+  }
+}
+
+/** Frase do aviso (vazia sem troca). */
+export function textoCustoForaDoNormal(c: CustoForaDoNormal, fmt: (n: number) => string): string {
+  if (!c.produtos.length) return ''
+  const onde = [
+    c.movimentos ? `${c.movimentos.toLocaleString('pt-BR')} movimento(s)` : '',
+    c.saldosEstoque ? `${c.saldosEstoque.toLocaleString('pt-BR')} saldo(s) de estoque inicial/final` : '',
+  ].filter(Boolean).join(' e ')
+  const partes = [`${c.produtos.length.toLocaleString('pt-BR')} produto(s) com custo fora do normal no Omie (${onde}): o custo foi trocado pelo custo normal do produto`]
+  if (difere(c.cmvOmie, c.cmv)) partes.push(`CMV pelo Omie ${fmt(c.cmvOmie)}, usado ${fmt(c.cmv)}`)
+  if (difere(c.consumoOmie, c.consumo)) partes.push(`consumo das OPs pelo Omie ${fmt(c.consumoOmie)}, usado ${fmt(c.consumo)}`)
+  if (difere(c.eiOmie, c.ei)) partes.push(`estoque inicial pelo Omie ${fmt(c.eiOmie)}, usado ${fmt(c.ei)}`)
+  if (difere(c.efOmie, c.ef)) partes.push(`estoque final pelo Omie ${fmt(c.efOmie)}, usado ${fmt(c.ef)}`)
+  if (c.semReferencia > 0) partes.push(`${c.semReferencia.toLocaleString('pt-BR')} sem nenhum custo confiável ficaram com custo zero (${fmt(c.faturamentoSemReferencia)} de faturamento sem custo)`)
+  return partes.join('; ') + '.'
 }

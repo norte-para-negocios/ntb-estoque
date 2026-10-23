@@ -50,7 +50,10 @@ export async function GET(request: Request) {
         { key: 'situacao', label: 'Observação', tipo: 'texto', largura: 28 },
       ]
   const suspeito = textoAvisoSuspeito(r.total.suspeitas.length, r.total.ajusteOmie)
-  const aviso = `${suspeito ? ` · ATENÇÃO: ${suspeito} (lista na aba Custo suspeito)` : ''}${r.erros.length ? ` · ATENÇÃO: falha ao ler ${r.erros.join(', ')}` : ''}${r.locaisSumidos.length ? ` · ATENÇÃO: local(is) fora da última leitura do Omie: ${r.locaisSumidos.join(', ')}` : ''}`
+  const sc = sped ? null : r.saldoConferir
+  const temSaldoConferir = !!sc && (sc.acumulados.length > 0 || sc.inativos.length > 0)
+  const brlX = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  const aviso = `${suspeito ? ` · ATENÇÃO: ${suspeito} (lista na aba Custo suspeito)` : ''}${sc && sc.acumulados.length ? ` · ATENÇÃO: ${brlX(sc.valorAcumulados)} em ${sc.acumulados.length} produtos com saldo maior que tudo o que entrou em 12 meses (aba Saldo a conferir)` : ''}${r.erros.length ? ` · ATENÇÃO: falha ao ler ${r.erros.join(', ')}` : ''}${r.locaisSumidos.length ? ` · ATENÇÃO: local(is) fora da última leitura do Omie: ${r.locaisSumidos.join(', ')}` : ''}`
   const buffer = await gerarPlanilhaMulti([{
     rows, colunas,
     opts: {
@@ -60,7 +63,7 @@ export async function GET(request: Request) {
     },
     nome: sped ? 'Bloco H' : 'Posição',
   }, ...(r.total.suspeitas.length ? [{
-    rows: r.total.suspeitas.map((l) => ({ codigo: l.codigo, descricao: l.descricao, local: l.local, quant: l.quant, cmcOmie: l.cmcOmie, referencia: l.referencia ?? '', valorOmie: l.valorOmie, valor: l.valor })),
+    rows: r.total.suspeitas.map((l) => ({ codigo: l.codigo, descricao: l.descricao, local: l.local, quant: l.quant, cmcOmie: l.cmcOmie, referencia: l.referencia ?? '', valorOmie: l.valorOmie, valor: l.valor, motivo: l.motivo })),
     colunas: [
       { key: 'codigo', label: 'Código', tipo: 'texto', largura: 14 },
       { key: 'descricao', label: 'Produto', tipo: 'texto', largura: 44 },
@@ -70,9 +73,26 @@ export async function GET(request: Request) {
       { key: 'referencia', label: 'Custo de referência', tipo: 'numero', largura: 16 },
       { key: 'valorOmie', label: 'Valor no Omie', tipo: 'moeda', largura: 18, somar: true },
       { key: 'valor', label: 'Valor usado', tipo: 'moeda', largura: 16, somar: true },
+      { key: 'motivo', label: 'Por quê', tipo: 'texto', largura: 60 },
     ] as ColunaExcel[],
-    opts: { titulo: 'Linhas com custo médio suspeito no Omie', subtitulo: 'O total da posição usa o custo de referência do produto nestas linhas. Corrija o custo no Omie.', autoFiltro: true },
+    opts: { titulo: 'Linhas com custo médio errado no Omie', subtitulo: 'O total da posição usa o custo de referência do produto nestas linhas. Corrija o custo (ou a unidade) no Omie.', autoFiltro: true },
     nome: 'Custo suspeito',
+  }] : []), ...(temSaldoConferir && sc ? [{
+    rows: [
+      ...sc.acumulados.map((l) => ({ motivo: 'Saldo maior que tudo o que entrou em 12 meses (notas, produção e ajustes)', codigo: l.codigo, descricao: l.descricao, unidade: l.unidade, saldo: l.saldo, comprado: l.comprado12m ?? '', valor: l.valor })),
+      ...sc.inativos.map((l) => ({ motivo: 'Produto inativo com saldo', codigo: l.codigo, descricao: l.descricao, unidade: l.unidade, saldo: l.saldo, comprado: l.comprado12m ?? '', valor: l.valor })),
+    ],
+    colunas: [
+      { key: 'motivo', label: 'Conferir', tipo: 'texto', largura: 48 },
+      { key: 'codigo', label: 'Código', tipo: 'texto', largura: 14 },
+      { key: 'descricao', label: 'Produto', tipo: 'texto', largura: 44 },
+      { key: 'unidade', label: 'Unidade', tipo: 'texto', largura: 8 },
+      { key: 'saldo', label: 'Saldo no Omie', tipo: 'numero', largura: 14 },
+      { key: 'comprado', label: 'Entrou em 12 meses (notas, produção, ajustes)', tipo: 'numero', largura: 18 },
+      { key: 'valor', label: 'Valor no total', tipo: 'moeda', largura: 16 },
+    ] as ColunaExcel[],
+    opts: { titulo: 'Saldos do Omie a conferir', subtitulo: 'O total soma estes saldos como o Omie. Saldo maior que tudo o que entrou em 12 meses (notas, produção, ajustes) = falta de baixa (consumo, perda, produção). Confira com inventário.', autoFiltro: true },
+    nome: 'Saldo a conferir',
   }] : [])])
   return planilhaResponse(sped ? 'inventario-bloco-h' : 'posicao-estoque', buffer)
 }

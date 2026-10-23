@@ -15,7 +15,7 @@ function agrupar(linhas: Bruto[]): ItemAbc[] {
   const m = new Map<string, ItemAbc>()
   for (const l of linhas) {
     const chave = l.idProduto != null ? String(l.idProduto) : `nome:${l.produto}`
-    const g = m.get(chave) ?? { chave, rotulo: l.produto, codigo: l.codigo ?? '', familia: l.familia, tipo: l.tipo, valor: 0, quant: 0 }
+    const g = m.get(chave) ?? { chave, rotulo: l.produto, codigo: l.codigo ?? '', familia: l.familia, tipo: l.tipo, tipoCod: l.tipoCod, valor: 0, quant: 0 }
     g.valor += l.valor
     g.quant += l.quant
     m.set(chave, g)
