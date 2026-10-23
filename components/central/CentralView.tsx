@@ -19,6 +19,8 @@ import {
   type SecaoPronta,
 } from '@/lib/central/visibilidade'
 import { useCentral, useFavoritos } from './central-estado'
+import { numerosDaCentral } from '@/lib/actions/central-numeros'
+import { destaquesDoModulo, formatarValor, type Numero, type Numeros } from '@/lib/central/numeros'
 
 // A cena 3D é um pedaço à parte (three.js): só baixa quem abre uma central.
 const CenaCentral = dynamic(() => import('./CenaCentral'), { ssr: false })
@@ -44,6 +46,37 @@ function useTelaLarga() {
     return () => mq.removeEventListener('change', ler)
   }, [])
   return larga
+}
+
+// ---------- números do dia ----------
+// Contagens leves (só "quantos"), pedidas a cada vez que a página abre; até chegarem, a tela mostra a descrição.
+function useNumeros(): Numeros {
+  const [numeros, setNumeros] = React.useState<Numeros>({})
+  React.useEffect(() => {
+    let vivo = true
+    numerosDaCentral()
+      .then((n) => vivo && setNumeros(n))
+      .catch(() => {})
+    return () => {
+      vivo = false
+    }
+  }, [])
+  return numeros
+}
+
+function Valor({ n, claro = false, grande = false }: { n: Numero; claro?: boolean; grande?: boolean }) {
+  return (
+    <span className="flex min-w-0 items-baseline gap-1.5">
+      <span
+        className={`num font-semibold tracking-[-0.02em] ${grande ? 'text-[28px]' : 'text-[22px]'} leading-none ${
+          claro ? 'text-white' : n.alerta ? 'text-[var(--tone-warn)]' : 'text-text'
+        }`}
+      >
+        {formatarValor(n.valor)}
+      </span>
+      <span className={`truncate text-[13px] ${claro ? 'text-white/85' : 'text-text-muted'}`}>{n.rotulo}</span>
+    </span>
+  )
 }
 
 function useVariantes() {
@@ -106,61 +139,70 @@ function Titulo({ children, n }: { children: React.ReactNode; n?: number }) {
   )
 }
 
-// ---------- ações (verbos) ----------
-function CartaoAcao({ item, principal, favs, alternar }: { item: ItemPronto; principal: boolean; favs: string[]; alternar: (h: string) => void }) {
+// ---------- telas do módulo (opção B: cada tela com o número do dia) ----------
+function CartaoTela({
+  item,
+  principal,
+  numero,
+  favs,
+  alternar,
+}: {
+  item: ItemPronto
+  principal: boolean
+  numero?: Numero
+  favs: string[]
+  alternar: (h: string) => void
+}) {
   const v = useVariantes()
-  const onMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const r = e.currentTarget.getBoundingClientRect()
-    e.currentTarget.style.setProperty('--mx', `${e.clientX - r.left}px`)
-    e.currentTarget.style.setProperty('--my', `${e.clientY - r.top}px`)
-  }
+  const { Icon } = iconeDoItem(item.label, undefined, item.href)
   return (
-    <motion.div variants={v.entra} className="h-full">
+    <motion.div variants={v.entra} className={`h-full min-w-0 ${principal ? 'sm:col-span-2' : ''}`}>
       <motion.div
-        onPointerMove={onMove}
-        whileHover={v.reduzir ? undefined : { y: -5 }}
-        whileTap={v.reduzir ? undefined : { scale: 0.975 }}
+        whileHover={v.reduzir ? undefined : { y: -3 }}
+        whileTap={v.reduzir ? undefined : { scale: 0.985 }}
         transition={SPRING_UI}
-        className={`group relative h-full overflow-hidden rounded-[22px] ${
+        className={`group relative h-full rounded-[20px] transition-shadow duration-200 ${
           principal
-            ? 'bg-[linear-gradient(135deg,var(--brand-fill),var(--brand-fill-hover))] text-white shadow-[0_14px_34px_-14px_var(--brand-fill)]'
+            ? 'bg-[linear-gradient(135deg,var(--brand-fill),var(--brand-fill-hover))] text-white shadow-[0_14px_34px_-16px_var(--brand-fill)]'
             : 'bg-surface shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)]'
         }`}
       >
-        {/* brilho que segue o mouse */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-          style={{
-            background: principal
-              ? 'radial-gradient(240px circle at var(--mx,50%) var(--my,50%), rgba(255,255,255,0.22), transparent 70%)'
-              : 'radial-gradient(260px circle at var(--mx,50%) var(--my,50%), color-mix(in srgb, var(--brand) 11%, transparent), transparent 70%)',
-          }}
-        />
-        <Link href={item.href!} className={`relative flex h-full min-h-[150px] flex-col justify-between gap-5 rounded-[22px] p-5 pr-12 outline-none focus-visible:ring-2 focus-visible:ring-inset ${principal ? 'focus-visible:ring-white' : 'focus-visible:ring-brand'}`}>
-          <span
-            className={
-              principal
-                ? 'flex size-12 items-center justify-center rounded-[16px] bg-white/20 text-white'
-                : 'contents'
-            }
-          >
-            {principal ? React.createElement(iconeDoItem(item.label, undefined, item.href).Icon, { className: 'size-[23px]', strokeWidth: 1.9 }) : <Bloco label={item.label} href={item.href} tamanho="g" />}
-          </span>
-          <span>
-            <span className="flex items-center gap-2">
-              <span className={`text-[17px] font-semibold leading-tight tracking-[-0.01em] ${principal ? '' : 'text-text'}`}>{item.label}</span>
-              <Etiquetas item={item} claro={principal} />
+        <Link
+          href={item.href!}
+          className={`flex h-full min-h-[112px] flex-col justify-between gap-4 rounded-[20px] p-4 outline-none focus-visible:ring-2 focus-visible:ring-inset ${
+            principal ? 'focus-visible:ring-white' : 'focus-visible:ring-brand'
+          }`}
+        >
+          <span className="flex items-start gap-3 pr-7 [@media(hover:none)]:pr-11">
+            {principal ? (
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-[13px] bg-white/20" aria-hidden>
+                <Icon className="size-[19px]" strokeWidth={1.9} />
+              </span>
+            ) : (
+              <Bloco label={item.label} href={item.href} />
+            )}
+            <span className="min-w-0 flex-1 pt-0.5">
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className={`text-[15px] font-semibold leading-snug ${principal ? '' : 'text-text group-hover:text-brand'}`}>{item.label}</span>
+                {numero?.alerta && <span className="size-2 rounded-full bg-[var(--tone-warn)]" aria-label="Precisa de atenção" />}
+                <Etiquetas item={item} claro={principal} />
+              </span>
+              {(principal || !numero) && item.desc && (
+                <span className={`mt-0.5 line-clamp-2 block text-[13px] leading-snug ${principal ? 'text-white/85' : 'text-text-muted'}`}>{item.desc}</span>
+              )}
             </span>
-            {item.desc && <span className={`mt-1 block text-[13px] leading-snug ${principal ? 'text-white/90' : 'text-text-muted'}`}>{item.desc}</span>}
           </span>
-          <ArrowRight
-            className={`absolute bottom-5 right-5 size-[18px] -translate-x-1 opacity-0 transition duration-300 group-hover:translate-x-0 group-hover:opacity-100 ${principal ? 'text-white' : 'text-brand'}`}
-            strokeWidth={2.2}
-            aria-hidden
-          />
+          {numero ? (
+            <Valor n={numero} claro={principal} grande={principal} />
+          ) : (
+            <ArrowRight
+              className={`size-[17px] self-end opacity-0 transition duration-300 group-hover:opacity-100 ${principal ? 'text-white' : 'text-brand'}`}
+              strokeWidth={2.2}
+              aria-hidden
+            />
+          )}
         </Link>
-        <div className="absolute right-2.5 top-2.5">
+        <div className="absolute right-2 top-2">
           <Estrela href={item.href!} favs={favs} alternar={alternar} />
         </div>
       </motion.div>
@@ -200,8 +242,8 @@ function CartaoConsulta({ item, secao, favs, alternar }: { item: ItemPronto; sec
 
 // ---------- cadastros (uma coisa, vários botões) ----------
 const CLASSE_BOTAO = {
-  novo: 'bg-[color-mix(in_srgb,var(--tone-new)_14%,transparent)] text-[var(--tone-new)] hover:bg-[#15803d] hover:text-white',
-  importar: 'bg-[color-mix(in_srgb,var(--tone-import)_14%,transparent)] text-[var(--tone-import)] hover:bg-[#1d4ed8] hover:text-white',
+  novo: 'bg-brand-fill text-white hover:bg-[var(--brand-fill-hover)]',
+  importar: 'bg-brand-soft text-brand hover:bg-brand-fill hover:text-white',
   padrao: 'bg-surface-2 text-text hover:bg-brand-fill hover:text-white',
 } as const
 
@@ -211,7 +253,7 @@ function CartaoCadastro({ secao }: { secao: SecaoPronta }) {
   const exibir = secao.itens.find((i) => /^exibir/i.test(i.label))
   const Icon = exibir ? iconeDoItem(secao.nome, undefined, exibir.href).Icon : iconeDaSecao(secao.nome)
   return (
-    <motion.section variants={v.entra} className="flex flex-col gap-4 rounded-[22px] bg-surface p-5 shadow-[var(--shadow-sm)]">
+    <motion.section variants={v.entra} className="flex flex-col gap-3.5 rounded-[20px] bg-surface p-4 shadow-[var(--shadow-sm)]">
       <div className="flex items-start gap-3.5">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-[13px] bg-brand-soft text-brand" aria-hidden>
           {React.createElement(Icon, { className: 'size-[19px]', strokeWidth: 1.9 })}
@@ -221,12 +263,12 @@ function CartaoCadastro({ secao }: { secao: SecaoPronta }) {
           {secao.desc && <p className="mt-0.5 text-[13px] text-text-muted">{secao.desc}</p>}
         </div>
       </div>
-      <div className="mt-auto flex flex-wrap gap-2">
+      <div className="mt-auto flex flex-wrap gap-1.5">
         {secao.itens.map((i, k) => (
           <motion.span key={`${i.label}-${k}`} whileTap={v.reduzir ? undefined : { scale: 0.94 }} transition={SPRING_TAP} className="inline-flex">
             <Link
               href={i.href!}
-              className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold u-motion ${CLASSE_BOTAO[varianteBotao(i.label)]}`}
+              className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold u-motion ${CLASSE_BOTAO[varianteBotao(i.label)]}`}
             >
               {rotuloBotao(i.label)}
               <Etiquetas item={i} />
@@ -324,22 +366,15 @@ function BarraFavoritos({ favs, modulos, alternar }: { favs: string[]; modulos: 
 // ---------- faixa "Novo" (criar documentos) ----------
 function BotaoNovo({ item }: { item: ItemPronto }) {
   const v = useVariantes()
-  // Ícone do documento com um "+" no canto (não um "+" igual para todos); um só destaque por tela: o cartão principal.
-  const { Icon, tom } = iconeDoItem(item.label, undefined, item.href)
   return (
     <motion.span variants={v.entra} whileHover={v.reduzir ? undefined : { y: -2 }} whileTap={v.reduzir ? undefined : { scale: 0.96 }} transition={SPRING_UI} className="inline-flex">
       <Link
         href={item.href!}
-        className="inline-flex h-11 items-center gap-2.5 rounded-full bg-surface pl-2 pr-4 text-[14px] font-semibold text-text shadow-[var(--shadow-sm)] u-motion outline-none hover:text-brand hover:shadow-[var(--shadow-md)] focus-visible:ring-2 focus-visible:ring-brand"
+        className="inline-flex h-10 items-center gap-2 rounded-full bg-brand-fill pl-3 pr-4 text-[14px] font-semibold text-white shadow-[var(--shadow-sm)] u-motion outline-none hover:bg-[var(--brand-fill-hover)] focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
       >
-        <span className={`relative flex size-8 items-center justify-center rounded-full ${CLASSE_TOM[tom === 'importar' ? 'importar' : 'novo']}`}>
-          <Icon className="size-[17px]" strokeWidth={1.9} aria-hidden />
-          <span className="absolute -bottom-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full bg-surface text-current shadow-[0_0_0_1.5px_currentColor]" aria-hidden>
-            <Plus className="size-2.5" strokeWidth={3} />
-          </span>
-        </span>
+        <Plus className="size-4" strokeWidth={2.4} aria-hidden />
         {item.label}
-        <Etiquetas item={item} />
+        <Etiquetas item={item} claro />
       </Link>
     </motion.span>
   )
@@ -371,7 +406,7 @@ function Cabecalho({
       <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[34%] [mask-image:linear-gradient(to_right,transparent,black_35%)] md:block">
         {larga && <CenaCentral modulo={id} key={id} />}
       </div>
-      <div className="relative flex min-h-[132px] flex-col gap-4 p-6 md:w-[70%] md:flex-row md:items-center md:justify-between md:gap-8 md:px-8">
+      <div className="relative flex min-h-[112px] flex-col gap-4 p-5 md:w-[70%] md:flex-row md:items-center md:justify-between md:gap-8 md:px-8">
         <div className="min-w-0">
           <h1 className="text-[30px] font-bold leading-[1.05] tracking-[-0.03em] text-text md:text-[36px]">{nome}</h1>
           <p className="mt-1.5 text-[15px] leading-snug text-text-muted">{desc}</p>
@@ -385,7 +420,7 @@ function Cabecalho({
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
               placeholder="Achar uma tela…"
-              className="h-11 w-full rounded-full bg-surface/90 pl-10 pr-4 text-[14px] text-text shadow-[var(--shadow-sm)] outline-none backdrop-blur placeholder:text-text-muted focus-visible:ring-2 focus-visible:ring-brand"
+              className="h-11 w-full rounded-full bg-surface pl-10 pr-4 text-[14px] text-text shadow-[var(--shadow-sm)] ring-1 ring-[var(--border)] outline-none placeholder:text-text-muted focus-visible:ring-2 focus-visible:ring-brand"
             />
           </label>
         )}
@@ -400,6 +435,7 @@ export function CentralModulo({ id }: { id: string }) {
   const [busca, setBusca] = React.useState('')
   const [favs, alternar] = useFavoritos(central?.userId ?? '')
   const v = useVariantes()
+  const numeros = useNumeros()
 
   const modulos = React.useMemo(() => (central ? modulosVisiveis(MODULOS, NAV_ITEMS, central.ctx) : []), [central])
   const base = moduloPorId(id)
@@ -461,14 +497,10 @@ export function CentralModulo({ id }: { id: string }) {
           {(org.principal || org.telas.length > 0) && (
             <section>
               <Titulo n={org.telas.length + (org.principal ? 1 : 0)}>Telas</Titulo>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                {org.principal && (
-                  <div className="md:row-span-2">
-                    <CartaoAcao item={org.principal} principal favs={favs} alternar={alternar} />
-                  </div>
-                )}
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                {org.principal && <CartaoTela item={org.principal} principal numero={numeros[org.principal.href ?? '']} favs={favs} alternar={alternar} />}
                 {org.telas.map((i, k) => (
-                  <CartaoConsulta key={`${i.label}-${k}`} item={i} favs={favs} alternar={alternar} />
+                  <CartaoTela key={`${i.label}-${k}`} item={i} principal={false} numero={numeros[i.href ?? '']} favs={favs} alternar={alternar} />
                 ))}
               </div>
             </section>
@@ -477,7 +509,7 @@ export function CentralModulo({ id }: { id: string }) {
           {org.cadastros.length > 0 && (
             <section>
               <Titulo n={org.cadastros.length}>Cadastros</Titulo>
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {org.cadastros.map((s) => (
                   <CartaoCadastro key={s.nome} secao={s} />
                 ))}
@@ -506,52 +538,78 @@ export function CentralModulo({ id }: { id: string }) {
   )
 }
 
-/** Visão geral: favoritos + um cartão por módulo, com as telas dele. */
+/** Visão geral: favoritos + um cartão por módulo com os números do dia e todas as telas dele. */
 export function CentralGeral() {
   const central = useCentral()
   const [favs, alternar] = useFavoritos(central?.userId ?? '')
   const v = useVariantes()
+  const numeros = useNumeros()
   const modulos = React.useMemo(() => (central ? modulosVisiveis(MODULOS, NAV_ITEMS, central.ctx) : []), [central])
   if (!central) return null
 
+  const cartoes = modulos
+    .map((m) => {
+      const o = organizar(m)
+      return { m, telas: [...(o.principal ? [o.principal] : []), ...o.telas].filter((i) => !!i.href) }
+    })
+    // Módulo sem nenhuma tela nesta loja (ex.: Finanças nas lojas do Omie) não ocupa espaço.
+    .filter(({ telas }) => telas.length > 0)
+
   return (
     <div className="space-y-7">
-      <Cabecalho id="inicio" nome="Visão geral" desc="Todos os módulos e telas do Norte Estoque." />
+      <Cabecalho id="inicio" nome="Visão geral" desc="O que precisa de você hoje, por módulo." />
       <BarraFavoritos favs={favs} modulos={modulos} alternar={alternar} />
-      <motion.div variants={v.lista} initial="oculto" animate="visivel" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {modulos.map((m) => {
+      {/* Colunas (não grade): cada cartão tem a altura do que tem dentro, sem branco sobrando. */}
+      <motion.div variants={v.lista} initial="oculto" animate="visivel" className="gap-4 sm:columns-2 xl:columns-3">
+        {cartoes.map(({ m, telas }) => {
           const Icon = m.icone
-          const o = organizar(m)
-          const telas = [...(o.principal ? [o.principal] : []), ...o.telas]
+          const destaques = destaquesDoModulo(
+            telas.map((i) => i.href!),
+            numeros
+          )
           return (
             <motion.section
               key={m.id}
               variants={v.entra}
-              className="group/m relative flex flex-col rounded-[24px] bg-surface p-5 shadow-[var(--shadow-sm)] transition-shadow duration-200 hover:shadow-[var(--shadow-md)]"
+              className="mb-4 flex break-inside-avoid flex-col gap-4 rounded-[22px] bg-surface p-5 shadow-[var(--shadow-sm)] transition-shadow duration-200 hover:shadow-[var(--shadow-md)]"
             >
-              <Link href={m.href} className="group flex items-start gap-4">
-                <span className="flex size-12 shrink-0 items-center justify-center rounded-[16px] bg-brand-soft text-brand">
-                  <Icon className="size-[23px]" strokeWidth={1.9} />
+              <Link href={m.href} className="group flex items-center gap-3.5">
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-[14px] bg-brand-soft text-brand">
+                  <Icon className="size-[21px]" strokeWidth={1.9} />
                 </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[17px] font-semibold text-text group-hover:text-brand">{m.nome}</span>
-                    <ArrowRight className="ml-auto size-4 -translate-x-1 text-brand opacity-0 transition duration-300 group-hover:translate-x-0 group-hover:opacity-100" aria-hidden />
-                  </div>
-                  <p className="mt-0.5 text-[13px] text-text-muted">{m.desc}</p>
-                </div>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[17px] font-semibold text-text group-hover:text-brand">{m.nome}</span>
+                  <span className="block truncate text-[13px] text-text-muted">{m.desc}</span>
+                </span>
+                <ChevronRight className="size-4 shrink-0 text-text-muted/50 u-motion group-hover:translate-x-0.5 group-hover:text-brand" aria-hidden />
               </Link>
-              <ul className="mt-4 flex flex-wrap gap-1.5">
+              {destaques.length > 0 && (
+                <div className="grid grid-cols-2 gap-2">
+                  {destaques.map((d) => (
+                    <Link key={d.href} href={d.href} className={`min-w-0 rounded-[14px] ${destaques.length === 1 ? 'col-span-2' : ''} bg-surface-2 px-3 py-2.5 u-motion hover:bg-brand-soft`}>
+                      <span className={`num block text-[20px] font-semibold leading-tight tracking-[-0.02em] ${d.alerta ? 'text-[var(--tone-warn)]' : 'text-text'}`}>
+                        {formatarValor(d.valor)}
+                      </span>
+                      <span className="line-clamp-2 block text-[12.5px] leading-snug text-text-muted">{d.rotulo}</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+              <ul className="-mx-1.5 grid">
                 {telas.map((i, k) => {
                   const { Icon: Ic } = iconeDoItem(i.label, undefined, i.href)
+                  const n = numeros[i.href!]
                   return (
                     <li key={`${i.label}-${k}`}>
-                      <Link
-                        href={i.href!}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1.5 text-[12px] font-medium text-text-muted u-motion hover:bg-brand-fill hover:text-white"
-                      >
-                        <Ic className="size-3.5" strokeWidth={2} aria-hidden />
-                        {i.label}
+                      <Link href={i.href!} className="group flex items-center gap-2.5 rounded-[10px] px-1.5 py-1.5 text-[14px] text-text u-motion hover:bg-surface-2 hover:text-brand">
+                        <Ic className="size-4 shrink-0 text-brand" strokeWidth={2} aria-hidden />
+                        <span className="min-w-0 flex-1 truncate">{i.label}</span>
+                        {n?.alerta && n.valor > 0 && (
+                          <span className="num rounded-full bg-[color-mix(in_srgb,var(--tone-warn)_16%,transparent)] px-2 text-[12px] font-semibold text-[var(--tone-warn)]">
+                            {formatarValor(n.valor)}
+                          </span>
+                        )}
+                        <Etiquetas item={i} />
                       </Link>
                     </li>
                   )
