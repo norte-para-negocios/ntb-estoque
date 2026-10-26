@@ -39,3 +39,14 @@ export function resolverCategoriaOrClause(categoriaParam: string | undefined | n
   }
   return orParts.length ? orParts.join(',') : null
 }
+
+// Liga o produto à categoria de compra do Omie pelo tipo do item (mesma lógica do Omie: REV/MAT/USO/ATV).
+// Valor = código da categoria (categorias_contabeis.codigo). Tipos que a loja não compra (acabado, processo…) ficam de fora.
+export const CATEGORIA_POR_TIPO_ITEM: Record<string, string> = {
+  '00': '2.01.01', // Mercadoria para revenda -> Compras de Mercadorias para Revenda
+  '01': '2.01.03', // Matéria-prima -> Compras de Materia Prima
+  '02': '2.01.96', // Embalagem -> Embalagens
+  '07': '2.01.97', // Uso e consumo -> Uso e Consumo
+  '08': '2.01.90', // Ativo imobilizado -> Ativo Imobilizado
+  '10': '2.01.03', // Outros insumos -> Compras de Materia Prima
+}

@@ -7,7 +7,7 @@ import { Tags } from 'lucide-react'
 import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { campoCompra } from '@/components/compras-proprio/SeletorProduto'
-import { setCategoriaContabilNota } from '@/lib/actions/nota-fiscal'
+import { setCategoriaContabilNota, classificarItensPeloProduto } from '@/lib/actions/nota-fiscal'
 import { criarCategoriaContabil } from '@/lib/actions/categoria-contabil'
 
 const NOVA = '__nova'
@@ -59,6 +59,17 @@ export function ClassificarNotaNF({ notaId, categorias, categoriaAtual, mista, e
     })
   }
 
+  function pelosProdutos() {
+    start(async () => {
+      const r = await classificarItensPeloProduto(notaId)
+      if ('error' in r && r.error) { toast.error('Não foi possível classificar pelos produtos', { description: r.error }); return }
+      const x = r as { classificados: number; semRegra: number }
+      if (x.classificados === 0) toast.info('Nenhum item pôde ser classificado pelo produto', { description: 'Escolha a categoria da nota acima.' })
+      else toast.success(`${x.classificados} ${x.classificados === 1 ? 'item classificado' : 'itens classificados'} pelo tipo do produto`, { description: x.semRegra > 0 ? `${x.semRegra} sem regra: escolha a categoria.` : undefined })
+      router.refresh()
+    })
+  }
+
   const semCategorias = categorias.length === 0
   return (
     <section aria-label="Classificar a nota" className="rounded-[var(--r-lg)] bg-surface p-4 u-card">
@@ -72,6 +83,11 @@ export function ClassificarNotaNF({ notaId, categorias, categoriaAtual, mista, e
             {podeCriar && editavel && <option value={NOVA}>+ Nova categoria…</option>}
           </select>
         </div>
+        {editavel && !semCategorias && (
+          <button type="button" className={btnClass('outline')} disabled={pending} onClick={pelosProdutos} title="Cada item recebe a categoria do tipo do produto dele (revenda, matéria-prima, uso e consumo…)">
+            {pending && <Spinner />}Classificar pelos produtos
+          </button>
+        )}
         {criando && (
           <div className="flex min-w-[260px] flex-1 items-end gap-2">
             <div className="flex-1 space-y-1.5">

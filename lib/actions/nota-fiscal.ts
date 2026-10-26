@@ -13,6 +13,7 @@ import {
 } from '@/lib/omie/nota-fiscal'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { statusNF } from '@/lib/nf-status'
+import { CATEGORIA_POR_TIPO_ITEM } from '@/lib/nota-fiscal-categoria'
 import type { LojaOmie } from '@/lib/omie/client'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { confirmarEntradaNF, desfazerEntradaNF, excluirNotaProprio } from '@/lib/actions/nota-fiscal-proprio'
@@ -63,6 +64,39 @@ export async function setCategoriaContabilNota(notaId: number, categoriaId: numb
   if (error) return { error: error.message }
   revalidatePath('/nota-fiscal', 'page')
   return { ok: true as const }
+}
+
+/** Classifica pelo produto: cada item SEM categoria recebe a categoria de compra do tipo do produto dele (revenda, matéria-prima, uso e consumo…). Não mexe em item já classificado. */
+export async function classificarItensPeloProduto(notaId: number) {
+  const __d = viaDesktop('nota-fiscal#classificarItensPeloProduto', classificarItensPeloProduto, [notaId]); if (__d) return __d as never
+  const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Notas Fiscais'))) return { error: 'Sem permissão' }
+  const supabase = createServiceClient()
+  const { data: itens, error } = await supabase
+    .from('nota_fiscal_items').select('id, n_id_produto').eq('nota_fiscal_id', notaId).eq('loja_id', lojaId).is('categoria_contabil_id', null)
+  if (error) return { error: error.message }
+  const comProduto = (itens ?? []).filter((i) => i.n_id_produto != null)
+  if (!comProduto.length) return { ok: true as const, classificados: 0, semRegra: (itens ?? []).length }
+  const [{ data: prods }, { data: cats }] = await Promise.all([
+    supabase.from('produtos').select('codigo_produto, tipo_item').eq('loja_id', lojaId).in('codigo_produto', [...new Set(comProduto.map((i) => i.n_id_produto as number))]),
+    supabase.from('categorias_contabeis').select('id, codigo').eq('loja_id', lojaId).eq('ativa', true).not('codigo', 'is', null),
+  ])
+  const tipoPorProduto = new Map((prods ?? []).map((p) => [Number(p.codigo_produto), p.tipo_item as string | null]))
+  const idPorCodigo = new Map((cats ?? []).map((c) => [c.codigo as string, c.id as number]))
+  const porCategoria = new Map<number, number[]>()
+  for (const i of comProduto) {
+    const cod = CATEGORIA_POR_TIPO_ITEM[tipoPorProduto.get(Number(i.n_id_produto)) ?? '']
+    const catId = cod ? idPorCodigo.get(cod) : undefined
+    if (catId) porCategoria.set(catId, [...(porCategoria.get(catId) ?? []), i.id])
+  }
+  let classificados = 0
+  for (const [catId, ids] of porCategoria) {
+    const { error: e } = await supabase.from('nota_fiscal_items').update({ categoria_contabil_id: catId, updated_at: new Date().toISOString() }).in('id', ids).eq('loja_id', lojaId)
+    if (e) return { error: e.message }
+    classificados += ids.length
+  }
+  revalidatePath('/nota-fiscal', 'page')
+  return { ok: true as const, classificados, semRegra: (itens ?? []).length - classificados }
 }
 
 // Mesmo padrao de lib/actions/ordem-producao.ts:carregarOPdaLoja -- carrega
