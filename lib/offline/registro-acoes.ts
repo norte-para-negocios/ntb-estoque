@@ -207,6 +207,7 @@ export const ACOES: Readonly<Record<string, Acao>> = Object.freeze({
   'nota-fiscal-proprio#buscarNotaPorChaveNF': m37.buscarNotaPorChaveNF as Acao,
   'nota-fiscal#setQuantidadeNFItem': m38.setQuantidadeNFItem as Acao,
   'nota-fiscal#setCategoriaContabilNFItem': m38.setCategoriaContabilNFItem as Acao,
+  'nota-fiscal#setCategoriaContabilNota': m38.setCategoriaContabilNota as Acao,
   'nota-fiscal#manifestarNF': m38.manifestarNF as Acao,
   'nota-fiscal#reverterManifestacaoNF': m38.reverterManifestacaoNF as Acao,
   'nota-fiscal#excluirRecebimentoNF': m38.excluirRecebimentoNF as Acao,

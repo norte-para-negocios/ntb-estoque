@@ -33,6 +33,9 @@ import { tpAmbDaNfe } from '@/lib/nfe-saida/ambiente'
 import { refsDaEntrada } from '@/lib/estoque/nf-entrada'
 import { HistoricoAlteracoes } from '@/components/historico/HistoricoAlteracoes'
 import { AnexosRegistro } from '@/components/anexos/AnexosRegistro'
+import { ClassificarNotaNF } from '@/components/nota-fiscal/ClassificarNotaNF'
+import { AbasNota, type AbaNota } from '@/components/nota-fiscal/AbasNota'
+import { BarraConcluirNF } from '@/components/nota-fiscal/BarraConcluirNF'
 
 export default async function NotaFiscalItensPage({
   params,
@@ -137,6 +140,76 @@ export default async function NotaFiscalItensPage({
     return `${dia}/${m}/${y}`
   }
 
+  const nomesLocais = conferencia ? Object.fromEntries(conferencia.locais.map((l) => [l.codigo, l.descricao])) : undefined
+  const itensNF = (itens ?? []) as ItemNF[]
+  // Categoria da nota = a dos itens quando todos coincidem; itens com categorias diferentes viram "várias".
+  const idsCategoria = new Set(itensNF.map((i) => i.categoria_contabil_id))
+  const categoriaUnica = idsCategoria.size === 1 ? ([...idsCategoria][0] ?? null) : null
+  const categoriaMista = idsCategoria.size > 1 && !idsCategoria.has(null)
+  const faltaCategoria = (categorias ?? []).length > 0 && itensNF.some((i) => i.categoria_contabil_id == null)
+  const podeCriarCategoria = await requirePermissao(lojaId, 'Categorias Contabeis - Criar')
+  const semProdutoOmie = itensNF.filter((i) => i.n_id_produto == null).length
+  const faltasOmie = [
+    ...(semProdutoOmie > 0 ? [`${semProdutoOmie} ${semProdutoOmie === 1 ? 'item sem produto ligado' : 'itens sem produto ligado'}`] : []),
+    ...(faltaCategoria ? ['escolher a categoria da nota'] : []),
+  ]
+  const listaItens = (
+    <ItensNotaFiscal notaId={id} itens={itensNF} categorias={categorias ?? []} ligacoes={proprio ? null : { emissao: nf.d_emissao_nfe ?? null, hoje: hojeBahiaISO() }} nomesLocais={nomesLocais} />
+  )
+  const abas: AbaNota[] = proprio
+    ? [
+        { id: 'itens', label: 'Itens e etiquetas', conteudo: listaItens },
+        { id: 'fiscal', label: 'Fiscal e situação', conteudo: <DetalhesFiscaisNF fullObject={nf.full_object} semOmie={proprio} /> },
+        { id: 'entradas', label: 'Entradas e frete', conteudo: (
+          <>
+            <EntradasGeradasNF lojaId={lojaId} referencias={refsDaEntrada(nf.c_chave_nfe ?? null, conferencia?.compra?.id ?? null, conferencia?.compra?.estornos ?? 0)} />
+            {conferencia?.compra && (
+              <FreteCteNF notaId={Number(id)} ctes={conferencia.ctes}
+                editavel={podeManifestar && conferencia.compra.status !== 'cancelada' && !conferencia.itens.some((i) => i.lancado)} />
+            )}
+          </>
+        ) },
+        ...(pedidoDaNota && conferencia?.compra || devolucoes && conferencia?.compra ? [{ id: 'pedido', label: 'Pedido e devolução', conteudo: (
+          <>
+            {pedidoDaNota && conferencia?.compra && <PedidoDaNotaNF compraId={conferencia.compra.id} dados={pedidoDaNota} podeVincular={podeVincularPedido} />}
+            {devolucoes && conferencia?.compra && <DevolucaoFornecedorNF compraId={conferencia.compra.id} dados={devolucoes} pode={podeDevolver}
+              nfesPorDevolucao={nfesDev ? Object.fromEntries(nfesDev) : null} tpAmb={tpAmbDaNfe()} podeNfe={podeNfe} />}
+          </>
+        ) }] : []),
+        { id: 'sefaz', label: 'SEFAZ', conteudo: (
+          <>
+            {conferencia && nf.c_chave_nfe && podeManifestarSefaz && (
+              <ManifestacaoNF notaId={Number(id)} ciencia={{ em: conferencia.documento?.cienciaEm ?? null, cstat: conferencia.documento?.cienciaCstat ?? null }}
+                manifestacoes={conferencia.manifestacoes} temEntrada={!!conferencia.itens.some((i) => i.lancado) && conferencia.compra?.status !== 'cancelada'} />
+            )}
+            {conferencia && <OrigemSefazNF info={conferencia} />}
+          </>
+        ) },
+        { id: 'historico', label: 'Histórico', conteudo: (
+          <>
+            <HistoricoProcessamentoNF lojaId={lojaId} chave={nf.c_chave_nfe ?? null} compraId={conferencia?.compra?.id ?? null} nomesLocais={nomesLocais} />
+            {conferencia?.compra && <HistoricoAlteracoes lojaId={lojaId} entidade="nota_entrada" ids={[conferencia.compra.id]} />}
+          </>
+        ) },
+        { id: 'anexos', label: 'Anexos e observação', conteudo: (
+          <>
+            {conferencia?.compra && <ObservacaoNF notaId={Number(id)} obs={conferencia.compra.obs} editavel={podeManifestar} />}
+            <AnexosRegistro lojaId={lojaId} entidade="nota_entrada" entidadeId={Number(id)} />
+          </>
+        ) },
+      ]
+    : [
+        { id: 'fiscal', label: 'Fiscal e situação', conteudo: <DetalhesFiscaisNF fullObject={nf.full_object} semOmie={proprio} /> },
+        { id: 'movimentos', label: 'OPs e movimentos', conteudo: (
+          <>
+            <OPsRelacionadasNF lojaId={lojaId} produtoCodes={produtoCodes} dataEmissao={nf.d_emissao_nfe ?? null} />
+            <MovimentosDaNota lojaId={lojaId} numero={nf.c_numero_nfe ?? null} emissao={nf.d_emissao_nfe ?? null} concluida={concluida}
+              itens={itensComLocal.map((i) => ({ n_id_produto: i.n_id_produto, codigo_local_estoque: i.codigo_local_estoque, quantidade: i.quantidade }))} />
+          </>
+        ) },
+        { id: 'historico', label: 'Histórico', conteudo: <HistoricoStatusNF lojaId={lojaId} nIdReceb={nf.n_id_receb ?? null} numeroNFe={nf.c_numero_nfe ?? null} /> },
+      ]
+
   return (
     <div className="space-y-4">
       <DetailHeader
@@ -213,55 +286,28 @@ export default async function NotaFiscalItensPage({
                   podeExcluir={podeExcluir}
                   modoProprio={proprio}
                   temEntrada={!!conferencia?.itens.some((i) => i.lancado) && conferencia.compra?.status !== 'cancelada'}
+                  semConcluir={!proprio}
                 />
               </div>
             )}
           </div>
         }
       />
-      <DetalhesFiscaisNF fullObject={nf.full_object} semOmie={proprio} />
-      {conferencia && (
-        <ConferenciaNF notaId={Number(id)} itens={conferencia.itens} status={conferencia.compra?.status ?? 'pendente'} locais={conferencia.locais} localAtual={conferencia.compra?.codigoLocal ?? null}
-          podeConferir={podeManifestar} alertas={conferencia.sefaz.alertas} conferidaEm={conferencia.compra?.conferidaEm ?? null} />
+      {!cancelada && (
+        <ClassificarNotaNF notaId={Number(id)} categorias={categorias ?? []} categoriaAtual={categoriaUnica} mista={categoriaMista}
+          editavel={!!nfSupabase && (proprio ? podeManifestar : podeManifestar && !concluida)} podeCriar={podeCriarCategoria} />
       )}
-      {pedidoDaNota && conferencia?.compra && <PedidoDaNotaNF compraId={conferencia.compra.id} dados={pedidoDaNota} podeVincular={podeVincularPedido} />}
-      {devolucoes && conferencia?.compra && <DevolucaoFornecedorNF compraId={conferencia.compra.id} dados={devolucoes} pode={podeDevolver}
-        nfesPorDevolucao={nfesDev ? Object.fromEntries(nfesDev) : null} tpAmb={tpAmbDaNfe()} podeNfe={podeNfe} />}
-      <ItensNotaFiscal notaId={id} itens={(itens ?? []) as ItemNF[]} categorias={categorias ?? []} ligacoes={proprio ? null : { emissao: nf.d_emissao_nfe ?? null, hoje: hojeBahiaISO() }}
-        nomesLocais={conferencia ? Object.fromEntries(conferencia.locais.map((l) => [l.codigo, l.descricao])) : undefined} />
 
       {proprio ? (
-        <>
-          <EntradasGeradasNF lojaId={lojaId} referencias={refsDaEntrada(nf.c_chave_nfe ?? null, conferencia?.compra?.id ?? null, conferencia?.compra?.estornos ?? 0)} />
-          {conferencia?.compra && (
-            <FreteCteNF notaId={Number(id)} ctes={conferencia.ctes}
-              editavel={podeManifestar && conferencia.compra.status !== 'cancelada' && !conferencia.itens.some((i) => i.lancado)} />
-          )}
-          {conferencia && nf.c_chave_nfe && podeManifestarSefaz && (
-            <ManifestacaoNF notaId={Number(id)} ciencia={{ em: conferencia.documento?.cienciaEm ?? null, cstat: conferencia.documento?.cienciaCstat ?? null }}
-              manifestacoes={conferencia.manifestacoes} temEntrada={!!conferencia.itens.some((i) => i.lancado) && conferencia.compra?.status !== 'cancelada'} />
-          )}
-          {conferencia?.compra && <ObservacaoNF notaId={Number(id)} obs={conferencia.compra.obs} editavel={podeManifestar} />}
-          {conferencia && <OrigemSefazNF info={conferencia} />}
-          {/* loja própria: histórico de processamento (SEFAZ, conferência, estoque, manifestação) no lugar do HistoricoStatusNF do Omie */}
-          <HistoricoProcessamentoNF lojaId={lojaId} chave={nf.c_chave_nfe ?? null} compraId={conferencia?.compra?.id ?? null}
-            nomesLocais={conferencia ? Object.fromEntries(conferencia.locais.map((l) => [l.codigo, l.descricao])) : undefined} />
-          <AnexosRegistro lojaId={lojaId} entidade="nota_entrada" entidadeId={Number(id)} />
-          {conferencia?.compra && <HistoricoAlteracoes lojaId={lojaId} entidade="nota_entrada" ids={[conferencia.compra.id]} />}
-        </>
+        <ConferenciaNF notaId={Number(id)} itens={conferencia?.itens ?? []} status={conferencia?.compra?.status ?? 'pendente'} locais={conferencia?.locais ?? []} localAtual={conferencia?.compra?.codigoLocal ?? null}
+          podeConferir={podeManifestar} alertas={conferencia?.sefaz.alertas ?? []} conferidaEm={conferencia?.compra?.conferidaEm ?? null} faltaCategoria={faltaCategoria}>
+          <AbasNota abas={abas} />
+        </ConferenciaNF>
       ) : (
         <>
-          <OPsRelacionadasNF lojaId={lojaId} produtoCodes={produtoCodes} dataEmissao={nf.d_emissao_nfe ?? null} />
-
-          <MovimentosDaNota
-            lojaId={lojaId}
-            numero={nf.c_numero_nfe ?? null}
-            emissao={nf.d_emissao_nfe ?? null}
-            concluida={concluida}
-            itens={itensComLocal.map((i) => ({ n_id_produto: i.n_id_produto, codigo_local_estoque: i.codigo_local_estoque, quantidade: i.quantidade }))}
-          />
-
-          <HistoricoStatusNF lojaId={lojaId} nIdReceb={nf.n_id_receb ?? null} numeroNFe={nf.c_numero_nfe ?? null} />
+          {listaItens}
+          <AbasNota abas={abas} />
+          {nfSupabase && <BarraConcluirNF notaId={Number(id)} concluida={concluida} cancelada={cancelada} podeConcluir={podeManifestar} faltas={faltasOmie} />}
         </>
       )}
     </div>

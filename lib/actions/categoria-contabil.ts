@@ -30,7 +30,7 @@ export async function criarCategoriaContabil(dados: CategoriaContabilInput) {
 
   await registrarAuditoria('criar', 'categoria contábil', data.id, dados.nome.trim())
   revalidatePath('/categoria-contabil')
-  return { ok: true }
+  return { ok: true, id: data.id as number }
 }
 
 export async function editarCategoriaContabil(id: number, dados: CategoriaContabilInput) {

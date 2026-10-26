@@ -16,6 +16,7 @@ export function AcoesNF({
   podeExcluir,
   modoProprio = false,
   temEntrada = false,
+  semConcluir = false,
 }: {
   notaId: number
   concluida: boolean
@@ -27,6 +28,8 @@ export function AcoesNF({
   modoProprio?: boolean
   /** Estoque próprio: a nota já tem pelo menos um item lançado no estoque (pode desfazer). */
   temEntrada?: boolean
+  /** O "Concluir" fica na barra fixa da página; aqui só sobram desfazer e excluir. */
+  semConcluir?: boolean
 }) {
   const [pending, startTransition] = useTransition()
   const router = useRouter()
@@ -61,11 +64,11 @@ export function AcoesNF({
     })
   }
 
-  if (!podeManifestar && !podeReverter && !podeExcluir) return null
+  if ((semConcluir || !podeManifestar) && !podeReverter && !podeExcluir) return null
 
   return (
     <div className="flex flex-wrap gap-2">
-      {podeManifestar && !concluida && !cancelada && (
+      {!semConcluir && podeManifestar && !concluida && !cancelada && (
         <button type="button" disabled={pending} onClick={manifestar} className={btnClass('outline')}>
           <CheckCircle2 className="size-4" /> Concluir recebimento
         </button>

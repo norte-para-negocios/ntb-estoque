@@ -45,6 +45,26 @@ export async function setCategoriaContabilNFItem(itemId: number, categoriaId: nu
   return { ok: true as const }
 }
 
+/** Categoria da nota inteira: grava em todos os itens da nota (a classificação continua por item; a nota só dá o valor de partida). */
+export async function setCategoriaContabilNota(notaId: number, categoriaId: number | null) {
+  const __d = viaDesktop('nota-fiscal#setCategoriaContabilNota', setCategoriaContabilNota, [notaId, categoriaId]); if (__d) return __d as never
+  const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Notas Fiscais'))) return { error: 'Sem permissão' }
+  const supabase = createServiceClient()
+  if (categoriaId != null) {
+    const { data: cat } = await supabase.from('categorias_contabeis').select('id').eq('id', categoriaId).eq('loja_id', lojaId).maybeSingle()
+    if (!cat) return { error: 'Categoria não encontrada nesta loja' }
+  }
+  const { error } = await supabase
+    .from('nota_fiscal_items')
+    .update({ categoria_contabil_id: categoriaId, updated_at: new Date().toISOString() })
+    .eq('nota_fiscal_id', notaId)
+    .eq('loja_id', lojaId)
+  if (error) return { error: error.message }
+  revalidatePath('/nota-fiscal', 'page')
+  return { ok: true as const }
+}
+
 // Mesmo padrao de lib/actions/ordem-producao.ts:carregarOPdaLoja -- carrega
 // a nota + a loja (com credenciais Omie) na loja ATUAL, verificando
 // permissao antes.

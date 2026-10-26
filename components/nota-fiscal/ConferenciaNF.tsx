@@ -41,9 +41,13 @@ const ORIGEM: Record<string, string> = { depara: 'de-para do fornecedor', ean: '
 const fmtQtd = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
 const fmtBRL = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-export function ConferenciaNF({ notaId, itens, status, locais, localAtual, podeConferir, alertas, conferidaEm }: {
+export function ConferenciaNF({ notaId, itens, status, locais, localAtual, podeConferir, alertas, conferidaEm, faltaCategoria = false, children }: {
   notaId: number; itens: ItemConferencia[]; status: string; locais: { codigo: number; descricao: string }[]; localAtual: number | null; podeConferir: boolean; alertas: string[]
   conferidaEm?: string | null
+  /** Há item sem categoria: a entrada só é liberada depois de classificar a nota. */
+  faltaCategoria?: boolean
+  /** Entra antes da barra fixa (ela só gruda no rodapé enquanto este bloco está na tela). */
+  children?: React.ReactNode
 }) {
   const router = useRouter()
   const [local, setLocal] = useState<number | ''>(localAtual ?? locais[0]?.codigo ?? '')
@@ -53,6 +57,12 @@ export function ConferenciaNF({ notaId, itens, status, locais, localAtual, podeC
   const temAvisoQueSegura = itens.some((i) => !i.lancado && i.config.movimentaEstoque && i.alertas.some((a) => AVISOS_QUE_SEGURAM.has(a.tipo)))
   const pendentes = itens.filter((i) => !i.lancado)
   const semProduto = pendentes.filter((i) => !i.produto).length
+  const faltas = [
+    ...(semProduto > 0 ? [`ligar ${semProduto} ${semProduto === 1 ? 'produto' : 'produtos'}`] : []),
+    ...(faltaCategoria ? ['escolher a categoria da nota'] : []),
+    ...(local === '' ? ['escolher o local'] : []),
+    ...(temAvisoQueSegura && !conferidaEm && !aceitarAvisos ? ['conferir os avisos de custo'] : []),
+  ]
   const encerrada = status === 'cancelada'
   const editavel = podeConferir && !encerrada
 
@@ -84,7 +94,7 @@ export function ConferenciaNF({ notaId, itens, status, locais, localAtual, podeC
     total: soma((i) => i.fiscal.valorTotalItem ?? i.valorLiquido),
   }
 
-  if (!itens.length) return null
+  if (!itens.length) return children ? <>{children}</> : null
   return (
     <section className="space-y-3" aria-label="Conferência com o cadastro">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -94,29 +104,6 @@ export function ConferenciaNF({ notaId, itens, status, locais, localAtual, podeC
             {pendentes.length === 0 ? 'Todos os itens entraram no estoque.' : semProduto === 0 ? 'Todos os itens têm produto. Confira e dê entrada.' : `${semProduto} ${semProduto === 1 ? 'item ainda sem produto' : 'itens ainda sem produto'}. O sistema aprende cada ligação para as próximas notas do fornecedor.`}
           </p>
         </div>
-        {editavel && pendentes.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2">
-            {conferidaEm
-              ? <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-ok"><CheckCircle2 className="size-4" />Conferida</span>
-              : <>
-                  {temAvisoQueSegura && (
-                    <label className="flex items-center gap-2 text-[13px] text-warn">
-                      <input type="checkbox" className="size-4" checked={aceitarAvisos} onChange={(e) => setAceitarAvisos(e.target.checked)} />Conferi os avisos
-                    </label>
-                  )}
-                  <button type="button" className={btnClass('outline')} onClick={marcarConferida} disabled={conferindo || (temAvisoQueSegura && !aceitarAvisos)}>
-                    {conferindo ? <Spinner /> : <CheckCircle2 className="size-4" />}Marcar como conferida
-                  </button>
-                </>}
-            <select aria-label="Local que recebe a mercadoria" className={`${campoCompra} w-auto`} value={local} onChange={(e) => setLocal(e.target.value ? Number(e.target.value) : '')}>
-              {locais.map((l) => <option key={l.codigo} value={l.codigo}>{l.descricao}</option>)}
-            </select>
-            <button type="button" className={btnClass('primary')} onClick={confirmar} disabled={pending || pendentes.every((i) => !i.produto) || (temAvisoQueSegura && !conferidaEm && !aceitarAvisos)}
-              title={temAvisoQueSegura && !conferidaEm && !aceitarAvisos ? 'Há avisos de custo ou quantidade: confira e marque "Conferi os avisos".' : undefined}>
-              {pending ? <Spinner /> : <PackageCheck className="size-4" />}Confirmar entrada
-            </button>
-          </div>
-        )}
       </div>
 
       {alertas.length > 0 && (
@@ -137,6 +124,44 @@ export function ConferenciaNF({ notaId, itens, status, locais, localAtual, podeC
         <div><dt className="text-text-muted">Frete/despesas</dt><dd className="num font-medium">{fmtBRL(rodape.despesas)}</dd></div>
         <div><dt className="text-text-muted">Total da nota</dt><dd className="num text-[15px] font-semibold">{fmtBRL(rodape.total)}</dd></div>
       </dl>
+
+      {children}
+
+      {editavel && pendentes.length > 0 && (
+        <div className="sticky bottom-0 z-10 -mx-1 rounded-[var(--r-lg)] bg-surface px-4 py-3 shadow-[0_-4px_18px_rgb(0_0_0/0.10)]">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div className="min-w-0 flex-1">
+              {faltas.length === 0
+                ? <p className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-ok"><CheckCircle2 className="size-4" />Tudo certo, pode confirmar a entrada</p>
+                : <><p className="text-[14px] font-semibold text-text">Falta para dar entrada</p>
+                    <p className="inline-flex items-start gap-1.5 text-[13px] text-warn"><CircleAlert className="mt-0.5 size-4 shrink-0" />{faltas.join(' · ')}</p></>}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+
+              {conferidaEm
+                ? <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-ok"><CheckCircle2 className="size-4" />Conferida</span>
+                : <>
+                    {temAvisoQueSegura && (
+                        <label className="flex items-center gap-2 text-[13px] text-warn">
+                        <input type="checkbox" className="size-4" checked={aceitarAvisos} onChange={(e) => setAceitarAvisos(e.target.checked)} />Conferi os avisos
+                      </label>
+                    )}
+                    <button type="button" className={btnClass('outline')} onClick={marcarConferida} disabled={conferindo || (temAvisoQueSegura && !aceitarAvisos)}>
+                      {conferindo ? <Spinner /> : <CheckCircle2 className="size-4" />}Marcar como conferida
+                    </button>
+                  </>}
+              <select aria-label="Local que recebe a mercadoria" className={`${campoCompra} w-auto`} value={local} onChange={(e) => setLocal(e.target.value ? Number(e.target.value) : '')}>
+                {locais.map((l) => <option key={l.codigo} value={l.codigo}>{l.descricao}</option>)}
+              </select>
+              <button type="button" className={btnClass('primary')} onClick={confirmar} disabled={pending || pendentes.every((i) => !i.produto) || faltaCategoria || (temAvisoQueSegura && !conferidaEm && !aceitarAvisos)}
+                title={temAvisoQueSegura && !conferidaEm && !aceitarAvisos ? 'Há avisos de custo ou quantidade: confira e marque "Conferi os avisos".' : undefined}>
+                {pending ? <Spinner /> : <PackageCheck className="size-4" />}Confirmar entrada
+              </button>
+          
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
