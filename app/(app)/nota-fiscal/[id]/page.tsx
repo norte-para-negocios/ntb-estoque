@@ -2,10 +2,11 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { ehDesenvolvedor } from '@/lib/recursos-dev'
 import { notFound } from 'next/navigation'
-import { DetailHeader } from '@/components/ui-kit/DetailHeader'
+import Link from 'next/link'
+import { ChevronLeft } from 'lucide-react'
 import { ItensNotaFiscal, type ItemNF } from '@/components/nota-fiscal/ItensNotaFiscal'
 import { btnClass } from '@/components/ui-kit/Button'
-import { FileText, Download } from 'lucide-react'
+import { FileText, Download, Printer } from 'lucide-react'
 import { complementarNotasFiscais, complementarNotaFiscalItems } from '@/lib/historico-contabo'
 import { statusNF } from '@/lib/nf-status'
 import { FUNDO_CLASSE } from '@/lib/status-cor'
@@ -16,7 +17,6 @@ import { MovimentosDaNota } from '@/components/nota-fiscal/MovimentosDaNota'
 import { hojeBahiaISO } from '@/lib/data-bahia'
 import { HistoricoStatusNF } from '@/components/nota-fiscal/HistoricoStatusNF'
 import { modoDaLoja } from '@/lib/estoque/ledger'
-import { ConferenciaNF } from '@/components/nota-fiscal/ConferenciaNF'
 import { OrigemSefazNF } from '@/components/nota-fiscal/OrigemSefazNF'
 import { EntradasGeradasNF } from '@/components/nota-fiscal/EntradasGeradasNF'
 import { ObservacaoNF } from '@/components/nota-fiscal/ObservacaoNF'
@@ -34,7 +34,14 @@ import { refsDaEntrada } from '@/lib/estoque/nf-entrada'
 import { HistoricoAlteracoes } from '@/components/historico/HistoricoAlteracoes'
 import { AnexosRegistro } from '@/components/anexos/AnexosRegistro'
 import { ClassificarNotaNF } from '@/components/nota-fiscal/ClassificarNotaNF'
-import { AbasNota, type AbaNota } from '@/components/nota-fiscal/AbasNota'
+import { SecoesNota, type SecaoNota } from '@/components/nota-fiscal/SecoesNota'
+import { PainelEntrada } from '@/components/nota-fiscal/PainelEntrada'
+import { MenuNota } from '@/components/nota-fiscal/MenuNota'
+import { ConferenciaNF, PainelEntradaProprio } from '@/components/nota-fiscal/ConferenciaNF'
+import { DialogImprimirEtiqueta } from '@/components/etiqueta/DialogImprimirEtiqueta'
+import { QuantidadeInput } from '@/components/nota-fiscal/QuantidadeInput'
+import { CategoriaContabilSelect } from '@/components/nota-fiscal/CategoriaContabilSelect'
+import { fmtCnpj, resumosDaNota, totaisDaNota, totalDoItem } from '@/lib/nota-fiscal/tela-nota'
 import { BarraConcluirNF } from '@/components/nota-fiscal/BarraConcluirNF'
 
 export default async function NotaFiscalItensPage({
@@ -60,7 +67,7 @@ export default async function NotaFiscalItensPage({
 
   const { data: nfSupabase } = await supabase
     .from('notas_fiscais')
-    .select('id, c_numero_nfe, c_razao_social, c_nome, c_chave_nfe, d_emissao_nfe, n_valor_nfe, c_etapa, n_id_receb, full_object, origem')
+    .select('id, c_numero_nfe, c_serie_nfe, c_razao_social, c_nome, c_cnpj_cpf, c_chave_nfe, d_emissao_nfe, n_valor_nfe, c_etapa, n_id_receb, full_object, origem')
     .eq('id', id)
     .eq('loja_id', lojaId)
     .is('deleted_at', null)
@@ -159,165 +166,207 @@ export default async function NotaFiscalItensPage({
     ...(semProdutoOmie > 0 ? [`${semProdutoOmie} ${semProdutoOmie === 1 ? 'item sem produto ligado' : 'itens sem produto ligado'}`] : []),
     ...(faltaCategoria ? ['escolher a categoria da nota'] : []),
   ]
-  const listaItens = (
-    <ItensNotaFiscal notaId={id} itens={itensNF} categorias={categorias ?? []} ligacoes={proprio ? null : { emissao: nf.d_emissao_nfe ?? null, hoje: hojeBahiaISO() }} nomesLocais={nomesLocais} />
-  )
-  const abas: AbaNota[] = proprio
-    ? [
-        { id: 'itens', label: 'Itens e etiquetas', conteudo: listaItens },
-        { id: 'fiscal', label: 'Fiscal e situação', conteudo: <DetalhesFiscaisNF fullObject={nf.full_object} semOmie={proprio} /> },
-        { id: 'entradas', label: 'Entradas e frete', conteudo: (
+  // Categoria sugerida (loja própria, nota sem categoria): a mais usada nas últimas notas do mesmo fornecedor.
+  let sugestaoCategoria: { id: number; nome: string; motivo: string } | null = null
+  const cnpjForn = (nf as { c_cnpj_cpf?: string | null }).c_cnpj_cpf ?? null
+  if (proprio && faltaCategoria && cnpjForn) {
+    const { data: outras } = await supabase.from('notas_fiscais').select('id').eq('loja_id', lojaId).eq('c_cnpj_cpf', cnpjForn).neq('id', Number(id)).is('deleted_at', null).order('id', { ascending: false }).limit(5)
+    const ids = (outras ?? []).map((o) => o.id)
+    if (ids.length) {
+      const { data: cats } = await supabase.from('nota_fiscal_items').select('categoria_contabil_id').eq('loja_id', lojaId).in('nota_fiscal_id', ids).not('categoria_contabil_id', 'is', null).limit(500)
+      const conta = new Map<number, number>()
+      for (const c of cats ?? []) conta.set(Number(c.categoria_contabil_id), (conta.get(Number(c.categoria_contabil_id)) ?? 0) + 1)
+      const [melhor] = [...conta.entries()].sort((a, b) => b[1] - a[1])
+      const cat = melhor && (categorias ?? []).find((c) => c.id === melhor[0])
+      if (cat) sugestaoCategoria = { id: cat.id, nome: cat.nome, motivo: `É a categoria das últimas notas deste fornecedor (${ids.length === 1 ? '1 nota' : `${ids.length} notas`}).` }
+    }
+  }
+
+  const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  const somaItens = itensNF.reduce((a, i) => a + (totalDoItem(i) ?? 0), 0)
+  const totais = totaisDaNota(nf.full_object, nf.n_valor_nfe != null ? Number(nf.n_valor_nfe) : null, somaItens)
+  const nomeFornecedor = nf.c_razao_social || nf.c_nome || null
+  const resumos = resumosDaNota(nf.full_object, nomeFornecedor, proprio)
+  const nomesCategoriaOmie = Object.fromEntries((categorias ?? []).filter((c) => c.codigo).map((c) => [c.codigo as string, c.nome]))
+  const base = `/nota-fiscal/${id}/imprimir`
+  const blocoCategoria = !cancelada ? (
+    <ClassificarNotaNF compacto notaId={Number(id)} categorias={categorias ?? []} categoriaAtual={categoriaUnica} mista={categoriaMista} categoriaOmie={categoriaOmie}
+      editavel={!!nfSupabase && (proprio ? podeManifestar : podeManifestar && !concluida)} podeCriar={podeCriarCategoria} sugestao={sugestaoCategoria} />
+  ) : null
+
+  // Loja própria: etiqueta e categoria de cada item ficam na linha dele (o item da nota casa pela linha = n_sequencia).
+  const itemPorLinha = new Map(itensNF.map((i) => [Number((i as { n_sequencia?: number }).n_sequencia ?? 0), i]))
+  const extrasProprio = conferencia
+    ? Object.fromEntries(conferencia.itens.map((ci) => {
+        const it = itemPorLinha.get(ci.linha)
+        if (!it) return [ci.linha, null]
+        return [ci.linha, (
+          <details key={ci.linha} className="text-[13px] [&[open]>summary]:mb-2">
+            <summary className="cursor-pointer list-none text-text-muted hover:text-text [&::-webkit-details-marker]:hidden">Etiqueta e categoria deste item ›</summary>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-[var(--r-md)] bg-surface-2 p-3">
+              {(categorias ?? []).length > 0 && <span className="inline-flex items-center gap-2 text-text-muted">Categoria <CategoriaContabilSelect itemId={it.id} valorInicial={it.categoria_contabil_id} categorias={categorias ?? []} /></span>}
+              <span className="inline-flex items-center gap-2 text-text-muted">Qtd para etiqueta <QuantidadeInput itemId={it.id} valorInicial={it.quantidade} /></span>
+              <DialogImprimirEtiqueta href={`${base}?itens=${it.id}`} trigger={<button type="button" className={btnClass('outline')}><Printer className="size-4" />Imprimir etiqueta</button>} />
+            </div>
+          </details>
+        )]
+      }))
+    : undefined
+
+  const pf = (parte: Parameters<typeof DetalhesFiscaisNF>[0]['so']) => <DetalhesFiscaisNF fullObject={nf.full_object} semOmie={proprio} so={parte} />
+  const comuns = {
+    fornecedor: { id: 'fornecedor', titulo: 'Fornecedor', resumo: resumos.fornecedor, conteudo: pf('fornecedor') },
+    transporte: resumos.transporte ? { id: 'transporte', titulo: 'Transporte', resumo: resumos.transporte, conteudo: pf('transporte') } : null,
+    impostos: { id: 'impostos', titulo: 'Impostos e totais', resumo: resumos.impostos, conteudo: <>{pf('totais')}{pf('impostos')}{pf('adicionais')}</> },
+    parcelas: resumos.parcelas ? { id: 'parcelas', titulo: 'Parcelas', resumo: resumos.parcelas, conteudo: pf('parcelas') } : null,
+    situacao: resumos.situacao ? { id: 'situacao', titulo: proprio ? 'Situação' : 'Situação no Omie', resumo: resumos.situacao, conteudo: pf('situacao') } : null,
+  }
+  const secoes: SecaoNota[] = proprio ? [
+        comuns.fornecedor,
+        ...(comuns.transporte ? [comuns.transporte] : []),
+        { id: 'frete', titulo: 'Frete (CT-e) e entradas', resumo: conferencia?.ctes.length ? `${conferencia.ctes.length} CT-e ligado${conferencia.ctes.length > 1 ? 's' : ''}` : 'Sem CT-e · entradas no estoque geradas por esta nota', conteudo: (
           <>
-            <EntradasGeradasNF lojaId={lojaId} referencias={refsDaEntrada(nf.c_chave_nfe ?? null, conferencia?.compra?.id ?? null, conferencia?.compra?.estornos ?? 0)} />
             {conferencia?.compra && (
               <FreteCteNF notaId={Number(id)} ctes={conferencia.ctes}
                 editavel={podeManifestar && conferencia.compra.status !== 'cancelada' && !conferencia.itens.some((i) => i.lancado)} />
             )}
+            <EntradasGeradasNF lojaId={lojaId} referencias={refsDaEntrada(nf.c_chave_nfe ?? null, conferencia?.compra?.id ?? null, conferencia?.compra?.estornos ?? 0)} />
           </>
         ) },
-        ...(pedidoDaNota && conferencia?.compra || devolucoes && conferencia?.compra ? [{ id: 'pedido', label: 'Pedido e devolução', conteudo: (
-          <>
-            {pedidoDaNota && conferencia?.compra && <PedidoDaNotaNF compraId={conferencia.compra.id} dados={pedidoDaNota} podeVincular={podeVincularPedido} />}
-            {devolucoes && conferencia?.compra && <DevolucaoFornecedorNF compraId={conferencia.compra.id} dados={devolucoes} pode={podeDevolver}
-              nfesPorDevolucao={nfesDev ? Object.fromEntries(nfesDev) : null} tpAmb={tpAmbDaNfe()} podeNfe={podeNfe} />}
-          </>
-        ) }] : []),
-        { id: 'sefaz', label: 'SEFAZ', conteudo: (
+        comuns.impostos,
+        ...(comuns.parcelas ? [comuns.parcelas] : []),
+        { id: 'sefaz', titulo: 'SEFAZ', resumo: conferencia?.documento?.cienciaEm ? 'Ciência da operação enviada · manifestação e origem da nota' : 'Manifestação e origem da nota', conteudo: (
           <>
             {conferencia && nf.c_chave_nfe && podeManifestarSefaz && (
               <ManifestacaoNF notaId={Number(id)} ciencia={{ em: conferencia.documento?.cienciaEm ?? null, cstat: conferencia.documento?.cienciaCstat ?? null }}
                 manifestacoes={conferencia.manifestacoes} temEntrada={!!conferencia.itens.some((i) => i.lancado) && conferencia.compra?.status !== 'cancelada'} />
             )}
             {conferencia && <OrigemSefazNF info={conferencia} />}
+            {pf('situacao')}
           </>
         ) },
-        { id: 'historico', label: 'Histórico', conteudo: (
+        ...(pedidoDaNota && conferencia?.compra || devolucoes && conferencia?.compra ? [{ id: 'pedido', titulo: 'Pedido e devolução', resumo: pedidoDaNota ? 'Pedido de compra desta nota' : 'Devolver itens ao fornecedor', conteudo: (
+          <>
+            {pedidoDaNota && conferencia?.compra && <PedidoDaNotaNF compraId={conferencia.compra.id} dados={pedidoDaNota} podeVincular={podeVincularPedido} />}
+            {devolucoes && conferencia?.compra && <DevolucaoFornecedorNF compraId={conferencia.compra.id} dados={devolucoes} pode={podeDevolver}
+              nfesPorDevolucao={nfesDev ? Object.fromEntries(nfesDev) : null} tpAmb={tpAmbDaNfe()} podeNfe={podeNfe} />}
+          </>
+        ) }] : []),
+        { id: 'historico', titulo: 'Histórico', resumo: 'O que aconteceu com esta nota e quem mexeu', conteudo: (
           <>
             <HistoricoProcessamentoNF lojaId={lojaId} chave={nf.c_chave_nfe ?? null} compraId={conferencia?.compra?.id ?? null} nomesLocais={nomesLocais} />
             {conferencia?.compra && <HistoricoAlteracoes lojaId={lojaId} entidade="nota_entrada" ids={[conferencia.compra.id]} />}
           </>
         ) },
-        { id: 'anexos', label: 'Anexos e observação', conteudo: (
+        { id: 'anexos', titulo: 'Anexos e observação', resumo: conferencia?.compra?.obs ? `Observação: ${conferencia.compra.obs}` : 'Arquivos e observação da nota', conteudo: (
           <>
             {conferencia?.compra && <ObservacaoNF notaId={Number(id)} obs={conferencia.compra.obs} editavel={podeManifestar} />}
             <AnexosRegistro lojaId={lojaId} entidade="nota_entrada" entidadeId={Number(id)} />
           </>
         ) },
-      ]
-    : [
-        { id: 'fiscal', label: 'Fiscal e situação', conteudo: <DetalhesFiscaisNF fullObject={nf.full_object} semOmie={proprio} /> },
-        { id: 'movimentos', label: 'OPs e movimentos', conteudo: (
+      ] : [
+        comuns.fornecedor,
+        ...(comuns.transporte ? [comuns.transporte] : []),
+        comuns.impostos,
+        ...(comuns.parcelas ? [comuns.parcelas] : []),
+        ...(comuns.situacao ? [comuns.situacao] : []),
+        { id: 'movimentos', titulo: 'OPs e movimentos', resumo: concluida ? 'Entradas no estoque e OPs ligadas aos produtos' : 'OPs ligadas aos produtos desta nota', conteudo: (
           <>
             <OPsRelacionadasNF lojaId={lojaId} produtoCodes={produtoCodes} dataEmissao={nf.d_emissao_nfe ?? null} />
             <MovimentosDaNota lojaId={lojaId} numero={nf.c_numero_nfe ?? null} emissao={nf.d_emissao_nfe ?? null} concluida={concluida}
               itens={itensComLocal.map((i) => ({ n_id_produto: i.n_id_produto, codigo_local_estoque: i.codigo_local_estoque, quantidade: i.quantidade }))} />
           </>
         ) },
-        { id: 'historico', label: 'Histórico', conteudo: <HistoricoStatusNF lojaId={lojaId} nIdReceb={nf.n_id_receb ?? null} numeroNFe={nf.c_numero_nfe ?? null} /> },
+        { id: 'historico', titulo: 'Histórico', resumo: 'Etapas da nota no Omie', conteudo: <HistoricoStatusNF lojaId={lojaId} nIdReceb={nf.n_id_receb ?? null} numeroNFe={nf.c_numero_nfe ?? null} /> },
       ]
+
+  const numero = String(nf.c_numero_nfe ?? '').replace(/^0+(?=\d)/, '')
+  const serie = (nf as { c_serie_nfe?: string | null }).c_serie_nfe
+  const corChip = statusInfo ? FUNDO_CLASSE[statusInfo.tom] : ''
 
   return (
     <div className="space-y-4">
-      <DetailHeader
-        href="/nota-fiscal"
-        title={`NFe ${nf.c_numero_nfe}`}
-        breadcrumb={[
-          { label: 'Notas Fiscais', href: '/nota-fiscal' },
-          { label: `NFe ${nf.c_numero_nfe}` },
-        ]}
-        meta={
-          <div className="space-y-1">
-            {(nf.c_razao_social || nf.c_nome) && (
-              <p className="text-[15px] text-text-muted">{nf.c_razao_social || nf.c_nome}</p>
-            )}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-text-muted">
-              {nf.d_emissao_nfe && <span>Emissão: <span className="num">{fmtData(nf.d_emissao_nfe)}</span></span>}
-              {nf.n_valor_nfe != null && (
-                <span>Valor: <span className="num font-medium text-text">{Number(nf.n_valor_nfe).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></span>
-              )}
-              {statusInfo && (
-                <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-medium text-text">
-                  <span className={`size-2 shrink-0 rounded-full ${FUNDO_CLASSE[statusInfo.tom]}`} aria-hidden />
-                  <span title={`Etapa ${nf.c_etapa ?? '?'}`}>{statusInfo.label.replace(/ \(etapa .*\)$/, '')}</span>
-                </span>
-              )}
-            </div>
-            {nf.c_chave_nfe && (
-              // Chave de acesso = código: continua em mono, quebrada em grupos de 4
-              // só visualmente (spans inline-block, sem espaço real no texto --
-              // copiar a chave continua dando os 44 dígitos colados).
-              <p className="font-mono text-[11px] leading-relaxed text-text-muted/80" title="Chave de acesso">
-                {(nf.c_chave_nfe.match(/.{1,4}/g) ?? [nf.c_chave_nfe]).map((g: string, i: number) => (
-                  <span key={i} className="mr-[0.5em] inline-block">{g}</span>
-                ))}
-              </p>
-            )}
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-            {nf.n_id_receb && (
-              <>
-                <a
-                  href={`/api/nota-fiscal/${nf.id}/xml`}
-                  download
-                  className={btnClass('outline')}
-                  title="Baixar XML da NF-e"
-                >
-                  <Download className="size-4" /> XML
-                </a>
-                {!proprio && <a
-                  href={`/api/nota-fiscal/${nf.id}/danfe`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={btnClass('outline')}
-                  title="Abrir DANFE em PDF"
-                >
-                  <FileText className="size-4" /> DANFE
-                </a>}
-              </>
-            )}
-            {/* So renderiza os botoes de acao quando a nota veio do Supabase
-                "quente" de verdade (nfSupabase, ANTES do fallback pro
-                Contabo). A lista mescla ids de duas fontes que nao
-                compartilham o mesmo espaco de ids -- um id vindo do Contabo
-                pode, por coincidencia, corresponder a uma nota DIFERENTE no
-                Supabase. As Server Actions sempre buscam na mesma tabela
-                quente por id+loja_id, entao so podem ser chamadas com
-                seguranca quando foi essa busca que encontrou a nota. */}
-            {nfSupabase && (
-              <>
-                <AcoesNF
-                  notaId={Number(id)}
-                  concluida={concluida}
-                  cancelada={cancelada}
-                  podeManifestar={podeManifestar && !proprio}
-                  podeReverter={podeReverter}
-                  podeExcluir={podeExcluir}
-                  modoProprio={proprio}
-                  temEntrada={!!conferencia?.itens.some((i) => i.lancado) && conferencia.compra?.status !== 'cancelada'}
-                  semConcluir={!proprio}
-                />
-              </>
-            )}
-            </div>
-          </div>
-        }
-      />
-      {!cancelada && (
-        <ClassificarNotaNF notaId={Number(id)} categorias={categorias ?? []} categoriaAtual={categoriaUnica} mista={categoriaMista} categoriaOmie={categoriaOmie}
-          editavel={!!nfSupabase && (proprio ? podeManifestar : podeManifestar && !concluida)} podeCriar={podeCriarCategoria} />
-      )}
+      <nav className="flex items-center gap-1 text-[13px] text-text-muted" aria-label="Caminho">
+        <Link href="/nota-fiscal" className="inline-flex items-center gap-0.5 hover:text-text"><ChevronLeft className="size-4" />Notas Fiscais</Link>
+      </nav>
 
-      {proprio ? (
-        <ConferenciaNF notaId={Number(id)} itens={conferencia?.itens ?? []} status={conferencia?.compra?.status ?? 'pendente'} locais={conferencia?.locais ?? []} localAtual={conferencia?.compra?.codigoLocal ?? null}
-          podeConferir={podeManifestar} alertas={conferencia?.sefaz.alertas ?? []} conferidaEm={conferencia?.compra?.conferidaEm ?? null} faltaCategoria={faltaCategoria}>
-          <AbasNota abas={abas} />
-        </ConferenciaNF>
-      ) : (
-        <>
-          {listaItens}
-          <AbasNota abas={abas} />
-          {nfSupabase && <BarraConcluirNF notaId={Number(id)} concluida={concluida} cancelada={cancelada} podeConcluir={podeManifestar} faltas={faltasOmie} resumo={`O recebimento é concluído no Omie${nf.n_valor_nfe != null ? `: entra no estoque e gera a conta a pagar de ${Number(nf.n_valor_nfe).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ''}.`} />}
-        </>
-      )}
+      <header className="flex flex-wrap items-start gap-4">
+        <div className="min-w-0 flex-1">
+          <h1 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[28px] font-bold leading-tight tracking-[-0.02em] text-text">
+            NF nº {numero}
+            {serie && <span className="text-[15px] font-medium text-text-muted">série {serie}</span>}
+            {statusInfo && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-surface px-2.5 py-1 text-[13px] font-semibold text-text shadow-[var(--shadow-sm)]" title={`Etapa ${nf.c_etapa ?? '?'}`}>
+                <span className={`size-2 rounded-full ${corChip}`} aria-hidden />{statusInfo.label.replace(/ \(etapa .*\)$/, '')}
+              </span>
+            )}
+          </h1>
+          {nomeFornecedor && (
+            <p className="mt-1 text-[15px] font-medium text-text">{nomeFornecedor}{cnpjForn && <span className="font-normal text-text-muted"> · CNPJ <span className="num">{fmtCnpj(cnpjForn)}</span></span>}</p>
+          )}
+          <p className="mt-0.5 flex flex-wrap gap-x-4 text-[13.5px] text-text-muted">
+            {nf.d_emissao_nfe && <span>Emissão <span className="num font-medium text-text">{fmtData(nf.d_emissao_nfe)}</span></span>}
+            <span>Valor <span className="num font-medium text-text">{brl(totais.total)}</span></span>
+            <span>{itensNF.length} {itensNF.length === 1 ? 'item' : 'itens'}</span>
+          </p>
+        </div>
+        <MenuNota chave={nf.c_chave_nfe ?? null}>
+          {nf.n_id_receb && <a href={`/api/nota-fiscal/${nf.id}/xml`} download className={btnClass('ghost')}><Download className="size-4" />Baixar XML</a>}
+          {nf.n_id_receb && !proprio && <a href={`/api/nota-fiscal/${nf.id}/danfe`} target="_blank" rel="noopener noreferrer" className={btnClass('ghost')}><FileText className="size-4" />Abrir DANFE</a>}
+          {itensNF.length > 0 && <DialogImprimirEtiqueta href={base} trigger={<button type="button" className={btnClass('ghost')}><Printer className="size-4" />Etiquetas de todos os itens</button>} />}
+          {/* Só com a nota do banco principal: ids do Contabo podem apontar para outra nota (as ações buscam por id + loja). */}
+          {nfSupabase && (
+            <AcoesNF
+              notaId={Number(id)}
+              concluida={concluida}
+              cancelada={cancelada}
+              podeManifestar={podeManifestar && !proprio}
+              podeReverter={podeReverter}
+              podeExcluir={podeExcluir}
+              modoProprio={proprio}
+              temEntrada={!!conferencia?.itens.some((i) => i.lancado) && conferencia.compra?.status !== 'cancelada'}
+              semConcluir={!proprio}
+            />
+          )}
+        </MenuNota>
+      </header>
+
+      {/* Celular: itens, painel de entrada, mais informações. Computador: painel fixo à direita dos dois. */}
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0 lg:col-start-1">
+          {proprio && conferencia?.itens.length ? (
+            <ConferenciaNF notaId={Number(id)} itens={conferencia.itens} status={conferencia.compra?.status ?? 'pendente'} locais={conferencia.locais}
+              podeConferir={podeManifestar} alertas={conferencia.sefaz.alertas} extras={extrasProprio} />
+          ) : (
+            <ItensNotaFiscal notaId={id} itens={itensNF} categorias={categorias ?? []} ligacoes={proprio ? null : { emissao: nf.d_emissao_nfe ?? null, hoje: hojeBahiaISO() }}
+              nomesLocais={nomesLocais} categoriaNota={codCategOmie} nomesCategoriaOmie={nomesCategoriaOmie} />
+          )}
+        </div>
+
+        {proprio && conferencia?.itens.length ? (
+          <PainelEntradaProprio notaId={Number(id)} itens={conferencia.itens} status={conferencia.compra?.status ?? 'pendente'} locais={conferencia.locais} localAtual={conferencia.compra?.codigoLocal ?? null}
+            podeConferir={podeManifestar} conferidaEm={conferencia.compra?.conferidaEm ?? null} faltaCategoria={faltaCategoria} categoria={blocoCategoria} totais={totais} />
+        ) : (
+          <PainelEntrada
+            titulo={cancelada ? 'Nota cancelada' : concluida ? 'Entrada feita' : proprio ? 'Entrada no estoque' : 'Concluir no Omie'}
+            passos={concluida || cancelada || proprio ? [] : [
+              { ok: semProdutoOmie === 0, texto: semProdutoOmie === 0 ? 'Todos os itens com produto no Omie' : `${semProdutoOmie} ${semProdutoOmie === 1 ? 'item sem produto ligado' : 'itens sem produto ligado'} no Omie` },
+              { ok: !faltaCategoria, texto: categoriaOmie ? 'Categoria da nota vem do Omie' : faltaCategoria ? 'Escolher a categoria da nota' : 'Categoria da nota escolhida' },
+            ]}
+            totais={totais}
+            rodape={nfSupabase && !proprio ? (
+              <BarraConcluirNF notaId={Number(id)} concluida={concluida} cancelada={cancelada} podeConcluir={podeManifestar} pronto={faltasOmie.length === 0}
+                resumo={`Conclui o recebimento no Omie: os itens entram no estoque e o Omie cria a conta a pagar de ${brl(totais.total)}.`} />
+            ) : null}
+          >
+            {blocoCategoria}
+          </PainelEntrada>
+        )}
+
+        <div className="min-w-0 lg:col-start-1">
+          <SecoesNota secoes={secoes} />
+        </div>
+      </div>
     </div>
   )
 }

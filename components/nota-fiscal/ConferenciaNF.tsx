@@ -11,6 +11,7 @@ import { buscarProdutosNF, confirmarEntradaNF, criarProdutoParaNF, definirLoteIt
 import { formatCustoUnit } from '@/lib/num-br'
 import type { AlertaItem } from '@/lib/estoque/nf-item-regras'
 import { EditorItemNF } from './EditorItemNF'
+import { PainelEntrada, type PassoEntrada } from './PainelEntrada'
 
 export type ItemConferencia = {
   id: number; linha: number; descricao: string; cProd: string | null; unidade: string | null; quantidade: number; valorLiquido: number
@@ -37,17 +38,91 @@ export type ItemConferencia = {
 /** Avisos que só passam com "Conferi os avisos" (mesma regra de decidirConferencia no servidor). */
 const AVISOS_QUE_SEGURAM = new Set<AlertaItem['tipo']>(['fator_suspeito', 'custo_fora', 'valor_zero'])
 
-const ORIGEM: Record<string, string> = { depara: 'de-para do fornecedor', ean: 'código de barras', descricao: 'nome parecido', manual: 'ligado por você' }
+const ORIGEM: Record<string, string> = { depara: 'mesmo código nas notas anteriores do fornecedor', ean: 'mesmo código de barras', descricao: 'nome parecido', manual: 'ligado por você' }
 const fmtQtd = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
 const fmtBRL = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-export function ConferenciaNF({ notaId, itens, status, locais, localAtual, podeConferir, alertas, conferidaEm, faltaCategoria = false, children }: {
-  notaId: number; itens: ItemConferencia[]; status: string; locais: { codigo: number; descricao: string }[]; localAtual: number | null; podeConferir: boolean; alertas: string[]
+/** Itens que ainda seguram a entrada (mesma conta do painel e do servidor). */
+function faltasDaEntrada(itens: ItemConferencia[], faltaCategoria: boolean, semLocal: boolean, avisosAbertos: boolean) {
+  const semProduto = itens.filter((i) => !i.lancado && !i.produto).length
+  return [
+    ...(semProduto > 0 ? [`Ligar ${semProduto} ${semProduto === 1 ? 'produto' : 'produtos'} ao cadastro`] : []),
+    ...(faltaCategoria ? ['Escolher a categoria da nota'] : []),
+    ...(semLocal ? ['Escolher o local'] : []),
+    ...(avisosAbertos ? ['Conferir os avisos de custo'] : []),
+  ]
+}
+
+/**
+ * Itens da nota da loja própria (27/10/2026): uma lista só (antes eram "Conferência" + a tabela de itens). O que o
+ * sistema ligou sozinho (de-para do fornecedor, código de barras) aparece como tal; o que ele só sugere tem "Usar"
+ * e, de uma vez, "Aceitar as sugestões".
+ */
+export function ConferenciaNF({ itens, status, locais, podeConferir, alertas, extras }: {
+  notaId: number; itens: ItemConferencia[]; status: string; locais: { codigo: number; descricao: string }[]; podeConferir: boolean; alertas: string[]
+  /** Por linha da nota: etiqueta e categoria do item (vêm da página, que tem o item da nota). */
+  extras?: Record<number, React.ReactNode>
+}) {
+  const router = useRouter()
+  const [aceitando, startAceitar] = useTransition()
+  const encerrada = status === 'cancelada'
+  const editavel = podeConferir && !encerrada
+  const pendentes = itens.filter((i) => !i.lancado)
+  const semProduto = pendentes.filter((i) => !i.produto)
+  const comSugestao = semProduto.filter((i) => i.sugestao)
+  const sozinho = itens.filter((i) => i.produto && (i.matchOrigem === 'depara' || i.matchOrigem === 'ean')).length
+
+  function aceitarSugestoes() {
+    startAceitar(async () => {
+      let ok = 0
+      for (const i of comSugestao) {
+        const r = await vincularItemNF(i.id, i.sugestao!.codigoProduto, 1)
+        if ('error' in r) { toast.error(`Parei em "${i.descricao}"`, { description: r.error }); break }
+        ok++
+      }
+      if (ok) toast.success(`${ok} ${ok === 1 ? 'item ligado' : 'itens ligados'} pela sugestão`, { description: 'Confira: se algum estiver errado, use "Trocar".' })
+      router.refresh()
+    })
+  }
+
+  if (!itens.length) return null
+  return (
+    <section className="rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)]" aria-label="Itens da nota">
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 pb-2 pt-3.5">
+        <h2 className="text-[16px] font-semibold text-text">Itens da nota <span className="font-normal text-text-muted">{itens.length}</span></h2>
+        <p className="text-[13px] text-text-muted">
+          {sozinho > 0 && <span><Sparkles className="mr-1 inline size-3.5 text-brand" />O sistema ligou {sozinho} sozinho</span>}
+          {sozinho > 0 && (pendentes.length > 0 || semProduto.length > 0) && ' · '}
+          {pendentes.length === 0 ? 'todos entraram no estoque' : semProduto.length === 0 ? 'todos com produto' : <span className="font-medium text-warn">falta ligar {semProduto.length}</span>}
+        </p>
+        {editavel && comSugestao.length > 0 && (
+          <button type="button" className={`${btnClass('outline')} ml-auto`} disabled={aceitando} onClick={aceitarSugestoes}>
+            {aceitando ? <Spinner /> : <Sparkles className="size-4" />}Aceitar {comSugestao.length === 1 ? 'a sugestão' : `as ${comSugestao.length} sugestões`}
+          </button>
+        )}
+      </header>
+
+      {alertas.length > 0 && (
+        <ul className="mx-4 mb-2 space-y-1 rounded-[var(--r-md)] bg-[color-mix(in_srgb,var(--warn)_10%,transparent)] px-3 py-2 text-[13px]">
+          {alertas.map((a) => <li key={a} className="flex items-start gap-2 text-warn"><CircleAlert className="mt-0.5 size-4 shrink-0" />{a}</li>)}
+        </ul>
+      )}
+
+      <ul className="divide-y divide-[var(--border)] border-t border-border">
+        {itens.map((i) => <LinhaItem key={i.id} item={i} editavel={editavel && !i.lancado} encerrada={encerrada} locais={locais} extras={extras?.[i.linha]} />)}
+      </ul>
+    </section>
+  )
+}
+
+/** Painel "Dar entrada no estoque" da loja própria: o que falta, local, conferida, totais e o botão. */
+export function PainelEntradaProprio({ notaId, itens, status, locais, localAtual, podeConferir, conferidaEm, faltaCategoria = false, categoria, totais }: {
+  notaId: number; itens: ItemConferencia[]; status: string; locais: { codigo: number; descricao: string }[]; localAtual: number | null; podeConferir: boolean
   conferidaEm?: string | null
-  /** Há item sem categoria: a entrada só é liberada depois de classificar a nota. */
   faltaCategoria?: boolean
-  /** Entra antes da barra fixa (ela só gruda no rodapé enquanto este bloco está na tela). */
-  children?: React.ReactNode
+  /** Bloco da categoria da nota (vem pronto da página). */
+  categoria?: React.ReactNode
+  totais: { mercadorias: number; outros: number; total: number }
 }) {
   const router = useRouter()
   const [local, setLocal] = useState<number | ''>(localAtual ?? locais[0]?.codigo ?? '')
@@ -56,15 +131,12 @@ export function ConferenciaNF({ notaId, itens, status, locais, localAtual, podeC
   const [aceitarAvisos, setAceitarAvisos] = useState(false)
   const temAvisoQueSegura = itens.some((i) => !i.lancado && i.config.movimentaEstoque && i.alertas.some((a) => AVISOS_QUE_SEGURAM.has(a.tipo)))
   const pendentes = itens.filter((i) => !i.lancado)
-  const semProduto = pendentes.filter((i) => !i.produto).length
-  const faltas = [
-    ...(semProduto > 0 ? [`ligar ${semProduto} ${semProduto === 1 ? 'produto' : 'produtos'}`] : []),
-    ...(faltaCategoria ? ['escolher a categoria da nota'] : []),
-    ...(local === '' ? ['escolher o local'] : []),
-    ...(temAvisoQueSegura && !conferidaEm && !aceitarAvisos ? ['conferir os avisos de custo'] : []),
-  ]
+  const avisosAbertos = temAvisoQueSegura && !conferidaEm && !aceitarAvisos
+  const faltas = faltasDaEntrada(itens, faltaCategoria, local === '', avisosAbertos)
   const encerrada = status === 'cancelada'
   const editavel = podeConferir && !encerrada
+  const semProduto = pendentes.filter((i) => !i.produto).length
+  const nomeLocal = locais.find((l) => l.codigo === local)?.descricao ?? 'local escolhido'
 
   function confirmar() {
     if (local === '') { toast.error('Escolha o local que recebe a mercadoria'); return }
@@ -86,87 +158,65 @@ export function ConferenciaNF({ notaId, itens, status, locais, localAtual, podeC
     })
   }
 
-  // Rodapé (D18): mesmos totais do cartão do Omie
-  const soma = (f: (i: ItemConferencia) => number) => itens.reduce((a, i) => a + f(i), 0)
-  const rodape = {
-    mercadorias: soma((i) => i.fiscal.valorProdutos), desconto: soma((i) => i.fiscal.desconto), ipi: soma((i) => i.fiscal.ipi), st: soma((i) => i.fiscal.st),
-    despesas: soma((i) => i.fiscal.frete + i.fiscal.seguro + i.fiscal.outras + i.fiscal.freteCte),
-    total: soma((i) => i.fiscal.valorTotalItem ?? i.valorLiquido),
-  }
+  const jaEntrou = itens.length > 0 && pendentes.length === 0
+  const passos: PassoEntrada[] = jaEntrou ? [] : [
+    { ok: semProduto === 0, texto: semProduto === 0 ? 'Todos os produtos ligados ao cadastro' : `Ligar ${semProduto} ${semProduto === 1 ? 'produto' : 'produtos'} ao cadastro` },
+    { ok: !faltaCategoria, texto: faltaCategoria ? 'Escolher a categoria da nota' : 'Categoria da nota escolhida' },
+    ...(temAvisoQueSegura ? [{ ok: !avisosAbertos, texto: avisosAbertos ? 'Conferir os avisos de custo' : 'Avisos de custo conferidos' }] : []),
+  ]
 
-  if (!itens.length) return children ? <>{children}</> : null
   return (
-    <section className="space-y-3" aria-label="Conferência com o cadastro">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h3 className="text-[17px] font-semibold text-text">Conferência com o cadastro</h3>
-          <p className="text-[13px] text-text-muted">
-            {pendentes.length === 0 ? 'Todos os itens entraram no estoque.' : semProduto === 0 ? 'Todos os itens têm produto. Confira e dê entrada.' : `${semProduto} ${semProduto === 1 ? 'item ainda sem produto' : 'itens ainda sem produto'}. O sistema aprende cada ligação para as próximas notas do fornecedor.`}
+    <PainelEntrada
+      titulo={encerrada ? 'Nota cancelada' : jaEntrou ? 'Entrada feita' : 'Dar entrada no estoque'}
+      passos={passos}
+      totais={totais}
+      rodape={editavel && pendentes.length > 0 ? (
+        <div className="space-y-2">
+          <button type="button" className={`${btnClass('primary')} w-full justify-center py-3 text-[15px]`} onClick={confirmar}
+            disabled={pending || pendentes.every((i) => !i.produto) || faltaCategoria || avisosAbertos}
+            title={avisosAbertos ? 'Há avisos de custo ou quantidade: confira e marque "Conferi os avisos".' : undefined}>
+            {pending ? <Spinner /> : <PackageCheck className="size-4" />}Confirmar entrada
+          </button>
+          <p className="text-[12.5px] text-text-muted">
+            {faltas.length === 0
+              ? `Os ${pendentes.length} itens entram em ${nomeLocal} com o custo da nota.`
+              : semProduto > 0 && faltas.length === 1
+                ? `Dá para confirmar agora: entram os itens com produto e ${semProduto === 1 ? 'o item sem produto fica' : `os ${semProduto} sem produto ficam`} para depois.`
+                : 'Resolva os itens marcados com ! para liberar.'}
           </p>
         </div>
-      </div>
-
-      {alertas.length > 0 && (
-        <ul className="space-y-1 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] shadow-[var(--shadow-sm)]">
-          {alertas.map((a) => <li key={a} className="flex items-start gap-2 text-warn"><CircleAlert className="mt-0.5 size-4 shrink-0" />{a}</li>)}
-        </ul>
-      )}
-
-      <ul className="divide-y divide-[var(--border)] rounded-[var(--r-lg)] bg-surface u-card">
-        {itens.map((i) => <LinhaItem key={i.id} item={i} editavel={editavel && !i.lancado} encerrada={encerrada} locais={locais} />)}
-      </ul>
-
-      <dl className="grid grid-cols-2 gap-x-5 gap-y-1 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] shadow-[var(--shadow-sm)] sm:grid-cols-6">
-        <div><dt className="text-text-muted">Mercadorias</dt><dd className="num font-medium">{fmtBRL(rodape.mercadorias)}</dd></div>
-        <div><dt className="text-text-muted">Desconto</dt><dd className="num font-medium">{fmtBRL(rodape.desconto)}</dd></div>
-        <div><dt className="text-text-muted">IPI</dt><dd className="num font-medium">{fmtBRL(rodape.ipi)}</dd></div>
-        <div><dt className="text-text-muted">ST</dt><dd className="num font-medium">{fmtBRL(rodape.st)}</dd></div>
-        <div><dt className="text-text-muted">Frete/despesas</dt><dd className="num font-medium">{fmtBRL(rodape.despesas)}</dd></div>
-        <div><dt className="text-text-muted">Total da nota</dt><dd className="num text-[15px] font-semibold">{fmtBRL(rodape.total)}</dd></div>
-      </dl>
-
-      {children}
-
+      ) : jaEntrou && !encerrada ? <p className="text-[13px] text-text-muted">Os {itens.length} itens já entraram no estoque. Para desfazer, use &quot;Mais&quot; no topo.</p> : null}
+    >
+      {categoria}
       {editavel && pendentes.length > 0 && (
-        <div className="sticky bottom-0 z-10 -mx-1 rounded-[var(--r-lg)] bg-surface px-4 py-3 shadow-[0_-4px_18px_rgb(0_0_0/0.10)]">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <div className="min-w-0 flex-1">
-              {faltas.length === 0
-                ? <p className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-ok"><CheckCircle2 className="size-4" />Tudo certo, pode confirmar a entrada</p>
-                : <><p className="text-[14px] font-semibold text-text">Falta para dar entrada</p>
-                    <p className="inline-flex items-start gap-1.5 text-[13px] text-warn"><CircleAlert className="mt-0.5 size-4 shrink-0" />{faltas.join(' · ')}</p></>}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-
-              {conferidaEm
-                ? <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-ok"><CheckCircle2 className="size-4" />Conferida</span>
-                : <>
-                    {temAvisoQueSegura && (
-                        <label className="flex items-center gap-2 text-[13px] text-warn">
-                        <input type="checkbox" className="size-4" checked={aceitarAvisos} onChange={(e) => setAceitarAvisos(e.target.checked)} />Conferi os avisos
-                      </label>
-                    )}
-                    <button type="button" className={btnClass('outline')} onClick={marcarConferida} disabled={conferindo || (temAvisoQueSegura && !aceitarAvisos)}>
-                      {conferindo ? <Spinner /> : <CheckCircle2 className="size-4" />}Marcar como conferida
-                    </button>
-                  </>}
-              <select aria-label="Local que recebe a mercadoria" className={`${campoCompra} w-auto`} value={local} onChange={(e) => setLocal(e.target.value ? Number(e.target.value) : '')}>
-                {locais.map((l) => <option key={l.codigo} value={l.codigo}>{l.descricao}</option>)}
-              </select>
-              <button type="button" className={btnClass('primary')} onClick={confirmar} disabled={pending || pendentes.every((i) => !i.produto) || faltaCategoria || (temAvisoQueSegura && !conferidaEm && !aceitarAvisos)}
-                title={temAvisoQueSegura && !conferidaEm && !aceitarAvisos ? 'Há avisos de custo ou quantidade: confira e marque "Conferi os avisos".' : undefined}>
-                {pending ? <Spinner /> : <PackageCheck className="size-4" />}Confirmar entrada
-              </button>
-          
-            </div>
-          </div>
-        </div>
+        <>
+          <label className="grid gap-1 text-[13px] text-text-muted">
+            Entra no local
+            <select aria-label="Local que recebe a mercadoria" className={campoCompra} value={local} onChange={(e) => setLocal(e.target.value ? Number(e.target.value) : '')}>
+              {locais.map((l) => <option key={l.codigo} value={l.codigo}>{l.descricao}</option>)}
+            </select>
+          </label>
+          {conferidaEm
+            ? <p className="inline-flex items-center gap-1.5 text-[13px] font-medium text-ok"><CheckCircle2 className="size-4" />Conferida</p>
+            : (
+              <div className="flex flex-wrap items-center gap-2">
+                {temAvisoQueSegura && (
+                  <label className="flex items-center gap-2 text-[13px] text-warn">
+                    <input type="checkbox" className="size-4" checked={aceitarAvisos} onChange={(e) => setAceitarAvisos(e.target.checked)} />Conferi os avisos
+                  </label>
+                )}
+                <button type="button" className={btnClass('outline')} onClick={marcarConferida} disabled={conferindo || (temAvisoQueSegura && !aceitarAvisos)}>
+                  {conferindo ? <Spinner /> : <CheckCircle2 className="size-4" />}Marcar como conferida
+                </button>
+              </div>
+            )}
+        </>
       )}
-    </section>
+    </PainelEntrada>
   )
 }
 
-function LinhaItem({ item, editavel, encerrada, locais }: { item: ItemConferencia; editavel: boolean; encerrada: boolean; locais: { codigo: number; descricao: string }[] }) {
+function LinhaItem({ item, editavel, encerrada, locais, extras }: { item: ItemConferencia; editavel: boolean; encerrada: boolean; locais: { codigo: number; descricao: string }[]; extras?: React.ReactNode }) {
   const router = useRouter()
   const [pending, start] = useTransition()
   const [trocando, setTrocando] = useState(false)
@@ -201,7 +251,7 @@ function LinhaItem({ item, editavel, encerrada, locais }: { item: ItemConferenci
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--r-md)] bg-surface-2 px-3 py-2 text-[13px]">
           <span className="min-w-0 truncate"><Link2 className="mr-1.5 inline size-4 text-text-muted" /><span className="num text-text-muted">{item.produto.codigo}</span> · {item.produto.descricao} <span className="text-text-muted">({item.produto.unidade})</span>
             {item.fator !== 1 && <span className="text-text-muted"> · 1 {item.unidade} = {fmtQtd(item.fator)} {item.produto.unidade}</span>}
-            {item.matchOrigem && <span className="ml-2 rounded-full bg-ok/15 px-2 py-0.5 text-[11px] font-medium text-ok">{ORIGEM[item.matchOrigem]}</span>}</span>
+            {item.matchOrigem && <span className="ml-2 rounded-full bg-ok/15 px-2 py-0.5 text-[11px] font-medium text-ok">{item.matchOrigem === 'depara' || item.matchOrigem === 'ean' ? <><Sparkles className="mr-0.5 inline size-3" />ligado sozinho · </> : null}{ORIGEM[item.matchOrigem]}</span>}</span>
           {editavel && <button type="button" className="text-text-muted hover:text-text" onClick={() => setTrocando(true)}>Trocar</button>}
         </div>
       )}
@@ -218,6 +268,7 @@ function LinhaItem({ item, editavel, encerrada, locais }: { item: ItemConferenci
       {(item.produto || item.lote || item.validade) && <LoteItem item={item} editavel={editavel} />}
 
       <EditorItemNF item={item} locais={locais} editavel={editavel} />
+      {extras}
 
       {editavel && !item.produto && (
         <div className="space-y-2">

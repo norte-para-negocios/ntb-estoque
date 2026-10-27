@@ -5,6 +5,7 @@ import { carregarCmc, carregarMemoria } from './nf-memoria'
 import { casarItem, montarContexto, podeLancarAutomatico, type Casamento, type Depara, type ProdutoCad } from './nf-conferencia'
 import { espelharNotaNoFrio } from './nf-frio'
 import { decidirLancamentoNaGravacao } from './nf-entrada'
+import { categoriaAutomatica } from '@/lib/nota-fiscal/tela-nota'
 import type { ItemNfe, NfeLida } from './nfe-xml'
 
 // Grava uma NF-e completa em loja de estoque próprio: nota no formato do Omie + conferência com o cadastro + (se tudo casou com
@@ -112,6 +113,9 @@ export async function gravarNotaCompleta(lojaId: number, nfe: NfeLida, opts: {
   const notaId = Number((g as { nota_id: number }).nota_id)
   const criada = !!(g as { criada: boolean }).criada
 
+  // Nota nova de fornecedor que sempre vem na mesma categoria: já chega classificada (a pessoa pode trocar na tela).
+  if (criada && nfe.fornecedor.cnpj) await classificarPeloFornecedor(lojaId, notaId, nfe.fornecedor.cnpj).catch((e) => console.error(`nf-sefaz loja ${lojaId}: categoria automática da nota ${notaId}:`, e))
+
   const local = opts.localEntrada ?? (await localPadraoEntrada(lojaId))
 
   const { itensFiscais, configs, alertasItens, aviso: avisoRateio } = await sugestoesDosItens(lojaId, nfe, casamentos, (cod) => ctx.produtosPorCodigo.get(cod)?.unidade ?? null, local, {
@@ -171,4 +175,18 @@ export async function gravarNotaCompleta(lojaId: number, nfe: NfeLida, opts: {
     pendentes: casamentos.filter((c) => c.codigoProduto == null).length, alertas, criada, lancados, status: statusCompra, alertasItens,
     retida: decisao.retida,
   }
+}
+
+async function classificarPeloFornecedor(lojaId: number, notaId: number, cnpj: string) {
+  const sb = createServiceClient()
+  const { data: notas } = await sb.from('notas_fiscais').select('id').eq('loja_id', lojaId).eq('c_cnpj_cpf', cnpj).neq('id', notaId).is('deleted_at', null).order('id', { ascending: false }).limit(5)
+  const ids = (notas ?? []).map((n) => Number(n.id))
+  if (ids.length < 2) return
+  const { data: itens } = await sb.from('nota_fiscal_items').select('categoria_contabil_id').eq('loja_id', lojaId).in('nota_fiscal_id', ids).not('categoria_contabil_id', 'is', null).limit(1000)
+  const conta = new Map<number, number>()
+  for (const i of itens ?? []) conta.set(Number(i.categoria_contabil_id), (conta.get(Number(i.categoria_contabil_id)) ?? 0) + 1)
+  const categoria = categoriaAutomatica(conta, ids.length)
+  if (categoria == null) return
+  await sb.from('nota_fiscal_items').update({ categoria_contabil_id: categoria, updated_at: new Date().toISOString() })
+    .eq('loja_id', lojaId).eq('nota_fiscal_id', notaId).is('categoria_contabil_id', null)
 }

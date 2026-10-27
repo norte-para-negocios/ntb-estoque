@@ -3,20 +3,22 @@
 import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { CheckCircle2, CircleAlert } from 'lucide-react'
+import { CheckCircle2 } from 'lucide-react'
 import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { manifestarNF } from '@/lib/actions/nota-fiscal'
 
-/** Barra fixa embaixo (loja com Omie): diz o que falta e só libera "Concluir nota" quando estiver tudo certo. */
-export function BarraConcluirNF({ notaId, concluida, cancelada, podeConcluir, faltas, resumo }: {
-  notaId: number; concluida: boolean; cancelada: boolean; podeConcluir: boolean; faltas: string[]
+/** Botão "Concluir nota" (loja com Omie), dentro do painel de entrada: só libera quando não falta nada. */
+export function BarraConcluirNF({ notaId, concluida, cancelada, podeConcluir, pronto, resumo }: {
+  notaId: number; concluida: boolean; cancelada: boolean; podeConcluir: boolean; pronto: boolean
   /** O que acontece ao concluir, em uma frase. */
   resumo?: string
 }) {
   const router = useRouter()
   const [pending, start] = useTransition()
-  if (cancelada || !podeConcluir) return null
+  if (cancelada) return null
+  if (concluida) return <p className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-ok"><CheckCircle2 className="size-4" />Nota concluída no Omie</p>
+  if (!podeConcluir) return <p className="text-[13px] text-text-muted">Você não tem permissão para concluir notas.</p>
 
   function concluir() {
     if (!window.confirm('Concluir o recebimento desta nota no Omie? Ela passa para Concluída.')) return
@@ -27,26 +29,12 @@ export function BarraConcluirNF({ notaId, concluida, cancelada, podeConcluir, fa
     })
   }
 
-  const pronto = faltas.length === 0
   return (
-    <div className="sticky bottom-0 z-10 -mx-1 rounded-[var(--r-lg)] bg-surface px-4 py-3 shadow-[0_-4px_18px_rgb(0_0_0/0.10)]">
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="min-w-0 flex-1">
-          {concluida
-            ? <p className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-ok"><CheckCircle2 className="size-4" />Nota concluída</p>
-            : pronto
-              ? <><p className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-ok"><CheckCircle2 className="size-4" />Tudo certo, pode concluir</p>
-                  {resumo && <p className="text-[13px] text-text-muted">{resumo}</p>}</>
-              : <><p className="text-[14px] font-semibold text-text">Falta para concluir</p>
-                  <p className="inline-flex items-start gap-1.5 text-[13px] text-warn"><CircleAlert className="mt-0.5 size-4 shrink-0" />{faltas.join(' · ')}</p>
-                  {resumo && <p className="text-[12px] text-text-muted">Ao concluir: {resumo.charAt(0).toLowerCase() + resumo.slice(1)}</p>}</>}
-        </div>
-        {!concluida && (
-          <button type="button" className={btnClass('primary')} disabled={pending || !pronto} onClick={concluir}>
-            {pending ? <Spinner /> : <CheckCircle2 className="size-4" />}Concluir nota
-          </button>
-        )}
-      </div>
+    <div className="space-y-2">
+      <button type="button" className={`${btnClass('primary')} w-full justify-center py-3 text-[15px]`} disabled={pending || !pronto} onClick={concluir}>
+        {pending ? <Spinner /> : <CheckCircle2 className="size-4" />}Concluir nota
+      </button>
+      <p className="text-[12.5px] text-text-muted">{pronto ? resumo : 'Resolva os itens marcados com ! para liberar.'}</p>
     </div>
   )
 }

@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nota fiscal por dentro — plano e protótipo</title>
+<style>
+/* Layout: plano no topo; protótipo com moldura do app — itens à esquerda, painel "Dar entrada" fixo à direita, detalhes recolhidos embaixo. */
+:root{
+  --bg:#f2f3f5; --card:#fff; --fg:#16191d; --muted:#6b7279; --line:#e6e8eb; --soft:#f6f7f8;
+  --brand:#168e9a; --brand-fill:#117c87; --brand-soft:#e3f3f5; --ok:#1f8a4c; --ok-soft:#e5f4ea; --warn:#b4600d; --warn-soft:#fbefe2; --bad:#c2352b;
+  --shadow:0 1px 2px rgba(16,24,32,.05),0 4px 14px rgba(16,24,32,.05);
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{--bg:#000;--card:#1c1d20;--fg:#f2f3f4;--muted:#9aa1a8;--line:#2b2d31;--soft:#24262a;--brand:#3fc6d4;--brand-soft:#123a3f;--ok:#4ade80;--ok-soft:#173826;--warn:#f0a35c;--warn-soft:#3a2a18;--shadow:none}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 var(--font);padding:20px max(16px,3vw) 80px}
+a{color:var(--brand);text-decoration:none}
+button,select,input{font:inherit;color:inherit}
+.num{font-variant-numeric:tabular-nums}
+.wrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+.card{background:var(--card);border-radius:18px;box-shadow:var(--shadow)}
+h1{font-size:24px;margin:0}
+.plano{padding:20px 22px;display:grid;gap:14px}
+.plano h2{font-size:13px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:0}
+.plano .cols{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.plano ol,.plano ul{margin:6px 0 0;padding-left:20px;display:grid;gap:5px}
+.plano small{color:var(--muted)}
+@media (max-width:860px){.plano .cols{grid-template-columns:1fr}}
+.ctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;color:var(--muted);font-size:14px}
+.seg{display:inline-flex;background:var(--card);border-radius:11px;padding:3px;box-shadow:var(--shadow)}
+.seg button{border:0;background:none;padding:6px 12px;border-radius:8px;font-weight:600;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--brand-fill);color:#fff}
+
+/* ---------- tela ---------- */
+.tela{display:flex;flex-direction:column;gap:16px}
+.migalha{font-size:13px;color:var(--muted)}
+.topo{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.topo .id{flex:1;min-width:260px}
+.topo h2{font-size:28px;letter-spacing:-.02em;margin:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;padding:3px 10px;border-radius:99px}
+.chip.warn{background:var(--warn-soft);color:var(--warn)} .chip.ok{background:var(--ok-soft);color:var(--ok)} .chip.br{background:var(--brand-soft);color:var(--brand)}
+.chip i{width:7px;height:7px;border-radius:9px;background:currentColor}
+.forn{margin-top:4px;color:var(--fg);font-weight:500}
+.forn span{color:var(--muted);font-weight:400}
+.meta{display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:13.5px;margin-top:4px}
+.meta b{color:var(--fg);font-weight:600}
+.acoes{display:flex;gap:6px;position:relative}
+.btn{border:0;border-radius:11px;padding:8px 13px;font-weight:600;cursor:pointer;display:inline-flex;gap:7px;align-items:center;background:var(--card);box-shadow:var(--shadow)}
+.btn.pri{background:var(--brand-fill);color:#fff}
+.btn.pri:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{padding:5px 10px;font-size:13px;border-radius:9px}
+.menu{position:absolute;right:0;top:42px;background:var(--card);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:6px;min-width:190px;z-index:5}
+.menu button{display:block;width:100%;text-align:left;border:0;background:none;padding:8px 10px;border-radius:8px;cursor:pointer}
+.menu button:hover{background:var(--soft)} .menu .del{color:var(--bad)}
+
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+@media (max-width:1000px){.grid{grid-template-columns:1fr}.painel{position:static!important}}
+
+/* itens */
+.itens{padding:6px 0}
+.itens .cab{display:flex;justify-content:space-between;align-items:center;padding:12px 18px 8px;gap:10px;flex-wrap:wrap}
+.itens .cab b{font-size:16px}
+.linha{display:grid;grid-template-columns:minmax(0,1fr) 92px 96px 104px 34px;gap:12px;align-items:center;padding:12px 18px;border-top:1px solid var(--line)}
+.linha.hd{border-top:0;padding-block:4px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.linha .r{text-align:right}
+.prod b{font-weight:600;display:block}
+.prod .nota{font-size:12.5px;color:var(--muted)}
+.liga{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:13px}
+.liga .ok{color:var(--ok);font-weight:600}
+.liga .falta{color:var(--warn);font-weight:600}
+.sug{background:var(--brand-soft);color:var(--brand);border:0;border-radius:8px;padding:4px 9px;font-weight:600;cursor:pointer}
+.busca{border:1px solid var(--line);background:var(--soft);border-radius:8px;padding:4px 9px;min-width:200px}
+.cat{font-size:12.5px;color:var(--muted)}
+.mais{border:0;background:none;cursor:pointer;color:var(--muted);font-size:18px;border-radius:8px;width:30px;height:30px}
+.mais:hover{background:var(--soft)}
+.det{grid-column:1/-1;background:var(--soft);border-radius:12px;padding:10px 12px;font-size:13px;color:var(--muted);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px 16px}
+.det b{color:var(--fg);font-weight:600;display:block}
+.det .acs{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap}
+@media (max-width:640px){.linha{grid-template-columns:minmax(0,1fr) 84px 30px}.linha .q,.linha .u{display:none}.linha.hd .q,.linha.hd .u{display:none}.det{grid-template-columns:1fr 1fr}}
+
+/* painel */
+.painel{position:sticky;top:16px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.painel h3{margin:0;font-size:16px}
+.passos{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.passos li{display:flex;gap:10px;align-items:flex-start;font-size:14px}
+.passos .m{flex-shrink:0;width:22px;height:22px;border-radius:99px;display:grid;place-items:center;font-size:12px;font-weight:700}
+.passos .feito .m{background:var(--ok-soft);color:var(--ok)}
+.passos .falta .m{background:var(--warn-soft);color:var(--warn)}
+.passos .falta a{font-weight:600}
+.campo{display:grid;gap:4px;font-size:13px;color:var(--muted)}
+.campo select{border:1px solid var(--line);background:var(--soft);border-radius:10px;padding:8px 10px;color:var(--fg)}
+.campo select.pede{border-color:var(--warn);background:var(--warn-soft)}
+.contas{display:grid;gap:4px;font-size:13.5px;border-top:1px solid var(--line);padding-top:12px}
+.contas div{display:flex;justify-content:space-between}
+.contas .tot{font-size:17px;font-weight:700;margin-top:4px}
+.painel .btn.pri{justify-content:center;padding:12px;font-size:15px}
+.painel .expl{font-size:12.5px;color:var(--muted);margin:-6px 0 0}
+
+/* mais informações */
+.secoes{display:grid;gap:8px}
+details.sec{background:var(--card);border-radius:14px;box-shadow:var(--shadow)}
+details.sec summary{list-style:none;cursor:pointer;padding:13px 16px;display:flex;gap:12px;align-items:center}
+details.sec summary::-webkit-details-marker{display:none}
+details.sec summary b{min-width:150px}
+details.sec summary span{color:var(--muted);font-size:13.5px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+details.sec summary::after{content:"›";color:var(--muted);transition:transform .2s}
+details.sec[open] summary::after{transform:rotate(90deg)}
+details.sec .corpo{padding:0 16px 14px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 18px;font-size:13.5px}
+details.sec .corpo div{color:var(--muted)} details.sec .corpo div b{display:block;color:var(--fg);font-weight:600}
+@media (max-width:640px){details.sec .corpo{grid-template-columns:1fr 1fr}details.sec summary b{min-width:0}}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Nota fiscal por dentro: plano e protótipo</h1>
+
+  <section class="card plano">
+    <div class="cols">
+      <div>
+        <h2>O que está ruim hoje (prints de produção, 27/10)</h2>
+        <ol>
+          <li><b>A barra de concluir flutua por cima dos itens e dos cartões</b> e esconde linhas da tabela.</li>
+          <li>Coluna <b>Total vazia ("-")</b> em todos os itens; unidades com código cru (<b>UND9, PCT2, FDO1</b>).</li>
+          <li>A nota diz a categoria (2.01.03) e <b>todo item diz "Sem categoria"</b>: parece que falta algo que não falta.</li>
+          <li>Linhas cinza-claras parecem desativadas; dois "Imprimir" por linha + "Imprimir selecionados" + "Imprimir todos".</li>
+          <li>Na ODARA, a mesma coisa aparece duas vezes: "Conferência com o cadastro" em cima e a tabela de itens embaixo.</li>
+          <li><b>7 abas</b> (Fiscal, Entradas e frete, Pedido, SEFAZ, Histórico, Anexos…) com cartões grandes e meio vazios. Fornecedor ocupa meia tela para mostrar CNPJ e natureza; "Situação" gasta 5 linhas de Sim/Não; frete é uma caixa solta.</li>
+          <li>Não fica claro <b>o que falta</b> e <b>o que acontece</b> quando você conclui.</li>
+        </ol>
+      </div>
+      <div>
+        <h2>Proposta: uma pergunta por tela, "o que falta para dar entrada?"</h2>
+        <ol>
+          <li><b>Topo de 3 linhas</b>: nº da nota, situação, fornecedor (nome + CNPJ curto), emissão, valor. XML, DANFE e Excluir num menu "⋯".</li>
+          <li><b>Painel "Dar entrada" fixo à direita</b> (no celular vai para baixo, sem cobrir nada): passos com ✓ ou o que falta (clica e vai até o item), categoria, local, totais e o botão. Diz em uma linha o que acontece ao confirmar.</li>
+          <li><b>Uma lista de itens só</b>: produto da nota → produto do cadastro (✓ ligado, sugestão com 1 clique ou busca), quantidade com unidade de verdade, custo e total. Categoria só aparece no item quando é diferente da nota. Imprimir, movimentos e impostos do item no "⋯".</li>
+          <li><b>Mais informações recolhidas</b> em linhas de uma frase cada (Fornecedor, Transporte e frete, Impostos, Parcelas, SEFAZ, Pedido e devolução, Histórico, Anexos). Abre só o que precisar. Transporte só aparece se a nota tiver.</li>
+          <li><b>O sistema faz sozinho o que dá</b>: liga o item ao produto quando tem certeza (mesmo código do fornecedor em notas anteriores, mesmo código de barras ou nome igual com a mesma unidade) e mostra o porquê; escolhe a categoria que esses produtos tiveram nas últimas notas e o local de sempre. Você só confere, troca se estiver errado e liga o que ele não achou. Nota com tudo certo e fornecedor conhecido pode dar entrada sozinha (já existe a chave para isso na ODARA).</li>
+          <li>Mesma tela nas lojas com Omie e na ODARA; muda só o que o Omie já faz (categoria e passos).</li>
+        </ol>
+        <p><small>Nada some: toda informação e botão de hoje continua, só muda de lugar. Depois do OK: corrigir os bugs (total, unidade, barra) primeiro, depois o layout novo, testes em nota real só leitura, deploy de madrugada.</small></p>
+      </div>
+    </div>
+  </section>
+
+  <div class="ctl">
+    Ver como:
+    <span class="seg" id="sLoja"><button data-v="propria" aria-pressed="true">ODARA (estoque próprio)</button><button data-v="omie" aria-pressed="false">Loja com Omie</button></span>
+    <span class="seg" id="sEst"><button data-v="falta" aria-pressed="true">Falta coisa</button><button data-v="pronta" aria-pressed="false">Pronta</button><button data-v="concluida" aria-pressed="false">Concluída</button></span>
+  </div>
+
+  <div class="tela" id="tela"></div>
+</div>
+
+<script>
+const ITENS = [
+  { nome: 'AZEITE OPALMA 2L', cod: '71', qn: 12, un: 'UN', unNota: 'UN', vu: 29.99, cad: null, sug: null, porque: '' },
+  { nome: 'CAMARAO DEFUMADO KG', cod: '0000000000059', qn: 2, un: 'KG', unNota: 'KG', vu: 66.99, cad: null, sug: '80070 · Caldo de camarão (MP)', porque: 'mesmo código do fornecedor nas últimas 3 notas' },
+  { nome: 'DOCE MEL AMBROSIA 700G', cod: '274', qn: 6, un: 'UN', unNota: 'UN', vu: 35.99, cad: null, sug: '90051 · Ambrosia', porque: 'mesmo código de barras (EAN)' },
+  { nome: 'AMENDOIM TORRADO KG', cod: '0000000000061', qn: 1, un: 'KG', unNota: 'KG', vu: 16.99, cad: null, sug: '80021 · Amendoim torrado (MP)', porque: 'nome igual e mesma unidade (KG)', cat: 'Feira' },
+]
+const LIGADOS = ['80305 · Azeite Opalma 2 L', '80070 · Caldo de camarão (MP)', '90051 · Ambrosia', '80021 · Amendoim torrado (MP)']
+let loja = 'propria', est = 'falta', aberto = -1, menu = false
+let itens = [], categoria = '', local = 'Depósito', catAuto = false
+
+const brl = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+function reset() {
+  // O sistema liga sozinho o que tem sugestão confiável; a pessoa só confere.
+  itens = ITENS.map((i, k) => est === 'falta' ? { ...i, cad: i.sug, auto: !!i.sug } : { ...i, cad: LIGADOS[k], auto: false })
+  categoria = '2.01.03 · Compras de Matéria Prima'
+  catAuto = est === 'falta' && loja === 'propria'
+}
+const faltam = () => itens.filter((i) => !i.cad).length
+
+function render() {
+  const total = itens.reduce((s, i) => s + i.qn * i.vu, 0)
+  const conc = est === 'concluida'
+  const falt = conc ? 0 : faltam()
+  const semCat = !conc && loja === 'propria' && !categoria
+  const pode = !conc && falt === 0 && !semCat
+  const situ = conc ? '<span class="chip ok"><i></i>Entrada feita</span>' : pode ? '<span class="chip br"><i></i>Pronta para entrada</span>' : '<span class="chip warn"><i></i>A conferir</span>'
+  const passos = [
+    { ok: falt === 0, t: falt === 0 ? 'Todos os produtos ligados ao cadastro' : `Ligar ${falt} produto${falt > 1 ? 's' : ''} ao cadastro`, ir: 'itens' },
+    { ok: !semCat, t: !semCat ? 'Categoria da nota escolhida' : 'Escolher a categoria da nota', ir: 'cat' },
+    { ok: true, t: `Entra no local ${local}` },
+  ]
+  document.getElementById('tela').innerHTML = `
+  <div class="migalha">Notas Fiscais › NFe 1540</div>
+  <div class="topo">
+    <div class="id">
+      <h2>NF nº 1540 <small style="font-size:15px;color:var(--muted);font-weight:500">série 1</small> ${situ}</h2>
+      <div class="forn">COUTO AMARAL COMÉRCIO DE GÊNEROS ALIMENTÍCIOS <span>· CNPJ 34.640.245/0001-03</span></div>
+      <div class="meta"><span>Emissão <b>26/10/2026</b></span><span>Valor <b class="num">${brl(total)}</b></span><span>${itens.length} itens</span>${loja === 'omie' ? '<span>Vencimento <b>10/11/2026</b></span>' : ''}</div>
+    </div>
+    <div class="acoes">
+      <button class="btn" id="bMenu" aria-expanded="${menu}">⋯ Mais</button>
+      ${menu ? `<div class="menu"><button>Baixar XML</button><button>Abrir DANFE</button><button>Imprimir etiquetas de todos</button><button>Copiar chave de acesso</button><button class="del">${loja === 'omie' ? 'Excluir recebimento' : 'Excluir nota'}</button></div>` : ''}
+    </div>
+  </div>
+
+  <div class="grid">
+    <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+      <section class="card itens" id="itens">
+        <div class="cab"><b>Itens da nota</b><span class="cat">${(() => { const a = itens.filter((i) => i.auto && i.cad).length; return (a ? `✨ O sistema ligou ${a} sozinho · ` : '') + (falt ? `<span style="color:var(--warn);font-weight:600">falta você ligar ${falt}</span>` : 'todos ligados ✓') })()}</span></div>
+        <div class="linha hd"><span>Produto</span><span class="r q">Quantidade</span><span class="r u">Custo un.</span><span class="r">Total</span><span></span></div>
+        ${itens.map((i, k) => `
+        <div class="linha">
+          <div class="prod">
+            <b>${i.cad ? i.cad.split(' · ')[1] : i.nome}</b>
+            <div class="nota">Na nota: ${i.nome} · cód. ${i.cod}</div>
+            ${conc ? '' : `<div class="liga">${i.cad ? (i.auto ? `<span class="ok">✨ Ligado sozinho a ${i.cad}</span> <span class="cat">(${i.porque})</span> <a href="#" data-des="${k}">trocar</a>` : `<span class="ok">✓ Ligado a ${i.cad}</span> <a href="#" data-des="${k}">trocar</a>`) : `<span class="falta">Falta ligar:</span> ${i.sug ? `<button class="sug" data-usa="${k}">Usar ${i.sug}</button> ou` : ''} <input class="busca" placeholder="buscar no cadastro" aria-label="Buscar produto">`}</div>`}
+            ${i.cat ? `<div class="cat" style="margin-top:4px">Categoria deste item: <b>${i.cat}</b> (diferente da nota)</div>` : ''}
+          </div>
+          <span class="r q num">${String(i.qn).replace('.', ',')} ${i.un}</span>
+          <span class="r u num">${brl(i.vu)}</span>
+          <span class="r num"><b>${brl(i.qn * i.vu)}</b></span>
+          <button class="mais" data-abre="${k}" aria-label="Mais do item">⋯</button>
+          ${aberto === k ? `<div class="det"><div>CFOP de entrada<b>1.102</b></div><div>NCM<b>1509.10.00</b></div><div>ICMS / IPI / ST<b>R$ 0,00</b></div><div>Valor de estoque<b>${brl(i.qn * i.vu)}</b></div>
+            <div class="acs"><button class="btn sm">Imprimir etiqueta</button><button class="btn sm">Ver movimentos do produto</button><button class="btn sm">Categoria diferente da nota…</button><button class="btn sm">Frete entra no custo</button></div></div>` : ''}
+        </div>`).join('')}
+      </section>
+
+      <div class="secoes">
+        ${secao('Fornecedor', 'Couto Amaral · CNPJ 34.640.245/0001-03 · IE 160761471 · Salvador-BA', [['Razão social', 'COUTO AMARAL COMÉRCIO DE GÊNEROS ALIMENTÍCIOS E SERVIÇOS DE…'], ['CNPJ', '34.640.245/0001-03'], ['Inscrição estadual', '160761471'], ['Natureza da operação', 'Venda de mercadoria adquirida de terceiros'], ['Telefone', '(71) 3333-0000'], ['Cidade', 'Salvador-BA']])}
+        ${secao('Transporte e frete', 'Por conta do fornecedor (CIF) · 1 volume · sem CT-e', [['Modalidade', 'Por conta do fornecedor (CIF)'], ['Transportadora', '—'], ['Volumes', '1 · 18,4 kg'], ['Frete na nota', 'R$ 0,00'], ['CT-e', '<button class="btn sm">Enviar XML do CT-e</button> <button class="btn sm">Informar frete sem XML</button>']])}
+        ${secao('Impostos', 'Mercadorias R$ 726,79 · descontos, IPI e ST zerados', [['Mercadorias', brl(total)], ['Desconto', 'R$ 0,00'], ['IPI', 'R$ 0,00'], ['ST', 'R$ 0,00'], ['ICMS', 'R$ 0,00'], ['PIS / COFINS', 'R$ 0,00'], ['IBS / CBS', 'R$ 0,50 / R$ 4,51'], ['Total da nota', brl(total)]])}
+        ${secao('Parcelas', '1 parcela · vence 10/11/2026', [['1ª', '10/11/2026 · ' + brl(total)]])}
+        ${secao(loja === 'omie' ? 'Situação no Omie' : 'SEFAZ', loja === 'omie' ? 'Faturada em 27/10 às 13:47 · não recebida · não cancelada' : 'Autorizada · manifestação: ciência da operação', loja === 'omie' ? [['Recebida', conc ? 'Sim' : 'Não'], ['Faturada', 'Sim · 27/10/2026 13:47'], ['Cancelada / devolvida / bloqueada', 'Não']] : [['Situação', 'Autorizada'], ['Manifestação', 'Ciência da operação'], ['Chave', '2926 1034 6402 4500 0103 5500 1000 0015 4010 0155 1540']])}
+        ${secao('Pedido e devolução', 'Sem pedido ligado', [['Pedido de compra', '<button class="btn sm">Ligar a um pedido</button>'], ['Devolução', '<button class="btn sm">Devolver itens ao fornecedor</button>']])}
+        ${secao('Histórico', conc ? 'Entrada feita por Ramon em 27/10 às 14:02' : 'Chegou pela SEFAZ em 27/10 às 09:10', [['27/10 09:10', 'Nota recebida da SEFAZ'], ['27/10 09:11', 'Itens sugeridos pelo cadastro'], ...(conc ? [['27/10 14:02', 'Entrada confirmada (Ramon)']] : [])])}
+        ${secao('Anexos e observação', 'Nenhum anexo', [['Observação', '<button class="btn sm">Escrever observação</button>'], ['Anexos', '<button class="btn sm">Anexar arquivo</button>']])}
+      </div>
+    </div>
+
+    <aside class="card painel" aria-label="Dar entrada">
+      <h3>${conc ? 'Entrada feita' : 'Dar entrada no estoque'}</h3>
+      ${conc ? `<p class="expl" style="margin:0">Os ${itens.length} itens entraram no ${local} em 27/10 às 14:02${loja === 'omie' ? ' e a conta a pagar foi criada no Omie' : ''}.</p>
+        <a href="#" onclick="return false">Ver as ${itens.length} entradas no estoque ›</a>` : `
+      <ol class="passos">${passos.map((p) => `<li class="${p.ok ? 'feito' : 'falta'}"><span class="m">${p.ok ? '✓' : '!'}</span><span>${p.ok || !p.ir ? p.t : `<a href="#${p.ir}" data-ir="${p.ir}">${p.t}</a>`}</span></li>`).join('')}</ol>
+      <label class="campo" id="cat">Categoria da nota${loja === 'omie' ? ' (vem do Omie)' : ''}
+        <select id="sCat" class="${semCat ? 'pede' : ''}" ${loja === 'omie' ? 'disabled' : ''}>
+          <option value="">Escolher…</option>
+          ${['2.01.03 · Compras de Matéria Prima', '2.01.85 · Compra de Gás', '2.04.01 · Descartáveis', '2.04.02 · Embalagens'].map((c) => `<option ${c === categoria ? 'selected' : ''}>${c}</option>`).join('')}
+        </select>
+        ${loja === 'propria' && catAuto ? '<span style="font-size:12.5px">✨ Escolhida pelo sistema: é a categoria que esses produtos tiveram nas últimas notas. Troque se estiver errada.</span>' : ''}
+      </label>
+      <label class="campo">Entra no local <span style="font-size:12px">(o de sempre desses produtos)</span>
+        <select id="sLocal">${['Depósito', 'Cozinha', 'Bar'].map((l) => `<option ${l === local ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      </label>`}
+      <div class="contas num">
+        <div><span>Mercadorias</span><span>${brl(total)}</span></div>
+        <div><span>Desconto · IPI · ST · frete</span><span>R$ 0,00</span></div>
+        <div class="tot"><span>Total da nota</span><span>${brl(total)}</span></div>
+      </div>
+      ${conc ? '' : `<button class="btn pri" id="bConf" ${pode ? '' : 'disabled'}>Confirmar entrada</button>
+      <p class="expl">${pode ? `Os ${itens.length} itens entram no ${local} com o custo acima${loja === 'omie' ? ' e o Omie cria a conta a pagar de ' + brl(total) : ''}.` : 'Resolva os itens marcados com ! para liberar.'}</p>`}
+    </aside>
+  </div>`
+  bind()
+}
+function secao(t, resumo, campos) {
+  return `<details class="sec"><summary><b>${t}</b><span>${resumo}</span></summary><div class="corpo">${campos.map(([k, v]) => `<div>${k}<b>${v}</b></div>`).join('')}</div></details>`
+}
+function bind() {
+  const q = (s) => document.querySelectorAll(s)
+  q('[data-usa]').forEach((b) => (b.onclick = () => { itens[+b.dataset.usa].cad = LIGADOS[+b.dataset.usa]; itens[+b.dataset.usa].auto = false; render() }))
+  q('[data-des]').forEach((a) => (a.onclick = (e) => { e.preventDefault(); itens[+a.dataset.des].cad = null; itens[+a.dataset.des].auto = false; render() }))
+  q('[data-abre]').forEach((b) => (b.onclick = () => { aberto = aberto === +b.dataset.abre ? -1 : +b.dataset.abre; render() }))
+  q('.busca').forEach((i) => (i.onkeydown = (e) => { if (e.key === 'Enter') { const k = [...q('.busca')].indexOf(i); const idx = itens.findIndex((x) => !x.cad && !x.sug) ; const alvo = idx >= 0 ? idx : itens.findIndex((x) => !x.cad); itens[alvo].cad = LIGADOS[alvo]; render() } }))
+  q('[data-ir]').forEach((a) => (a.onclick = (e) => { e.preventDefault(); document.getElementById(a.dataset.ir).scrollIntoView({ behavior: 'smooth', block: 'center' }) }))
+  const sc = document.getElementById('sCat'); if (sc) sc.onchange = () => { categoria = sc.value; catAuto = false; render() }
+  const sl = document.getElementById('sLocal'); if (sl) sl.onchange = () => { local = sl.value; render() }
+  const bm = document.getElementById('bMenu'); bm.onclick = () => { menu = !menu; render() }
+  const bc = document.getElementById('bConf'); if (bc) bc.onclick = () => { est = 'concluida'; marcar(); render(); toast('Entrada feita: ' + itens.length + ' itens no ' + local) }
+}
+function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2600) }
+function marcar() {
+  document.querySelectorAll('#sLoja button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === loja))
+  document.querySelectorAll('#sEst button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === est))
+}
+document.querySelectorAll('#sLoja button').forEach((b) => (b.onclick = () => { loja = b.dataset.v; reset(); marcar(); render() }))
+document.querySelectorAll('#sEst button').forEach((b) => (b.onclick = () => { est = b.dataset.v; reset(); marcar(); render() }))
+reset(); render()
+</script>
+</body>
+</html>

@@ -100,7 +100,11 @@ function Campo({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-export function DetalhesFiscaisNF({ fullObject, semOmie = false }: { fullObject: unknown; semOmie?: boolean }) {
+export type ParteFiscal = 'fornecedor' | 'situacao' | 'transporte' | 'parcelas' | 'totais' | 'impostos' | 'adicionais'
+
+/** `so` = mostra só uma parte, sem cartão nem título (dentro de uma linha recolhida da tela da nota). */
+export function DetalhesFiscaisNF({ fullObject, semOmie = false, so }: { fullObject: unknown; semOmie?: boolean; so?: ParteFiscal }) {
+  const ver = (p: ParteFiscal) => !so || so === p
   const fo = (fullObject ?? {}) as FullObjectNF
   const { cabec, infoCadastro: ic, transporte, parcelas, totais, infoAdicionais } = fo
 
@@ -108,8 +112,8 @@ export function DetalhesFiscaisNF({ fullObject, semOmie = false }: { fullObject:
   if (!temAlgumaSecao) return null
 
   return (
-    <div className="grid items-start gap-3 sm:grid-cols-2">
-      {(cabec?.cCNPJ_CPF || cabec?.cNaturezaOperacao) && (
+    <div className={so ? 'grid gap-3 [&>div]:bg-transparent [&>div]:p-0 [&>div]:shadow-none [&_dl]:grid [&_dl]:gap-x-6 [&_dl]:gap-y-2.5 [&_dl]:space-y-0 sm:[&_dl]:grid-cols-2 lg:[&_dl]:grid-cols-3 [&_h3]:hidden' : 'grid items-start gap-3 sm:grid-cols-2'}>
+      {ver('fornecedor') && (cabec?.cCNPJ_CPF || cabec?.cNaturezaOperacao) && (
         <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
           <h3 className="mb-3 text-[17px] font-semibold text-text">Fornecedor / operação</h3>
           <dl className="space-y-2.5">
@@ -120,7 +124,7 @@ export function DetalhesFiscaisNF({ fullObject, semOmie = false }: { fullObject:
         </div>
       )}
 
-      {ic && (
+      {ver('situacao') && ic && (
         <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
           <h3 className="mb-3 text-[17px] font-semibold text-text">{semOmie ? 'Situação' : 'Situação no Omie'}</h3>
           <dl className="space-y-2.5">
@@ -143,11 +147,11 @@ export function DetalhesFiscaisNF({ fullObject, semOmie = false }: { fullObject:
         </div>
       )}
 
-      {transporte?.cNomeTransp && (
+      {ver('transporte') && (transporte?.cNomeTransp || (transporte?.cTipoFrete && transporte.cTipoFrete !== '9')) && (
         <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
           <h3 className="mb-3 text-[17px] font-semibold text-text">Transporte</h3>
           <dl className="space-y-2.5">
-            <Campo label="Transportadora">{transporte.cNomeTransp}</Campo>
+            {transporte.cNomeTransp && <Campo label="Transportadora">{transporte.cNomeTransp}</Campo>}
             {transporte.cTipoFrete && (
               <Campo label="Frete">{FRETE_LABEL[transporte.cTipoFrete] ?? transporte.cTipoFrete}</Campo>
             )}
@@ -180,7 +184,7 @@ export function DetalhesFiscaisNF({ fullObject, semOmie = false }: { fullObject:
         </div>
       )}
 
-      {!!parcelas?.parcelasLista?.length && (
+      {ver('parcelas') && !!parcelas?.parcelasLista?.length && (
         <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
           <h3 className="mb-3 text-[17px] font-semibold text-text">Parcelas</h3>
           <ul className="divide-y divide-border/60 text-[15px]">
@@ -194,7 +198,7 @@ export function DetalhesFiscaisNF({ fullObject, semOmie = false }: { fullObject:
         </div>
       )}
 
-      {semOmie && totais?.vTotalNFe != null && (
+      {ver('totais') && totais?.vTotalNFe != null && (so === 'totais' || (semOmie && totais?.vTotalNFe != null)) && (
         <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
           <h3 className="mb-3 text-[17px] font-semibold text-text">Totais</h3>
           <dl className="grid grid-cols-2 gap-2.5">
@@ -210,7 +214,7 @@ export function DetalhesFiscaisNF({ fullObject, semOmie = false }: { fullObject:
         </div>
       )}
 
-      {totais && (totais.vAproxTributos != null || totais.nValIBS != null) && (
+      {ver('impostos') && totais && (totais.vAproxTributos != null || totais.nValIBS != null) && (
         <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
           <h3 className="mb-3 text-[17px] font-semibold text-text">Impostos (aproximados)</h3>
           <dl className="space-y-2.5">
@@ -227,7 +231,7 @@ export function DetalhesFiscaisNF({ fullObject, semOmie = false }: { fullObject:
         </div>
       )}
 
-      {infoAdicionais?.cCategCompra && (
+      {ver('adicionais') && infoAdicionais?.cCategCompra && (
         <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
           <h3 className="mb-3 text-[17px] font-semibold text-text">Informações adicionais</h3>
           <dl className="space-y-2.5">

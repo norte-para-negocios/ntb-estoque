@@ -40,12 +40,14 @@ test('ItensNotaFiscal: colunas novas só leem full_object.itensAjustes (sem cons
 })
 test('etapas e histórico novos só aparecem em loja própria', () => {
   assert.ok(ler('app/(app)/nota-fiscal/etapas/page.tsx').includes("redirect('/nota-fiscal')"))
-  assert.ok(/proprio \?[\s\S]*HistoricoProcessamentoNF[\s\S]*HistoricoStatusNF/.test(ler('app/(app)/nota-fiscal/[id]/page.tsx')))
+  assert.ok(/proprio \? \[[\s\S]*HistoricoProcessamentoNF[\s\S]*HistoricoStatusNF/.test(ler('app/(app)/nota-fiscal/[id]/page.tsx')))
 })
 test('tela da nota: manifestação, CT-e e observações só dentro do ramo da loja própria; DetalhesFiscais novo só com semOmie', () => {
   const page = ler('app/(app)/nota-fiscal/[id]/page.tsx')
-  const iProprio = page.indexOf('{proprio ? (')
-  const iOmie = page.indexOf(') : (', iProprio)
+  // As seções recolhidas da tela (27/10/2026) são montadas numa lista só: ramo da loja própria até o '] : [' do Omie.
+  const iProprio = page.indexOf('const secoes: SecaoNota[] = proprio ? [')
+  const iOmie = page.indexOf('] : [\n', iProprio)
+  assert.ok(iProprio > 0 && iOmie > iProprio, 'lista de seções por modo não encontrada')
   for (const comp of ['<ManifestacaoNF', '<FreteCteNF', '<ObservacaoNF', '<HistoricoProcessamentoNF']) {
     const i = page.indexOf(comp)
     assert.ok(i > iProprio && i < iOmie, `${comp} fora do ramo da loja própria`)

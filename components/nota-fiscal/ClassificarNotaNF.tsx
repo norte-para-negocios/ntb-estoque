@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Tags } from 'lucide-react'
+import { Sparkles, Tags } from 'lucide-react'
 import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { campoCompra } from '@/components/compras-proprio/SeletorProduto'
@@ -14,7 +14,7 @@ const NOVA = '__nova'
 const MISTA = '__mista'
 
 /** Categoria da nota inteira, na cara da tela: vale para todos os itens; exceção por item fica na lista de itens. */
-export function ClassificarNotaNF({ notaId, categorias, categoriaAtual, mista, editavel, podeCriar, categoriaOmie = null }: {
+export function ClassificarNotaNF({ notaId, categorias, categoriaAtual, mista, editavel, podeCriar, categoriaOmie = null, compacto = false, sugestao = null }: {
   notaId: number
   categorias: { id: number; nome: string }[]
   /** Todos os itens com a mesma categoria; null = nenhum item classificado. */
@@ -25,6 +25,10 @@ export function ClassificarNotaNF({ notaId, categorias, categoriaAtual, mista, e
   podeCriar: boolean
   /** Loja com Omie: a nota já traz a categoria de compra do Omie; ela vale e não se pede outra. */
   categoriaOmie?: { codigo: string; nome: string | null } | null
+  /** Dentro do painel de entrada (coluna estreita, sem cartão próprio). */
+  compacto?: boolean
+  /** Categoria que o sistema sugere (a das últimas notas do fornecedor). */
+  sugestao?: { id: number; nome: string; motivo: string } | null
 }) {
   const router = useRouter()
   const [pending, start] = useTransition()
@@ -73,6 +77,46 @@ export function ClassificarNotaNF({ notaId, categorias, categoriaAtual, mista, e
   }
 
   const semCategorias = categorias.length === 0
+  if (compacto) {
+    if (categoriaOmie) {
+      return (
+        <div className="grid gap-1 text-[13px]">
+          <span className="text-text-muted">Categoria da nota (vem do Omie)</span>
+          <span className="font-medium text-text"><span className="num text-text-muted">{categoriaOmie.codigo}</span>{categoriaOmie.nome ? ` · ${categoriaOmie.nome}` : ''}</span>
+        </div>
+      )
+    }
+    return (
+      <div className="grid gap-1.5 text-[13px]">
+        <label htmlFor="cat-nota" className="text-text-muted">Categoria da nota</label>
+        <select id="cat-nota" className={`${campoCompra} ${!valor ? 'ring-2 ring-warn/50' : ''}`} value={valor} disabled={!editavel || pending} onChange={(e) => escolher(e.target.value)}>
+          <option value="">{semCategorias ? 'Nenhuma categoria cadastrada' : 'Escolher a categoria…'}</option>
+          {mista && <option value={MISTA} disabled>Várias (cada item tem a sua)</option>}
+          {categorias.map((c) => <option key={c.id} value={String(c.id)}>{c.nome}</option>)}
+          {podeCriar && editavel && <option value={NOVA}>+ Nova categoria…</option>}
+        </select>
+        {editavel && !valor && sugestao && (
+          <button type="button" disabled={pending} onClick={() => escolher(String(sugestao.id))}
+            className="flex items-start gap-1.5 rounded-[var(--r-md)] bg-brand-soft px-2.5 py-2 text-left text-brand hover:brightness-95">
+            <Sparkles className="mt-0.5 size-3.5 shrink-0" />
+            <span><span className="font-semibold">Usar {sugestao.nome}</span><span className="block text-[12px] opacity-80">{sugestao.motivo}</span></span>
+          </button>
+        )}
+        {criando && (
+          <div className="flex items-end gap-2">
+            <input aria-label="Nome da nova categoria" autoFocus className={campoCompra} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Bebidas" onKeyDown={(e) => { if (e.key === 'Enter' && nome.trim()) criar() }} />
+            <button type="button" className={btnClass('primary')} disabled={pending || nome.trim().length < 2} onClick={criar}>{pending && <Spinner />}Criar</button>
+          </div>
+        )}
+        {editavel && !semCategorias && (
+          <button type="button" className="justify-self-start text-[12.5px] font-medium text-brand hover:underline" disabled={pending} onClick={pelosProdutos}
+            title="Cada item recebe a categoria do tipo do produto dele (revenda, matéria-prima, uso e consumo…)">
+            Classificar cada item pelo tipo do produto
+          </button>
+        )}
+      </div>
+    )
+  }
   if (categoriaOmie) {
     return (
       <section aria-label="Categoria da nota" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[var(--r-lg)] bg-surface px-4 py-3 u-card">

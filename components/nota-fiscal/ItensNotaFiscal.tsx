@@ -1,16 +1,15 @@
 'use client'
 
-import { Fragment, useState } from 'react'
-import { Printer, ChevronDown, ChevronUp } from 'lucide-react'
+import { useState } from 'react'
+import { Printer, MoreHorizontal, FileText } from 'lucide-react'
+import Link from 'next/link'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
-import { Num } from '@/components/ui-kit/Num'
 import { btnClass } from '@/components/ui-kit/Button'
 import { QuantidadeInput } from '@/components/nota-fiscal/QuantidadeInput'
 import { CategoriaContabilSelect } from '@/components/nota-fiscal/CategoriaContabilSelect'
 import { DialogImprimirEtiqueta } from '@/components/etiqueta/DialogImprimirEtiqueta'
-import { FileText } from 'lucide-react'
 import { impostosItem } from '@/lib/nf-impostos-item'
-import Link from 'next/link'
+import { categoriaDoItemOmie, entraNoEstoque, totalDoItem } from '@/lib/nota-fiscal/tela-nota'
 
 export type ItemNF = {
   id: number
@@ -39,13 +38,21 @@ function ajustesDoItem(fullObject: unknown): { cfopEntrada: string | null; local
   }
 }
 const simNao = (v: boolean | null) => (v == null ? '-' : v ? 'Sim' : 'Não')
+const brl = (n: number | null) => (n == null ? '-' : n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
+const qtd = (n: number | string | null) => (n == null ? '-' : Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 3 }))
 
+/**
+ * Itens da nota (27/10/2026): uma linha por item com o que importa (produto, quantidade, custo, total); o resto
+ * (CFOP, local, impostos, classificação, etiqueta) fica no "⋯" de cada linha.
+ */
 export function ItensNotaFiscal({
   notaId,
   itens,
   categorias,
   ligacoes,
   nomesLocais,
+  categoriaNota,
+  nomesCategoriaOmie,
 }: {
   notaId: string
   itens: ItemNF[]
@@ -54,275 +61,132 @@ export function ItensNotaFiscal({
   ligacoes?: { emissao: string | null; hoje: string } | null
   /** Nomes dos locais já carregados pela página (sem consulta nova aqui); sem nome, mostra o código. */
   nomesLocais?: Record<number, string>
+  /** Categoria da nota no Omie: o item só mostra a dele quando é diferente. */
+  categoriaNota?: string | null
+  nomesCategoriaOmie?: Record<string, string>
 }) {
+  const [sel, setSel] = useState<Set<number>>(new Set())
+  const [aberto, setAberto] = useState<number | null>(null)
+
+  if (!itens.length) return <EmptyState icon={FileText} title="Nenhum item nesta nota" />
+
   const nomeLocal = (c: number | null) => (c == null ? '-' : nomesLocais?.[c] ?? String(c))
   const produtoHref = (item: ItemNF) => (ligacoes && item.n_id_produto ? `/estoque/produto/${item.n_id_produto}` : null)
   const movHref = (item: ItemNF) =>
     ligacoes && item.n_id_produto && ligacoes.emissao
       ? `/movimentacoes?cod=${item.n_id_produto}&data_inicio=${ligacoes.emissao.slice(0, 10)}&data_final=${ligacoes.hoje}`
       : null
-  const nomeItem = (item: ItemNF) => {
-    const ph = produtoHref(item)
-    const mh = movHref(item)
-    return (
-      <>
-        {ph ? <Link href={ph} className="hover:underline" title="Abrir o produto">{item.c_descricao_produto}</Link> : item.c_descricao_produto}
-        {mh && <Link href={mh} className="ml-2 text-[12px] font-normal text-brand hover:underline" title="Movimentos deste produto desde a emissão da nota">movimentos</Link>}
-      </>
-    )
-  }
-  const [sel, setSel] = useState<Set<number>>(new Set())
-  const [expandido, setExpandido] = useState<Set<number>>(new Set())
-
-  function toggleExpandido(id: number) {
-    setExpandido((s) => {
-      const n = new Set(s)
-      if (n.has(id)) n.delete(id)
-      else n.add(id)
-      return n
-    })
-  }
-
-  function toggle(id: number) {
+  const base = `/nota-fiscal/${notaId}/imprimir`
+  const todos = sel.size === itens.length
+  const alternar = (id: number) =>
     setSel((s) => {
       const n = new Set(s)
       if (n.has(id)) n.delete(id)
       else n.add(id)
       return n
     })
-  }
-
-  function toggleTodos() {
-    setSel((s) => (s.size === itens.length ? new Set() : new Set(itens.map((i) => i.id))))
-  }
-
-  if (!itens.length) {
-    return <EmptyState icon={FileText} title="Nenhum item nesta nota" />
-  }
-
-  const base = `/nota-fiscal/${notaId}/imprimir`
-  const todosMarcados = sel.size === itens.length && itens.length > 0
+  const semProduto = itens.filter((i) => ligacoes && i.n_id_produto == null).length
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <DialogImprimirEtiqueta
-          href={sel.size ? `${base}?itens=${[...sel].join(',')}` : base}
-          trigger={
-            <button type="button" disabled={sel.size === 0} className={`${btnClass('outline')} disabled:opacity-50`}>
-              <Printer className="size-4" /> Imprimir selecionados{sel.size ? ` (${sel.size})` : ''}
-            </button>
-          }
-        />
-        <DialogImprimirEtiqueta
-          href={base}
-          trigger={
-            <button type="button" className={btnClass('primary')}>
-              <Printer className="size-4" /> Imprimir todos
-            </button>
-          }
-        />
-      </div>
-
-      {/* Desktop: tabela */}
-      <div className="hidden lg:block">
-        {/* Mesmo visual do DataTable do kit, mas com layout automático + rolagem
-            horizontal: com 11 colunas o table-fixed espremia o nome do produto
-            em ~5 letras. Aqui o produto quebra linha e nada é cortado. */}
-        <div className="u-stagger overflow-x-auto rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)]">
-        <table className="w-full min-w-[920px] text-sm [&_td:last-child]:sticky [&_td:last-child]:right-0 [&_td:last-child]:bg-surface [&_th:last-child]:sticky [&_th:last-child]:right-0 [&_th:last-child]:bg-surface [&_th]:whitespace-nowrap [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-left [&_th]:text-[13px] [&_th]:font-semibold [&_th]:text-text-muted [&_thead]:border-b [&_thead]:border-border [&_td]:px-3 [&_td]:py-2.5 [&_tbody_tr]:border-b [&_tbody_tr]:border-border/60 [&_tbody_tr:last-child]:border-0 [&_tbody_tr]:u-motion hover:[&_tbody_tr]:bg-surface-2/60">
-          <thead>
-            <tr>
-              <th className="w-10">
-                <input type="checkbox" checked={todosMarcados} onChange={toggleTodos} aria-label="Selecionar todos" className="size-4 accent-[var(--brand)]" />
-              </th>
-              <th className="min-w-[220px]">Produto</th>
-              <th className="!text-right">Quantidade</th>
-              <th className="!text-right">Preço unit.</th>
-              <th className="!text-right">Total</th>
-              <th>Categoria</th>
-              <th>Local</th>
-              <th></th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {itens.map((item) => {
-              const impostos = impostosItem(item.full_object)
-              const aj = ajustesDoItem(item.full_object)
-              const aberto = expandido.has(item.id)
-              return (
-                <Fragment key={item.id}>
-                  <tr className={sel.has(item.id) ? 'bg-brand-soft/40' : ''}>
-                    <td>
-                      <input type="checkbox" checked={sel.has(item.id)} onChange={() => toggle(item.id)} aria-label={`Selecionar ${item.c_codigo_produto}`} className="size-4 accent-[var(--brand)]" />
-                    </td>
-                    <td>
-                      <p className="font-medium text-text">{nomeItem(item)}</p>
-                      <p className="num text-[12px] text-text-muted">{item.c_codigo_produto}</p>
-                    </td>
-                    <td className="whitespace-nowrap text-right">
-                      <Num value={item.n_qtde_nfe} frac={3} /> <span className="text-text-muted">{item.c_unidade_nfe}</span>
-                    </td>
-                    <td className="num whitespace-nowrap text-right text-text-muted">
-                      {item.n_preco_unit != null ? Number(item.n_preco_unit).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
-                    </td>
-                    <td className="num whitespace-nowrap text-right font-medium">
-                      {item.v_total_item != null ? Number(item.v_total_item).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
-                    </td>
-                    <td>
-                      <CategoriaContabilSelect itemId={item.id} valorInicial={item.categoria_contabil_id} categorias={categorias} />
-                    </td>
-                    <td className="text-text-muted">
-                      {nomeLocal(aj.local)}
-                      {(aj.movimenta === false || aj.geraConta === false) && (
-                        <p className="text-[12px] text-warn">{[aj.movimenta === false ? 'não movimenta estoque' : '', aj.geraConta === false ? 'não gera conta a pagar' : ''].filter(Boolean).join(' · ')}</p>
-                      )}
-                    </td>
-                    <td className="text-right whitespace-nowrap">
-                      <button type="button" onClick={() => toggleExpandido(item.id)} className="inline-flex items-center gap-0.5 text-[13px] font-medium text-brand hover:underline">
-                        Detalhes {aberto ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
-                      </button>
-                    </td>
-                    <td className="text-right">
-                      <DialogImprimirEtiqueta
-                        href={`${base}?itens=${item.id}`}
-                        trigger={<button type="button" className="whitespace-nowrap font-semibold text-brand hover:underline">Imprimir</button>}
-                      />
-                    </td>
-                  </tr>
-                  {aberto && (
-                    <tr>
-                      <td></td>
-                      <td colSpan={8} className="bg-surface-2/50 py-3">
-                        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px]">
-                          <span className="text-text-muted">CFOP: <span className="num font-medium text-text">{item.c_cfop || '-'}</span></span>
-                          <span className="text-text-muted">CFOP de entrada: <span className="num font-medium text-text">{aj.cfopEntrada ?? '-'}</span></span>
-                          <span className="text-text-muted">Gera conta a pagar: <span className="font-medium text-text">{simNao(aj.geraConta)}</span></span>
-                          <span className="text-text-muted">Movimenta estoque: <span className="font-medium text-text">{simNao(aj.movimenta)}</span></span>
-                          <span className="inline-flex items-center gap-2 text-text-muted">Qtd para etiqueta: <QuantidadeInput itemId={item.id} valorInicial={item.quantidade} /></span>
-                          {impostos.map((imp) => (
-                            <span key={imp.label} className="text-text-muted">
-                              {imp.label}: <span className="num font-medium text-text">{imp.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              )
-            })}
-          </tbody>
-        </table>
+    <section className="rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)]" aria-label="Itens da nota">
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 pb-2 pt-3.5">
+        <h2 className="text-[16px] font-semibold text-text">Itens da nota <span className="font-normal text-text-muted">{itens.length}</span></h2>
+        {semProduto > 0 && <span className="text-[13px] font-medium text-warn">{semProduto} sem produto ligado no Omie</span>}
+        <div className="ml-auto flex items-center gap-2">
+          {sel.size > 0 && (
+            <DialogImprimirEtiqueta
+              href={`${base}?itens=${[...sel].join(',')}`}
+              trigger={<button type="button" className={btnClass('outline')}><Printer className="size-4" />Etiquetas dos marcados ({sel.size})</button>}
+            />
+          )}
+          <DialogImprimirEtiqueta href={base} trigger={<button type="button" className={btnClass('outline')}><Printer className="size-4" />Etiquetas de todos</button>} />
         </div>
+      </header>
+
+      <div className="hidden grid-cols-[28px_minmax(0,1fr)_130px_100px_110px_36px] items-center gap-3 border-b border-border px-4 pb-2 text-[12px] font-semibold uppercase tracking-[0.04em] text-text-muted md:grid">
+        <input type="checkbox" checked={todos} onChange={() => setSel(todos ? new Set() : new Set(itens.map((i) => i.id)))} aria-label="Marcar todos" className="size-4 accent-[var(--brand)]" />
+        <span>Produto</span>
+        <span className="text-right">Quantidade</span>
+        <span className="text-right">Custo un.</span>
+        <span className="text-right">Total</span>
+        <span />
       </div>
 
-      {/* Mobile: cards */}
-      <div className="space-y-3 lg:hidden">
-        <label className="flex min-h-[44px] items-center gap-2 px-1 text-[15px] text-text-muted">
-          <input
-            type="checkbox"
-            checked={todosMarcados}
-            onChange={toggleTodos}
-            aria-label="Selecionar todos"
-            className="size-4 accent-[var(--brand)]"
-          />
-          Selecionar todos
-        </label>
+      <ul>
         {itens.map((item) => {
-          const impostos = impostosItem(item.full_object)
           const aj = ajustesDoItem(item.full_object)
+          const entra = entraNoEstoque(item)
+          const total = totalDoItem(item)
+          const catItem = categoriaDoItemOmie(item.full_object)
+          const catDiferente = !!catItem && !!categoriaNota && catItem !== categoriaNota
+          const ph = produtoHref(item)
+          const mh = movHref(item)
+          const abrir = aberto === item.id
+          const impostos = abrir ? impostosItem(item.full_object) : []
           return (
-          <div
-            key={item.id}
-            className={`rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] p-4 ${
-              sel.has(item.id) ? 'bg-brand-soft/40' : 'bg-surface'
-            }`}
-          >
-            <div className="flex items-start gap-3">
-              <input
-                type="checkbox"
-                checked={sel.has(item.id)}
-                onChange={() => toggle(item.id)}
-                aria-label={`Selecionar ${item.c_codigo_produto}`}
-                className="mt-0.5 size-4 shrink-0 accent-[var(--brand)]"
-              />
-              <div className="min-w-0 flex-1">
-                <div className="num text-[13px] text-text-muted">{item.c_codigo_produto}</div>
-                <div className="text-[15px] font-semibold text-text break-words">{nomeItem(item)}</div>
-              </div>
-            </div>
-
-            <div className="mt-3 text-sm">
-              <span className="text-[13px] font-semibold text-text-muted">
-                Qtd NFe{' '}
-              </span>
-              <Num value={item.n_qtde_nfe} frac={3} />{' '}
-              <span className="text-text-muted">{item.c_unidade_nfe}</span>
-            </div>
-
-            {(aj.cfopEntrada || aj.local != null || aj.movimenta != null) && (
-              <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[13px]">
-                <div><dt className="text-text-muted">CFOP de entrada</dt><dd className="num">{aj.cfopEntrada ?? '-'}</dd></div>
-                <div><dt className="text-text-muted">Local</dt><dd>{nomeLocal(aj.local)}</dd></div>
-                <div><dt className="text-text-muted">Gera conta a pagar</dt><dd>{simNao(aj.geraConta)}</dd></div>
-                <div><dt className="text-text-muted">Movimenta estoque</dt><dd>{simNao(aj.movimenta)}</dd></div>
-              </dl>
-            )}
-
-            {impostos.length > 0 && (
-              <div className="mt-3">
+            <li key={item.id} className={`border-b border-border/60 last:border-0 ${sel.has(item.id) ? 'bg-brand-soft/40' : ''}`}>
+              <div className="grid grid-cols-[28px_minmax(0,1fr)_36px] items-start gap-x-3 gap-y-1 px-4 py-3 md:grid-cols-[28px_minmax(0,1fr)_130px_100px_110px_36px] md:items-center">
+                <input type="checkbox" checked={sel.has(item.id)} onChange={() => alternar(item.id)} aria-label={`Marcar ${item.c_descricao_produto ?? 'item'}`} className="mt-1 size-4 accent-[var(--brand)] md:mt-0" />
+                <div className="min-w-0">
+                  <p className="text-[14px] font-medium text-text">
+                    {ph ? <Link href={ph} className="hover:text-brand hover:underline">{item.c_descricao_produto}</Link> : item.c_descricao_produto}
+                  </p>
+                  <p className="text-[12px] text-text-muted">
+                    <span className="num">cód. {item.c_codigo_produto ?? '-'}</span>
+                    {mh && <> · <Link href={mh} className="text-brand hover:underline">movimentos</Link></>}
+                    {ligacoes && item.n_id_produto == null && <span className="font-medium text-warn"> · sem produto ligado</span>}
+                  </p>
+                  {catDiferente && (
+                    <p className="text-[12px] text-text-muted">Categoria deste item: <span className="font-medium text-text">{catItem}{nomesCategoriaOmie?.[catItem!] ? ` · ${nomesCategoriaOmie[catItem!]}` : ''}</span></p>
+                  )}
+                  {(aj.movimenta === false || aj.geraConta === false) && (
+                    <p className="text-[12px] text-warn">{[aj.movimenta === false ? 'não movimenta estoque' : '', aj.geraConta === false ? 'não gera conta a pagar' : ''].filter(Boolean).join(' · ')}</p>
+                  )}
+                  {/* celular: números embaixo do nome */}
+                  <p className="num mt-1 text-[13px] text-text md:hidden">
+                    {qtd(item.n_qtde_nfe)} {item.c_unidade_nfe}{entra ? ` (entra ${qtd(entra.quantidade)} ${entra.unidade})` : ''} · {brl(item.n_preco_unit != null ? Number(item.n_preco_unit) : null)} · <span className="font-semibold">{brl(total)}</span>
+                  </p>
+                </div>
+                <div className="hidden text-right md:block">
+                  <p className="num text-[14px] text-text">{qtd(item.n_qtde_nfe)} <span className="text-text-muted">{item.c_unidade_nfe}</span></p>
+                  {entra && <p className="num text-[12px] text-text-muted">entra {qtd(entra.quantidade)} {entra.unidade}</p>}
+                </div>
+                <p className="num hidden text-right text-[14px] text-text md:block">{brl(item.n_preco_unit != null ? Number(item.n_preco_unit) : null)}</p>
+                <p className="num hidden text-right text-[14px] font-semibold text-text md:block">{brl(total)}</p>
                 <button
                   type="button"
-                  onClick={() => toggleExpandido(item.id)}
-                  className="inline-flex min-h-[44px] items-center gap-0.5 text-[13px] font-medium text-brand hover:underline"
+                  onClick={() => setAberto(abrir ? null : item.id)}
+                  aria-expanded={abrir}
+                  aria-label="Mais deste item"
+                  className="flex size-9 items-center justify-center rounded-full text-text-muted u-motion hover:bg-surface-2 hover:text-text"
                 >
-                  Impostos {expandido.has(item.id) ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+                  <MoreHorizontal className="size-4" />
                 </button>
-                {expandido.has(item.id) && (
-                  <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[13px]">
+              </div>
+              {abrir && (
+                <div className="mx-4 mb-3 space-y-3 rounded-[var(--r-md)] bg-surface-2 p-3 text-[13px]">
+                  <dl className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
+                    <div><dt className="text-text-muted">CFOP da nota</dt><dd className="num font-medium">{item.c_cfop || '-'}</dd></div>
+                    <div><dt className="text-text-muted">CFOP de entrada</dt><dd className="num font-medium">{aj.cfopEntrada ?? '-'}</dd></div>
+                    <div><dt className="text-text-muted">Entra no local</dt><dd className="font-medium">{nomeLocal(aj.local)}</dd></div>
+                    <div><dt className="text-text-muted">Gera conta a pagar · movimenta</dt><dd className="font-medium">{simNao(aj.geraConta)} · {simNao(aj.movimenta)}</dd></div>
                     {impostos.map((imp) => (
-                      <span key={imp.label} className="text-text-muted">
-                        {imp.label}:{' '}
-                        <span className="num font-medium text-text">
-                          {imp.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </span>
-                      </span>
+                      <div key={imp.label}><dt className="text-text-muted">{imp.label}</dt><dd className="num font-medium">{brl(imp.valor)}</dd></div>
                     ))}
+                  </dl>
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                    {categorias.length > 0 && (
+                      <span className="inline-flex items-center gap-2 text-text-muted">Classificação no sistema <CategoriaContabilSelect itemId={item.id} valorInicial={item.categoria_contabil_id} categorias={categorias} /></span>
+                    )}
+                    <span className="inline-flex items-center gap-2 text-text-muted">Qtd para etiqueta <QuantidadeInput itemId={item.id} valorInicial={item.quantidade} /></span>
+                    <DialogImprimirEtiqueta href={`${base}?itens=${item.id}`} trigger={<button type="button" className={btnClass('outline')}><Printer className="size-4" />Imprimir etiqueta</button>} />
                   </div>
-                )}
-              </div>
-            )}
-
-            <div className="mt-3">
-              <div className="mb-1 text-[13px] font-semibold text-text-muted">
-                Qtd p/ etiqueta
-              </div>
-              <QuantidadeInput itemId={item.id} valorInicial={item.quantidade} />
-            </div>
-
-            <div className="mt-3">
-              <div className="mb-1 text-[13px] font-semibold text-text-muted">
-                Categoria contábil
-              </div>
-              <CategoriaContabilSelect itemId={item.id} valorInicial={item.categoria_contabil_id} categorias={categorias} />
-            </div>
-
-            <div className="mt-4 border-t border-border/60 pt-3">
-              <DialogImprimirEtiqueta
-                href={`${base}?itens=${item.id}`}
-                trigger={
-                  <button type="button" className="inline-flex min-h-[44px] items-center gap-1.5 font-semibold text-brand hover:underline">
-                    <Printer className="size-3.5" /> Imprimir
-                  </button>
-                }
-              />
-            </div>
-          </div>
+                </div>
+              )}
+            </li>
           )
         })}
-      </div>
-    </div>
+      </ul>
+    </section>
   )
 }

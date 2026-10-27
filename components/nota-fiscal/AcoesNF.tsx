@@ -79,7 +79,7 @@ export function AcoesNF({
         </button>
       )}
       {podeExcluir && (
-        <button type="button" disabled={pending} onClick={excluir} className={btnClass('outline')}>
+        <button type="button" disabled={pending} onClick={excluir} className={`${btnClass('outline')} text-err`}>
           <Trash2 className="size-4" /> {modoProprio ? 'Excluir nota' : 'Excluir recebimento'}
         </button>
       )}
