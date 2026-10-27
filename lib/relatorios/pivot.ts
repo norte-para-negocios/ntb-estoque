@@ -3,7 +3,15 @@
 export type Linha = Record<string, string | number | null>
 export type Agg = 'soma' | 'contagem' | 'contagem_distinta' | 'media' | 'min' | 'max'
 export type Medida = { campo: string; agg: Agg }
-export type Layout = { linhas: string[]; colunas: string[]; medidas: Medida[]; filtros: Record<string, string[]> }
+export type Layout = {
+  linhas: string[]
+  colunas: string[]
+  medidas: Medida[]
+  /** Só entram as linhas cujo campo está na lista. */
+  filtros: Record<string, string[]>
+  /** Saem as linhas cujo campo está na lista (ex.: Situação = Cancelada). */
+  exceto?: Record<string, string[]>
+}
 export type No = { chave: string; rotulo: string; valores: Record<string, number>; filhos: No[] }
 
 export const VAZIO = '(vazio)'
@@ -77,9 +85,11 @@ export function pivotar(linhas: Linha[], layout: Layout): { raizLinhas: No; colu
   const raiz = novoNo('', '')
   const colunas = new Set<string>()
   const filtrosAtivos = Object.entries(filtros).filter(([, v]) => v.length > 0)
+  const excecoes = Object.entries(layout.exceto ?? {}).filter(([, v]) => v.length > 0)
 
   for (const linha of linhas) {
     if (filtrosAtivos.some(([campo, ok]) => !ok.includes(rotuloDe(linha[campo])))) continue
+    if (excecoes.some(([campo, fora]) => fora.includes(rotuloDe(linha[campo])))) continue
     const col = camposColuna.length ? camposColuna.map((c) => rotuloDe(linha[c])).join(' / ') : ''
     if (col) colunas.add(col)
     somar(raiz, col, medidas, linha)

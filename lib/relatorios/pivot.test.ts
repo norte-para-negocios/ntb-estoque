@@ -67,3 +67,9 @@ test('sem linhas escolhidas: so o total', () => {
   assert.equal(r.raizLinhas.filhos.length, 0)
   assert.equal(r.total[k], 200)
 })
+
+test('exceto tira as linhas listadas e mantem as demais (inclusive valor desconhecido)', () => {
+  const r = pivotar([...dados, L('C', '2026-10', '9', 999, 'Cancelada'), L('D', '2026-10', '8', 1, 'Pendente (etapa 40)')], base({ exceto: { Situação: ['Cancelada'] } }))
+  assert.equal(r.total[k], 201)
+  assert.deepEqual(r.raizLinhas.filhos.map((n) => n.rotulo), ['A', 'B', 'D'])
+})
