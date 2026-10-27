@@ -49,7 +49,17 @@ export function linhaRecebimentos(r: Record<string, unknown>): Linha {
   const transp = obj(nota.transporte)
   const parcelas = obj(nota.parcelas).parcelasLista
   const qtd = num(r.n_qtde_nfe) ?? num(cab.nQtdeNFe)
-  const unit = num(r.n_preco_unit) ?? num(cab.nPrecoUnit)
+  // A coluna n_preco_unit guarda 2 casas; o full_object guarda o preço com 6 (o que o Omie usa).
+  const unit = num(cab.nPrecoUnit) ?? num(r.n_preco_unit)
+  const desconto = num(r.v_desconto) ?? num(cab.vDesconto)
+  const totalItem = num(cab.vTotalItem) ?? num(r.v_total_item)
+  const ipi = num(obj(item.itensIPI).nValIPI) ?? 0
+  const st = num(obj(item.itensICMSST).nValorST) ?? num(obj(item.itensICMSST).nValorSubst) ?? 0
+  // "Total de Mercadoria" do Omie = valor dos produtos, sem imposto somado. Sem IPI/ST no item, o total do item mais o desconto
+  // é exato (conferido nota a nota com o Omie em 26/10/2026); com IPI/ST o total do item já traz imposto, então vale quantidade x preço.
+  const mercadoria = totalItem != null && ipi === 0 && st === 0
+    ? Math.round((totalItem + (desconto ?? 0)) * 100) / 100
+    : qtd != null && unit != null ? Math.round(qtd * unit * 100) / 100 : null
   const emissao = dataISO(r.d_emissao_nfe)
   const registro = dataISO(adic.dRegistro) ?? emissao
   const recebimento = dataISO(info.dRec)
@@ -103,12 +113,12 @@ export function linhaRecebimentos(r: Record<string, unknown>): Linha {
     'Item': num(r.n_sequencia),
     'Quantidade': qtd,
     'Valor Unitário': unit,
-    'Total de Mercadoria': qtd != null && unit != null ? Math.round(qtd * unit * 100) / 100 : null,
-    'Desconto': num(r.v_desconto) ?? num(cab.vDesconto),
+    'Total de Mercadoria': mercadoria,
+    'Desconto': desconto,
     'Frete': num(r.v_frete) ?? num(sefaz.vFrete),
     'Seguro': num(sefaz.vSeg),
     'Outras Despesas Acessórias': num(sefaz.vOutro),
-    'Total do Documento Fiscal': num(r.v_total_item) ?? num(cab.vTotalItem),
+    'Total do Documento Fiscal': totalItem,
     'Valor Aprox. dos Impostos': null,
     'Valor do ICMS': num(obj(item.itensICMS).nValor),
     'Valor do ICMS ST': num(obj(item.itensICMSST).nValorST),

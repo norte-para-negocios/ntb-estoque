@@ -17,6 +17,8 @@ export const ROTAS_SO_DEV = [
   '/relatorio-produtos-fornecedor',
   // Finanças, etapa 1 (migrations 285/286): contas correntes, categorias, contas a pagar, pagamentos e extrato.
   '/financeiro',
+  // Relatórios dinâmicos estilo Omie (tabela dinâmica por cubo): só desenvolvedor até conferir os números com o Omie.
+  '/relatorios/dinamico',
 ] as const
 
 export async function ehDesenvolvedor(): Promise<boolean> {

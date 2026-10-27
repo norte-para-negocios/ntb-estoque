@@ -56,3 +56,16 @@ test('todo campo devolvido pela linha esta declarado no cubo (sem campo fantasma
   const declarados = new Set(CAMPOS_RECEBIMENTOS.map((x) => x.id))
   for (const k of Object.keys(linhaRecebimentos(odara))) assert.ok(declarados.has(k), `campo fantasma ${k}`)
 })
+
+// Casos no molde dos itens da Donana (loja 5) conferidos contra o relatório do Omie: nota 197852 (sem imposto, 593,92) e 139407 (com IPI, 4.062,48).
+test('sem IPI/ST: Total de Mercadoria = total do item + desconto (cravado com o Omie)', () => {
+  const l = linhaRecebimentos({ n_qtde_nfe: 3, n_preco_unit: 1.65, item_full: { itensCabec: { nPrecoUnit: 1.6534, vTotalItem: 4.95, vDesconto: 0 } } })
+  assert.equal(l['Total de Mercadoria'], 4.95) // 3 x 1,6534 = 4,96: o Omie mostra 4,95
+})
+
+test('com IPI: o total do item traz imposto, entao vale quantidade x preco preciso', () => {
+  const l = linhaRecebimentos({ n_qtde_nfe: 5, n_preco_unit: 123.26, item_full: { itensCabec: { nPrecoUnit: 123.256132, vTotalItem: 688.13, vDesconto: 0 }, itensIPI: { nValIPI: 19.52 } } })
+  assert.equal(l['Total de Mercadoria'], 616.28)
+  assert.equal(l['Total do Documento Fiscal'], 688.13)
+  assert.equal(l['Valor do IPI'], 19.52)
+})

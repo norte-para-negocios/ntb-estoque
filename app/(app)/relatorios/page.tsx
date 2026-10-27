@@ -3,7 +3,9 @@ import { getAtorGestao } from '@/lib/auth'
 import { ehDesenvolvedor, ROTAS_SO_DEV } from '@/lib/recursos-dev'
 import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { PRESETS, EM_BREVE } from '@/lib/relatorios/catalogo'
 import { getCurrentLojaId } from '@/lib/auth'
+import { TableProperties } from 'lucide-react'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import {
   TrendingUp, BarChart3, ShoppingCart, ArrowDownUp, DollarSign, Scale, Percent, ShieldCheck, CalendarCheck, ArrowUpRight, Boxes, ClipboardX, Factory, FileBarChart, Target, Flag, ChartColumnDecreasing, Warehouse, Calculator, Truck, BellRing,
@@ -91,6 +93,38 @@ export default async function RelatoriosPage() {
         icon={BarChart3}
         description="Todos os relatórios num lugar só. Cada um responde uma pergunta do negócio."
       />
+
+      {dev && (
+        <section aria-label="Relatórios do Omie">
+          <h2 className="mb-1 text-[13px] font-semibold text-text-muted">Relatórios do Omie <span className="ml-1 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium">só dev</span></h2>
+          <p className="mb-2 text-[12px] text-text-muted">Os mesmos relatórios do Omie, com o mesmo nome. Escolha o período e mude linhas, colunas e valores como no Omie; exporta para Excel.</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {PRESETS.map((r) => (
+              <Link key={r.slugOmie} href={`/relatorios/dinamico/${r.cubo}?preset=${r.slugOmie}`}
+                className="group relative overflow-hidden rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4 u-motion hover:shadow-[var(--shadow-md)]">
+                <div className="flex items-start gap-3">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-brand-soft text-brand"><TableProperties className="size-[18px]" strokeWidth={2} /></span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2"><span className="font-semibold text-text group-hover:text-brand">{r.titulo}</span><ArrowUpRight className="ml-auto size-4 text-text-muted/30 group-hover:text-brand" /></div>
+                    <p className="mt-0.5 text-[13px] font-medium text-text-muted">{r.pergunta}</p>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+          <details className="mt-3 rounded-[var(--r-lg)] bg-surface p-4 shadow-[var(--shadow-sm)]">
+            <summary className="cursor-pointer text-[13px] font-semibold text-text">Em breve: {EM_BREVE.length} relatórios do Omie (vendas, estoque, produção e financeiro)</summary>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              {(['Vendas', 'Estoque', 'Produção', 'Financeiro'] as const).map((f) => (
+                <div key={f}>
+                  <p className="text-[12px] font-semibold text-text-muted">{f}</p>
+                  <ul className="mt-1 space-y-0.5 text-[13px] text-text-muted">{EM_BREVE.filter((e) => e.familia === f).map((e) => <li key={e.slugOmie}>{e.titulo}</li>)}</ul>
+                </div>
+              ))}
+            </div>
+          </details>
+        </section>
+      )}
 
       {secoes.map((secao) => (
         <section key={secao.grupo}>
