@@ -79,7 +79,7 @@ export default async function NotaFiscalItensPage({
       .order('n_sequencia'),
     supabase
       .from('categorias_contabeis')
-      .select('id, nome')
+      .select('id, nome, codigo')
       .eq('loja_id', lojaId)
       .eq('ativa', true)
       .order('nome'),
@@ -140,13 +140,19 @@ export default async function NotaFiscalItensPage({
     return `${dia}/${m}/${y}`
   }
 
-  const nomesLocais = conferencia ? Object.fromEntries(conferencia.locais.map((l) => [l.codigo, l.descricao])) : undefined
+  const { data: locaisLoja } = conferencia ? { data: null } : await supabase.from('local_estoques').select('codigo_local_estoque, descricao').eq('loja_id', lojaId)
+  const nomesLocais = conferencia
+    ? Object.fromEntries(conferencia.locais.map((l) => [l.codigo, l.descricao]))
+    : Object.fromEntries((locaisLoja ?? []).map((l) => [Number(l.codigo_local_estoque), l.descricao as string]))
   const itensNF = (itens ?? []) as ItemNF[]
   // Categoria da nota = a dos itens quando todos coincidem; itens com categorias diferentes viram "várias".
   const idsCategoria = new Set(itensNF.map((i) => i.categoria_contabil_id))
   const categoriaUnica = idsCategoria.size === 1 ? ([...idsCategoria][0] ?? null) : null
   const categoriaMista = idsCategoria.size > 1 && !idsCategoria.has(null)
-  const faltaCategoria = (categorias ?? []).length > 0 && itensNF.some((i) => i.categoria_contabil_id == null)
+  // Loja com Omie: a nota já chega com a categoria de compra do Omie (ex.: 2.01.85). Ela vale; não se pede outra.
+  const codCategOmie = (nf.full_object as { infoAdicionais?: { cCategCompra?: string } } | null)?.infoAdicionais?.cCategCompra || null
+  const categoriaOmie = !proprio && codCategOmie ? { codigo: codCategOmie, nome: (categorias ?? []).find((c) => c.codigo === codCategOmie)?.nome ?? null } : null
+  const faltaCategoria = !categoriaOmie && (categorias ?? []).length > 0 && itensNF.some((i) => i.categoria_contabil_id == null)
   const podeCriarCategoria = await requirePermissao(lojaId, 'Categorias Contabeis - Criar')
   const semProdutoOmie = itensNF.filter((i) => i.n_id_produto == null).length
   const faltasOmie = [
@@ -232,7 +238,7 @@ export default async function NotaFiscalItensPage({
               {statusInfo && (
                 <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-medium text-text">
                   <span className={`size-2 shrink-0 rounded-full ${FUNDO_CLASSE[statusInfo.tom]}`} aria-hidden />
-                  {statusInfo.label} <span className="num font-normal text-text-muted">({nf.c_etapa})</span>
+                  <span title={`Etapa ${nf.c_etapa ?? '?'}`}>{statusInfo.label.replace(/ \(etapa .*\)$/, '')}</span>
                 </span>
               )}
             </div>
@@ -240,14 +246,15 @@ export default async function NotaFiscalItensPage({
               // Chave de acesso = código: continua em mono, quebrada em grupos de 4
               // só visualmente (spans inline-block, sem espaço real no texto --
               // copiar a chave continua dando os 44 dígitos colados).
-              <p className="font-mono text-[12px] leading-relaxed text-text-muted" title="Chave de acesso">
+              <p className="font-mono text-[11px] leading-relaxed text-text-muted/80" title="Chave de acesso">
                 {(nf.c_chave_nfe.match(/.{1,4}/g) ?? [nf.c_chave_nfe]).map((g: string, i: number) => (
                   <span key={i} className="mr-[0.5em] inline-block">{g}</span>
                 ))}
               </p>
             )}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
             {nf.n_id_receb && (
-              <div className="flex flex-wrap gap-2 pt-1">
+              <>
                 <a
                   href={`/api/nota-fiscal/${nf.id}/xml`}
                   download
@@ -265,7 +272,7 @@ export default async function NotaFiscalItensPage({
                 >
                   <FileText className="size-4" /> DANFE
                 </a>}
-              </div>
+              </>
             )}
             {/* So renderiza os botoes de acao quando a nota veio do Supabase
                 "quente" de verdade (nfSupabase, ANTES do fallback pro
@@ -276,7 +283,7 @@ export default async function NotaFiscalItensPage({
                 quente por id+loja_id, entao so podem ser chamadas com
                 seguranca quando foi essa busca que encontrou a nota. */}
             {nfSupabase && (
-              <div className="pt-1">
+              <>
                 <AcoesNF
                   notaId={Number(id)}
                   concluida={concluida}
@@ -288,13 +295,14 @@ export default async function NotaFiscalItensPage({
                   temEntrada={!!conferencia?.itens.some((i) => i.lancado) && conferencia.compra?.status !== 'cancelada'}
                   semConcluir={!proprio}
                 />
-              </div>
+              </>
             )}
+            </div>
           </div>
         }
       />
       {!cancelada && (
-        <ClassificarNotaNF notaId={Number(id)} categorias={categorias ?? []} categoriaAtual={categoriaUnica} mista={categoriaMista}
+        <ClassificarNotaNF notaId={Number(id)} categorias={categorias ?? []} categoriaAtual={categoriaUnica} mista={categoriaMista} categoriaOmie={categoriaOmie}
           editavel={!!nfSupabase && (proprio ? podeManifestar : podeManifestar && !concluida)} podeCriar={podeCriarCategoria} />
       )}
 
@@ -307,7 +315,7 @@ export default async function NotaFiscalItensPage({
         <>
           {listaItens}
           <AbasNota abas={abas} />
-          {nfSupabase && <BarraConcluirNF notaId={Number(id)} concluida={concluida} cancelada={cancelada} podeConcluir={podeManifestar} faltas={faltasOmie} />}
+          {nfSupabase && <BarraConcluirNF notaId={Number(id)} concluida={concluida} cancelada={cancelada} podeConcluir={podeManifestar} faltas={faltasOmie} resumo={`O recebimento é concluído no Omie${nf.n_valor_nfe != null ? `: entra no estoque e gera a conta a pagar de ${Number(nf.n_valor_nfe).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ''}.`} />}
         </>
       )}
     </div>

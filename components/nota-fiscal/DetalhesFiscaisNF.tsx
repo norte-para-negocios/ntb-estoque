@@ -108,7 +108,7 @@ export function DetalhesFiscaisNF({ fullObject, semOmie = false }: { fullObject:
   if (!temAlgumaSecao) return null
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className="grid items-start gap-3 sm:grid-cols-2">
       {(cabec?.cCNPJ_CPF || cabec?.cNaturezaOperacao) && (
         <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
           <h3 className="mb-3 text-[17px] font-semibold text-text">Fornecedor / operação</h3>

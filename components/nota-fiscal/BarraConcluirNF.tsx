@@ -9,8 +9,10 @@ import { Spinner } from '@/components/ui-kit/Spinner'
 import { manifestarNF } from '@/lib/actions/nota-fiscal'
 
 /** Barra fixa embaixo (loja com Omie): diz o que falta e só libera "Concluir nota" quando estiver tudo certo. */
-export function BarraConcluirNF({ notaId, concluida, cancelada, podeConcluir, faltas }: {
+export function BarraConcluirNF({ notaId, concluida, cancelada, podeConcluir, faltas, resumo }: {
   notaId: number; concluida: boolean; cancelada: boolean; podeConcluir: boolean; faltas: string[]
+  /** O que acontece ao concluir, em uma frase. */
+  resumo?: string
 }) {
   const router = useRouter()
   const [pending, start] = useTransition()
@@ -33,9 +35,11 @@ export function BarraConcluirNF({ notaId, concluida, cancelada, podeConcluir, fa
           {concluida
             ? <p className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-ok"><CheckCircle2 className="size-4" />Nota concluída</p>
             : pronto
-              ? <p className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-ok"><CheckCircle2 className="size-4" />Tudo certo, pode concluir</p>
+              ? <><p className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-ok"><CheckCircle2 className="size-4" />Tudo certo, pode concluir</p>
+                  {resumo && <p className="text-[13px] text-text-muted">{resumo}</p>}</>
               : <><p className="text-[14px] font-semibold text-text">Falta para concluir</p>
-                  <p className="inline-flex items-start gap-1.5 text-[13px] text-warn"><CircleAlert className="mt-0.5 size-4 shrink-0" />{faltas.join(' · ')}</p></>}
+                  <p className="inline-flex items-start gap-1.5 text-[13px] text-warn"><CircleAlert className="mt-0.5 size-4 shrink-0" />{faltas.join(' · ')}</p>
+                  {resumo && <p className="text-[12px] text-text-muted">Ao concluir: {resumo.charAt(0).toLowerCase() + resumo.slice(1)}</p>}</>}
         </div>
         {!concluida && (
           <button type="button" className={btnClass('primary')} disabled={pending || !pronto} onClick={concluir}>

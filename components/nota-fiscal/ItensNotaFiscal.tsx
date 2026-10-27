@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { Printer, ChevronDown, ChevronUp } from 'lucide-react'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Num } from '@/components/ui-kit/Num'
@@ -130,30 +130,18 @@ export function ItensNotaFiscal({
             horizontal: com 11 colunas o table-fixed espremia o nome do produto
             em ~5 letras. Aqui o produto quebra linha e nada é cortado. */}
         <div className="u-stagger overflow-x-auto rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)]">
-        <table className="w-full min-w-[1200px] text-sm [&_td:last-child]:sticky [&_td:last-child]:right-0 [&_td:last-child]:bg-surface [&_th:last-child]:sticky [&_th:last-child]:right-0 [&_th:last-child]:bg-surface [&_th]:whitespace-nowrap [&_th]:px-4 [&_th]:py-2.5 [&_th]:text-left [&_th]:text-[13px] [&_th]:font-semibold [&_th]:text-text-muted [&_thead]:border-b [&_thead]:border-border [&_td]:px-4 [&_td]:py-2.5 [&_tbody_tr]:border-b [&_tbody_tr]:border-border/60 [&_tbody_tr:last-child]:border-0 [&_tbody_tr]:u-motion hover:[&_tbody_tr]:bg-surface-2/60">
+        <table className="w-full min-w-[920px] text-sm [&_td:last-child]:sticky [&_td:last-child]:right-0 [&_td:last-child]:bg-surface [&_th:last-child]:sticky [&_th:last-child]:right-0 [&_th:last-child]:bg-surface [&_th]:whitespace-nowrap [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-left [&_th]:text-[13px] [&_th]:font-semibold [&_th]:text-text-muted [&_thead]:border-b [&_thead]:border-border [&_td]:px-3 [&_td]:py-2.5 [&_tbody_tr]:border-b [&_tbody_tr]:border-border/60 [&_tbody_tr:last-child]:border-0 [&_tbody_tr]:u-motion hover:[&_tbody_tr]:bg-surface-2/60">
           <thead>
             <tr>
               <th className="w-10">
-                <input
-                  type="checkbox"
-                  checked={todosMarcados}
-                  onChange={toggleTodos}
-                  aria-label="Selecionar todos"
-                  className="size-4 accent-[var(--brand)]"
-                />
+                <input type="checkbox" checked={todosMarcados} onChange={toggleTodos} aria-label="Selecionar todos" className="size-4 accent-[var(--brand)]" />
               </th>
-              <th>Código</th>
-              <th className="min-w-[240px]">Produto</th>
-              <th>CFOP</th>
-              <th>CFOP de entrada</th>
-              <th>Local</th>
-              <th>Gera conta a pagar</th>
-              <th>Movimenta estoque</th>
-              <th className="!text-right">Qtd NFe</th>
+              <th className="min-w-[220px]">Produto</th>
+              <th className="!text-right">Quantidade</th>
               <th className="!text-right">Preço unit.</th>
               <th className="!text-right">Total</th>
-              <th className="!text-right">Qtd p/ etiqueta</th>
-              <th>Categoria contábil</th>
+              <th>Categoria</th>
+              <th>Local</th>
               <th></th>
               <th></th>
             </tr>
@@ -162,28 +150,19 @@ export function ItensNotaFiscal({
             {itens.map((item) => {
               const impostos = impostosItem(item.full_object)
               const aj = ajustesDoItem(item.full_object)
+              const aberto = expandido.has(item.id)
               return (
-                <>
-                  <tr key={item.id} className={sel.has(item.id) ? 'bg-brand-soft/40' : ''}>
+                <Fragment key={item.id}>
+                  <tr className={sel.has(item.id) ? 'bg-brand-soft/40' : ''}>
                     <td>
-                      <input
-                        type="checkbox"
-                        checked={sel.has(item.id)}
-                        onChange={() => toggle(item.id)}
-                        aria-label={`Selecionar ${item.c_codigo_produto}`}
-                        className="size-4 accent-[var(--brand)]"
-                      />
+                      <input type="checkbox" checked={sel.has(item.id)} onChange={() => toggle(item.id)} aria-label={`Selecionar ${item.c_codigo_produto}`} className="size-4 accent-[var(--brand)]" />
                     </td>
-                    <td className="num text-text-muted">{item.c_codigo_produto}</td>
-                    <td className="font-medium text-text">{nomeItem(item)}</td>
-                    <td className="num text-text-muted">{item.c_cfop || '-'}</td>
-                    <td className="num text-text-muted">{aj.cfopEntrada ?? '-'}</td>
-                    <td className="text-text-muted">{nomeLocal(aj.local)}</td>
-                    <td className="text-text-muted">{simNao(aj.geraConta)}</td>
-                    <td className="text-text-muted">{simNao(aj.movimenta)}</td>
+                    <td>
+                      <p className="font-medium text-text">{nomeItem(item)}</p>
+                      <p className="num text-[12px] text-text-muted">{item.c_codigo_produto}</p>
+                    </td>
                     <td className="whitespace-nowrap text-right">
-                      <Num value={item.n_qtde_nfe} frac={3} />{' '}
-                      <span className="text-text-muted">{item.c_unidade_nfe}</span>
+                      <Num value={item.n_qtde_nfe} frac={3} /> <span className="text-text-muted">{item.c_unidade_nfe}</span>
                     </td>
                     <td className="num whitespace-nowrap text-right text-text-muted">
                       {item.n_preco_unit != null ? Number(item.n_preco_unit).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
@@ -191,54 +170,47 @@ export function ItensNotaFiscal({
                     <td className="num whitespace-nowrap text-right font-medium">
                       {item.v_total_item != null ? Number(item.v_total_item).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
                     </td>
-                    <td className="text-right">
-                      <div className="flex justify-end">
-                        <QuantidadeInput itemId={item.id} valorInicial={item.quantidade} />
-                      </div>
-                    </td>
                     <td>
                       <CategoriaContabilSelect itemId={item.id} valorInicial={item.categoria_contabil_id} categorias={categorias} />
                     </td>
-                    <td className="text-right whitespace-nowrap">
-                      {impostos.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => toggleExpandido(item.id)}
-                          className="inline-flex items-center gap-0.5 text-[13px] font-medium text-brand hover:underline"
-                        >
-                          Impostos {expandido.has(item.id) ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
-                        </button>
+                    <td className="text-text-muted">
+                      {nomeLocal(aj.local)}
+                      {(aj.movimenta === false || aj.geraConta === false) && (
+                        <p className="text-[12px] text-warn">{[aj.movimenta === false ? 'não movimenta estoque' : '', aj.geraConta === false ? 'não gera conta a pagar' : ''].filter(Boolean).join(' · ')}</p>
                       )}
+                    </td>
+                    <td className="text-right whitespace-nowrap">
+                      <button type="button" onClick={() => toggleExpandido(item.id)} className="inline-flex items-center gap-0.5 text-[13px] font-medium text-brand hover:underline">
+                        Detalhes {aberto ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+                      </button>
                     </td>
                     <td className="text-right">
                       <DialogImprimirEtiqueta
                         href={`${base}?itens=${item.id}`}
-                        trigger={
-                          <button type="button" className="whitespace-nowrap font-semibold text-brand hover:underline">
-                            Imprimir
-                          </button>
-                        }
+                        trigger={<button type="button" className="whitespace-nowrap font-semibold text-brand hover:underline">Imprimir</button>}
                       />
                     </td>
                   </tr>
-                  {expandido.has(item.id) && impostos.length > 0 && (
-                    <tr key={`${item.id}-impostos`}>
+                  {aberto && (
+                    <tr>
                       <td></td>
-                      <td colSpan={13} className="bg-surface-2/50 py-2">
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px]">
+                      <td colSpan={8} className="bg-surface-2/50 py-3">
+                        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px]">
+                          <span className="text-text-muted">CFOP: <span className="num font-medium text-text">{item.c_cfop || '-'}</span></span>
+                          <span className="text-text-muted">CFOP de entrada: <span className="num font-medium text-text">{aj.cfopEntrada ?? '-'}</span></span>
+                          <span className="text-text-muted">Gera conta a pagar: <span className="font-medium text-text">{simNao(aj.geraConta)}</span></span>
+                          <span className="text-text-muted">Movimenta estoque: <span className="font-medium text-text">{simNao(aj.movimenta)}</span></span>
+                          <span className="inline-flex items-center gap-2 text-text-muted">Qtd para etiqueta: <QuantidadeInput itemId={item.id} valorInicial={item.quantidade} /></span>
                           {impostos.map((imp) => (
                             <span key={imp.label} className="text-text-muted">
-                              {imp.label}:{' '}
-                              <span className="num font-medium text-text">
-                                {imp.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                              </span>
+                              {imp.label}: <span className="num font-medium text-text">{imp.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                             </span>
                           ))}
                         </div>
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               )
             })}
           </tbody>

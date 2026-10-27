@@ -14,7 +14,7 @@ const NOVA = '__nova'
 const MISTA = '__mista'
 
 /** Categoria da nota inteira, na cara da tela: vale para todos os itens; exceção por item fica na lista de itens. */
-export function ClassificarNotaNF({ notaId, categorias, categoriaAtual, mista, editavel, podeCriar }: {
+export function ClassificarNotaNF({ notaId, categorias, categoriaAtual, mista, editavel, podeCriar, categoriaOmie = null }: {
   notaId: number
   categorias: { id: number; nome: string }[]
   /** Todos os itens com a mesma categoria; null = nenhum item classificado. */
@@ -23,6 +23,8 @@ export function ClassificarNotaNF({ notaId, categorias, categoriaAtual, mista, e
   mista: boolean
   editavel: boolean
   podeCriar: boolean
+  /** Loja com Omie: a nota já traz a categoria de compra do Omie; ela vale e não se pede outra. */
+  categoriaOmie?: { codigo: string; nome: string | null } | null
 }) {
   const router = useRouter()
   const [pending, start] = useTransition()
@@ -71,6 +73,15 @@ export function ClassificarNotaNF({ notaId, categorias, categoriaAtual, mista, e
   }
 
   const semCategorias = categorias.length === 0
+  if (categoriaOmie) {
+    return (
+      <section aria-label="Categoria da nota" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[var(--r-lg)] bg-surface px-4 py-3 u-card">
+        <span className="flex items-center gap-1.5 text-[13px] font-medium text-text-muted"><Tags className="size-4" />Categoria da nota (no Omie)</span>
+        <span className="text-[14px] font-semibold text-text"><span className="num text-text-muted">{categoriaOmie.codigo}</span>{categoriaOmie.nome ? ` · ${categoriaOmie.nome}` : ''}</span>
+        <span className="text-[12px] text-text-muted">Já vem do Omie. Cada item ainda pode ter a sua classificação na lista abaixo.</span>
+      </section>
+    )
+  }
   return (
     <section aria-label="Classificar a nota" className="rounded-[var(--r-lg)] bg-surface p-4 u-card">
       <div className="flex flex-wrap items-end gap-4">
