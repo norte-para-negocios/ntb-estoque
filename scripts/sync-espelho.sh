@@ -31,4 +31,11 @@ hit /api/cron/sync-ops-abertas 150
 hit /api/cron/sync-kardex 280
 hit /api/cron/sync-fichas 150
 
+# Financeiro A0 (27/10/2026): espelho do financeiro do Omie (omie_fin_*). 1) avisos Financas.* já gravados em webhooks
+# -> espelho (só banco, não chama o Omie, roda também de madrugada); 2) carga inicial/conferência pela API (só leitura,
+# 8 chamadas por loja e ciclo, orçamento de 90 s, nunca 00–07h da Bahia). Aqui e não no sync-cron.sh, que já leva ~7 min.
+# Desligar: OMIE_FIN_DESLIGADO=1 no .env.local (ou OMIE_FIN_API_DESLIGADA=1 só para a parte da API).
+hit /api/cron/sync-financeiro-avisos 150
+hit /api/cron/sync-financeiro 150
+
 tail -n 3000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"

@@ -2,6 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import type { LojaOmie } from './client'
 import { lojaPodeEspelhar, type LojaCandidata } from '@/lib/estoque/espelho-lojas'
 import { cronAutorizado } from '@/lib/seguranca/regras'
+import { lojasDoFinanceiro } from '@/lib/financeiro-omie/lojas'
 
 export async function getLojasAtivas(): Promise<LojaOmie[]> {
   const supabase = createServiceClient({ semAutor: true })
@@ -63,4 +64,26 @@ export async function lojaOpTempoReal(lojaId: number): Promise<boolean> {
     return false
   }
   return (data as { omie_op_tempo_real?: boolean | null } | null)?.omie_op_tempo_real === true
+}
+
+/**
+ * Lojas do espelho do financeiro do Omie (Financeiro A0): regra própria `lojaPodeEspelharFinanceiro` (loja real, ativa,
+ * modo Omie, com chave, nunca a 4; não exige espelho_completo), filtradas por OMIE_FIN_LOJAS (opcional) e, na API, sem
+ * OMIE_FIN_API_FORA (padrão 7). Erro ao ler as lojas LANÇA (o cron não roda em vez de pular avisos).
+ */
+export async function getLojasFinanceiroOmie(): Promise<{ avisos: LojaOmie[]; api: LojaOmie[] }> {
+  const { data, error } = await createServiceClient({ semAutor: true })
+    .from('lojas')
+    .select('id, omie_app_key, omie_app_secret, is_test, ativo, modo_estoque')
+    .eq('ativo', true)
+    .eq('is_test', false)
+    .neq('id', 4)
+    .not('omie_app_key', 'is', null)
+    .order('id')
+  if (error) throw new Error(`lojas (financeiro): ${error.message}`)
+  const r = lojasDoFinanceiro((data ?? []) as (LojaOmie & LojaCandidata)[], {
+    OMIE_FIN_LOJAS: process.env.OMIE_FIN_LOJAS, OMIE_FIN_API_FORA: process.env.OMIE_FIN_API_FORA,
+  })
+  const so = ({ id, omie_app_key, omie_app_secret, is_test }: LojaOmie) => ({ id, omie_app_key, omie_app_secret, is_test })
+  return { avisos: r.avisos.map(so), api: r.api.map(so) }
 }

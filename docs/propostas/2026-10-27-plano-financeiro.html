@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Plano do Financeiro — Norte Estoque</title>
+<style>
+/* Documento de leitura: coluna única, blocos por pergunta, tabelas de fase. */
+:root{--bg:#f2f3f5;--card:#fff;--fg:#16191d;--muted:#5f666d;--line:#e3e6e9;--brand:#117c87;--brand-soft:#e3f3f5;--warn:#a85300;--warn-soft:#fbefe2;--ok:#1f7a43;--ok-soft:#e5f4ea;
+--font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+@media (prefers-color-scheme:dark){:root{--bg:#000;--card:#1c1d20;--fg:#f2f3f4;--muted:#a0a7ae;--line:#2c2e33;--brand:#3fc6d4;--brand-soft:#123a3f;--warn:#f0a35c;--warn-soft:#3a2a18;--ok:#4ade80;--ok-soft:#173826}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15.5px/1.55 var(--font);padding:28px max(16px,4vw) 80px}
+main{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1{font-size:30px;letter-spacing:-.02em;margin:0;line-height:1.15}
+h2{font-size:19px;margin:0 0 10px}
+h3{font-size:15px;margin:14px 0 6px}
+.sub{color:var(--muted);margin:4px 0 0;max-width:75ch}
+.card{background:var(--card);border-radius:18px;padding:20px 22px;box-shadow:0 1px 2px rgba(0,0,0,.05),0 4px 14px rgba(0,0,0,.04)}
+.alerta{background:var(--warn-soft);border-left:4px solid var(--warn)}
+.alerta h2{color:var(--warn)}
+.bom{background:var(--ok-soft);border-left:4px solid var(--ok)}
+ul,ol{margin:6px 0 0;padding-left:20px;display:grid;gap:4px}
+.wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:620px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+td.p{white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--muted)}
+.tag{display:inline-block;font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:99px;background:var(--brand-soft);color:var(--brand)}
+.tag.w{background:var(--warn-soft);color:var(--warn)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:760px){.grid2{grid-template-columns:1fr}}
+small{color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Financeiro do Norte Estoque: o que precisa e por onde começar</h1>
+    <p class="sub">Pesquisa de 27/10/2026, só leitura: telas e relatórios de Finanças do Omie mapeados, o que o nosso sistema já tem, os dados que já chegam no banco, os relatórios que um restaurante usa e as skills de agente para gerar esses relatórios.</p>
+  </header>
+
+  <section class="card alerta">
+    <h2>Três coisas que descobri e mudam o plano</h2>
+    <ol>
+      <li><b>As contas a pagar e a receber que vinham do Omie pararam em 27/06.</b> O programa que copiava apontava para o banco antigo na nuvem, que foi desligado. E ele só guardava título <i>em aberto</i>, apagando o que foi pago, então não existe histórico de despesa no nosso banco. Hoje não dá para montar fluxo de caixa nem resultado do mês (DRE) confiável com o que temos.</li>
+      <li><b>Mas os eventos financeiros do Omie já chegam até nós, e ninguém usa.</b> Cada conta incluída ou paga no Omie manda um aviso automático (cerca de 38 mil em 30 dias nas lojas 2 a 6, com categoria, conta, fornecedor, juros e data de crédito). Basta passar a processar. É a forma mais rápida de ter o financeiro de volta e em tempo real.</li>
+      <li><b>O Omie da Donana PF tem 8.340 recebimentos de cartão nunca baixados (desde 12/2023).</b> Qualquer relatório de "a receber" ou "atrasados" vai mostrar isso. Não é erro nosso; precisa de aviso na tela ou de uma faxina no Omie.</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2>O que o financeiro do Omie faz (e o que importa para restaurante)</h2>
+    <div class="grid2">
+      <div>
+        <h3>Essencial</h3>
+        <ul>
+          <li>Contas a pagar: lançar, baixar (total/parcial, juros, multa, desconto)</li>
+          <li>Contas a receber: vendas no cartão, apps, convênios</li>
+          <li>Contas correntes: bancos, caixa, maquininhas</li>
+          <li>Extrato, transferência, lançamento avulso</li>
+          <li>Importar extrato do banco (OFX) e conciliar</li>
+          <li>Categorias ligadas às linhas da DRE</li>
+          <li>Relatórios: a pagar/receber em aberto, pagos/recebidos, atrasadas, por categoria e fornecedor, fluxo de caixa (padrão, resumido, por categoria), DRE, resumo de finanças</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Útil, mas pode esperar</h3>
+        <ul>
+          <li>Previsto x realizado (orçamento)</li>
+          <li>Aprovação de pagamento</li>
+          <li>Departamentos e rateio</li>
+        </ul>
+        <h3>Fora do escopo</h3>
+        <ul>
+          <li>Boleto, Pix de cobrança, CNAB, DDA, Omie.CASH, crédito/negativação</li>
+        </ul>
+        <p><small>Detalhe: a DRE do Omie mistura contas a pagar/receber com o custo do estoque (CMC do PDV). Na Donana PF em outubro (parcial): receita 478 mil, impostos −70 mil, CMC −160 mil, pessoal −184 mil, outros custos −173 mil.</small></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>O que já temos</h2>
+    <ul>
+      <li><b>Financeiro próprio, etapa 1</b> (no banco de produção desde 21/10): contas correntes, categorias com linha da DRE (17 padrão), extrato que não se apaga, contas a pagar com baixa e estorno. Só para desenvolvedores e só na ODARA. <b>Zero lançamentos até hoje.</b></li>
+      <li><b>Faturamento por dia, forma de pagamento, ticket médio e meta do mês</b>: prontos e conferidos.</li>
+      <li><b>CMV</b>: exato nas lojas 5 e 6 (kardex completo), estimado nas lojas 2, 3, 4 e 7; corrigido em 23/10.</li>
+      <li><b>Compras por categoria</b> (notas de entrada) e <b>margem por prato</b> (fichas e custo).</li>
+      <li><b>Motor de tabela dinâmica</b> dos relatórios (26/10): os relatórios financeiros entram nele como novas bases, no mesmo formato do Omie.</li>
+    </ul>
+    <h3>O que falta de dado (não sai de sistema nenhum hoje)</h3>
+    <ul>
+      <li><b>Folha e encargos</b> por loja e mês (vem do contador/DP)</li>
+      <li><b>Imposto efetivo</b> (alíquota do Simples/DAS e regime de cada CNPJ)</li>
+      <li><b>Taxas de cartão</b> por adquirente e bandeira, e a agenda de recebíveis (D+1, D+30)</li>
+      <li><b>Saldo bancário real</b> (extrato/OFX)</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Plano em fases</h2>
+    <p>Uma ideia central: <b>os relatórios usam os mesmos campos do Omie</b> e têm duas fontes, o espelho do Omie (lojas Omie) e o nosso financeiro próprio (ODARA e quem sair do Omie). Assim cada relatório é feito uma vez só.</p>
+
+    <h3>Trilha A — lojas que continuam no Omie (só leitura, rápida)</h3>
+    <div class="wrap"><table>
+      <tr><th>Fase</th><th>Entrega</th><th>Prazo</th></tr>
+      <tr><td><span class="tag">A0</span></td><td>Espelho novo do financeiro do Omie: títulos abertos <i>e pagos</i>, baixas, categorias com linha da DRE, contas e saldos. Carga inicial com ritmo controlado (o Omie bloqueia quem abusa) e depois em tempo real pelos avisos que já chegam. Só lojas reais 2 a 7.</td><td class="p">2–4 dias</td></tr>
+      <tr><td><span class="tag">A1</span></td><td>Relatórios: a pagar/receber em aberto, pagos/recebidos, atrasadas, por categoria, fornecedor e período (mesmos filtros do Omie).</td><td class="p">2–3 dias</td></tr>
+      <tr><td><span class="tag">A2</span></td><td>Fluxo de caixa (realizado e previsto, por dia e categoria) e Resumo de Finanças (saldo por conta, a pagar, a receber).</td><td class="p">3–4 dias</td></tr>
+      <tr><td><span class="tag w">A3</span></td><td>DRE gerencial: categorias do Omie + faturamento + CMV que já calculamos, conferida número a número com a DRE do Omie da Donana PF.</td><td class="p">~1 semana</td></tr>
+    </table></div>
+
+    <h3>Trilha B — financeiro próprio (ODARA, e cada loja que sair do Omie)</h3>
+    <div class="wrap"><table>
+      <tr><th>Fase</th><th>Entrega</th><th>Prazo</th></tr>
+      <tr><td><span class="tag">B0</span></td><td>Ligar a etapa 1 de verdade: conta "Caixa", permissões, primeiro uso na ODARA.</td><td class="p">até 1 dia</td></tr>
+      <tr><td><span class="tag">B1</span></td><td>Conta a pagar gerada sozinha pela nota de entrada (parcelas do XML; nota cancelada cancela os títulos).</td><td class="p">3–5 dias</td></tr>
+      <tr><td><span class="tag">B2</span></td><td>Lançamento avulso, transferência (sangria do caixa para o banco), contas fixas que se repetem (aluguel, folha), importar planilha.</td><td class="p">3–4 dias</td></tr>
+      <tr><td><span class="tag w">B3</span></td><td>Contas a receber das vendas: dinheiro e Pix direto no caixa; cartão vira título com prazo e taxa da maquininha; baixa e conferência com a adquirente.</td><td class="p">1,5–2 semanas</td></tr>
+      <tr><td><span class="tag w">B4</span></td><td>Importar extrato do banco (OFX) e conciliar.</td><td class="p">2+ semanas</td></tr>
+      <tr><td><span class="tag">B5</span></td><td>Relatórios e DRE do financeiro próprio, usando as mesmas telas da trilha A.</td><td class="p">3–5 dias</td></tr>
+      <tr><td><span class="tag">B6</span></td><td>Aprovação de pagamento, fechamento do mês, anexo do boleto, previsto x realizado. Sob demanda.</td><td class="p">1–2 semanas</td></tr>
+    </table></div>
+  </section>
+
+  <section class="card">
+    <h2>Relatórios que um restaurante usa (e como o agente faz)</h2>
+    <div class="wrap"><table>
+      <tr><th>Relatório</th><th>Conta</th><th>Temos o dado?</th></tr>
+      <tr><td>DRE gerencial do mês</td><td>receita − impostos e taxas − CMV − pessoal − ocupação − administrativas = resultado</td><td>Parcial: falta despesa paga (A0), folha e imposto efetivo</td></tr>
+      <tr><td>CMV %</td><td>(estoque inicial + compras − estoque final) ÷ receita; faixa usual 25–40%</td><td>Sim (exato lojas 5 e 6; estimado nas outras)</td></tr>
+      <tr><td>Prime cost</td><td>(CMV + folha com encargos) ÷ receita; alerta acima de ~60–65%</td><td>Falta folha</td></tr>
+      <tr><td>Fluxo de caixa realizado e previsto</td><td>saldo + a receber − a pagar, por semana, 30/60/90 dias</td><td>Depois de A0/A2</td></tr>
+      <tr><td>Ponto de equilíbrio</td><td>custos fixos ÷ margem de contribuição %</td><td>Depois da DRE</td></tr>
+      <tr><td>Margem por prato/família</td><td>(preço − custo da ficha − impostos − taxa) × quantidade</td><td>Sim</td></tr>
+      <tr><td>Faturamento × meta, ticket médio</td><td>realizado vs. meta e mês anterior; projeção do mês</td><td>Sim</td></tr>
+    </table></div>
+
+    <h3>Skills de agente</h3>
+    <p><b>Já instaladas e úteis:</b> Excel (gera a DRE com fórmulas de verdade), dataviz/dashboard (relatório em HTML aberto no Mac), consultas SQL e validação de dados (conferir os totais antes de entregar), análise (explicar por que o CMV subiu), report-builder/report-pack e schedule (rodar sozinho toda segunda ou dia 1º), cash-flow-snapshot (projeção 30/60/90 com alertas). Nenhuma conversa com o Omie ou com o nosso banco por conta própria: o agente busca os dados e passa para elas.</p>
+    <p><b>Para criar (nossas):</b></p>
+    <ol>
+      <li><b>ntb-financeiro-contexto</b>: o mapa de onde vem cada número em cada loja, os comandos só de leitura e as armadilhas já conhecidas. Base de todas as outras.</li>
+      <li><b>cmv-margem-cardapio</b>: CMV por família contra a meta e pratos com margem baixa ou negativa. <span class="tag">dá para fazer já</span></li>
+      <li><b>dre-restaurante</b>: DRE do mês em Excel + resumo, com a origem de cada linha, comparação com mês anterior, média de 3 meses e meta, e as maiores variações comentadas. Dado que faltar aparece como "não informado", nunca como zero.</li>
+      <li><b>fluxo-caixa-norte</b>: caixa das próximas semanas, com alerta de semana no vermelho. Recusa rodar com dado velho.</li>
+    </ol>
+    <p><small>Regra das quatro: só leitura, cada número com a fonte e conferido com a tela do sistema, nada enviado a cliente sem pedido.</small></p>
+  </section>
+
+  <section class="card bom">
+    <h2>Minha recomendação: por onde começar</h2>
+    <ol>
+      <li><b>Esta semana, sem dado novo:</b> skill de contexto + relatório "Faturamento × Meta × CMV" e margem por prato das lojas 5 e 6, em Excel/HTML. É o que já é confiável.</li>
+      <li><b>Em paralelo, A0:</b> religar o financeiro do Omie pelos avisos que já chegam, guardando também o que foi pago. Sem isso não existe fluxo de caixa nem DRE.</li>
+      <li><b>Pedir ao contador/DP</b>, por loja e mês: folha com encargos, alíquota efetiva do Simples e regime de cada CNPJ; e montar a tabela de taxas das maquininhas.</li>
+      <li>Depois: A1 → A2 → A3 (DRE) e as skills de DRE e fluxo de caixa rodando sozinhas no dia 1º e toda segunda.</li>
+    </ol>
+    <p><small>Decisões suas: (1) mostrar os 8.340 recebíveis antigos com aviso ou limpar no Omie; (2) DRE por competência (quando foi vendido/comprado) e fluxo por caixa (quando entrou/saiu), o padrão de mercado; (3) quando liberar o financeiro próprio da ODARA para uso real.</small></p>
+  </section>
+</main>
+</body>
+</html>

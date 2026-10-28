@@ -15,7 +15,7 @@ import {
   type GuardaFrente,
 } from '@/lib/estoque/espelho-guarda'
 
-export type FrenteEspelho = 'kardex' | 'ajustes' | 'ops-abertas' | 'fichas'
+export type FrenteEspelho = 'kardex' | 'ajustes' | 'ops-abertas' | 'fichas' | 'financeiro'
 
 /** Por que a loja não roda esta frente agora (null = liberada) + a guarda lida (para gravar o resultado). */
 export async function verificarGuarda(loja: LojaOmie, frente: FrenteEspelho, agoraMs = Date.now()): Promise<{ motivo: string | null; guarda: GuardaFrente }> {
