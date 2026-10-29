@@ -794,15 +794,7 @@ export async function carregarPainelAcao(lojaIds: number[]): Promise<ItemAcao[]>
   // 6. Pendencias de classificacao.
   if (semFamilia) itens.push({ titulo: 'Produtos sem família cadastrada', tom: 'info', contagem: semFamilia, href: '/pendencias-classificacao' })
 
-  // 7. Correções automáticas (robô/faxina) paradas ou aguardando decisão (migration 171). Falha (ex.: tabela ainda
-  // não criada) nunca derruba o painel: só não mostra o contador.
-  const { count: correcoesPend, error: correcoesErr } = await supabase
-    .from('correcoes_automaticas')
-    .select('id', { count: 'exact', head: true })
-    .in('loja_id', lojaIds)
-    .in('status', ['parado', 'pendente_decisao'])
-  if (correcoesErr) console.error('resumo-dia: falha ao contar correcoes automaticas pendentes', correcoesErr.code)
-  else if (correcoesPend) itens.push({ titulo: 'Correções do robô aguardando decisão', tom: 'warn', contagem: correcoesPend, href: '/correcoes' })
+  // 7. Correções do robô saíram do painel do cliente em 29/10 (pedido do Ramon); a tela /correcoes segue pelo endereço.
 
   const ORDEM_TOM: Record<ItemAcao['tom'], number> = { err: 0, warn: 1, info: 2 }
   return itens.sort((a, b) => ORDEM_TOM[a.tom] - ORDEM_TOM[b.tom])

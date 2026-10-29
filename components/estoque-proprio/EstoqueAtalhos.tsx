@@ -4,7 +4,6 @@ export type AtalhoEstoque = 'estoque' | 'correcoes' | 'kardex' | 'ajustes' | 'fi
 
 const ATALHOS: { chave: AtalhoEstoque; href: string; rotulo: string }[] = [
   { chave: 'estoque', href: '/estoque', rotulo: 'Saldos' },
-  { chave: 'correcoes', href: '/estoque/correcoes', rotulo: 'Correções' },
   { chave: 'kardex', href: '/estoque/kardex', rotulo: 'Kardex' },
   { chave: 'ajustes', href: '/estoque/ajustes', rotulo: 'Ajustes' },
   { chave: 'fichas', href: '/estoque/fichas', rotulo: 'Fichas' },

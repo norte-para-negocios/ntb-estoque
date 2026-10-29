@@ -88,7 +88,6 @@ export const MODULOS: ModuloCentral[] = [
     telas: [
       { label: 'Painel do dia', href: '/home', desc: 'Vendas, estoque e pendências num olhar', principal: true },
       { label: 'Resumo Operacional', href: '/resumo', desc: 'O que entrou, saiu e deu erro' },
-      { label: 'Feito pelo robô', href: '/correcoes', desc: 'Correções automáticas do dia' },
     ],
     secoes: [],
   },
@@ -101,7 +100,6 @@ export const MODULOS: ModuloCentral[] = [
     novos: [criar('Ajuste de estoque', '/estoque/ajustes', { regra: '/estoque' }), criar('Inventário', '/inventario'), criar('Transferência', '/transferencia')],
     telas: [
       { label: 'Estoque', href: '/estoque', desc: 'Saldo e custo de cada produto', principal: true },
-      { label: 'Central de correções', href: '/estoque/correcoes', desc: 'Diferenças a corrigir' },
       { label: 'Movimentações', href: '/movimentacoes', desc: 'Todas as entradas e saídas' },
       { label: 'Inventários', href: '/inventario', desc: 'Contagens feitas e em andamento' },
       { label: 'Transferências', href: '/transferencia', desc: 'Entre locais da loja' },
