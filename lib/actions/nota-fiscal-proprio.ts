@@ -18,7 +18,7 @@ import { carregarCmc, carregarMemoria } from '@/lib/estoque/nf-memoria'
 import { carregarCredencialLoja } from '@/lib/estoque/sefaz-certificado'
 import { enviarManifestacao } from '@/lib/estoque/sefaz-rede'
 import { decidirEnvioManifestacao, ehTipoManifestacao, resultadoManifestacao, validarJustificativa, type EstadoManifestacao, type TipoManifestacao } from '@/lib/estoque/sefaz-manifestacao'
-import { avaliarItemCompra, decidirConferencia, sugerirCfopEntrada, flagsParaTexto, validarConfigItem, type AlertaItem, type ConfigItemNF, type ItemCompraGravado } from '@/lib/estoque/nf-item-regras'
+import { avaliarItemCompra, decidirConferencia, sugerirCfopEntrada, fatorConhecido, flagsParaTexto, validarConfigItem, type AlertaItem, type ConfigItemNF, type ItemCompraGravado } from '@/lib/estoque/nf-item-regras'
 import { decidirConfirmacaoEntrada, resultadoLancamento } from '@/lib/estoque/nf-entrada'
 
 // Ações da tela de Notas Fiscais em loja de estoque próprio (sem Omie): conferir itens, confirmar a entrada, desfazer e excluir.
@@ -122,12 +122,25 @@ export async function vincularItemNF(compraItemId: number, codigoProduto: number
   const __d = viaDesktop('nota-fiscal-proprio#vincularItemNF', vincularItemNF, [compraItemId, codigoProduto, fator]); if (__d) return __d as never
   const ctx = await contexto('Notas Fiscais - Manifestar')
   if ('error' in ctx) return ctx
-  const { data, error } = await createServiceClient().rpc('vincular_item_compra', { p_loja: ctx.lojaId, p_compra_item: compraItemId, p_produto: codigoProduto, p_fator: fator > 0 ? fator : 1, p_user: ctx.userId })
+  const fatorFinal = fator > 0 && fator !== 1 ? fator : await fatorPelaUnidade(ctx.lojaId, compraItemId, codigoProduto)
+  const { data, error } = await createServiceClient().rpc('vincular_item_compra', { p_loja: ctx.lojaId, p_compra_item: compraItemId, p_produto: codigoProduto, p_fator: fatorFinal, p_user: ctx.userId })
   if (error) return { error: error.message }
   await recalcularCfopDoItem(ctx.lojaId, compraItemId, codigoProduto)
   const notaId = (data as { nota_id: number | null }).nota_id
   if (notaId) await atualizarSituacao(ctx.lojaId, Number(notaId))
   return { ok: true }
+}
+
+/** Fator 1 (o padrão da tela) com unidades conversíveis vira o fator certo: nota em L e produto em ML = 1.000, KG → G =
+ *  1.000 (reunião com o Ramon 27/10/2026: "a nota já trouxe, o sistema pode fazer a conversão"). Senão fica 1. */
+async function fatorPelaUnidade(lojaId: number, compraItemId: number, codigoProduto: number): Promise<number> {
+  const sb = createServiceClient()
+  const [{ data: it }, { data: prod }] = await Promise.all([
+    sb.from('compras_proprio_itens').select('unidade_compra').eq('id', compraItemId).eq('loja_id', lojaId).maybeSingle(),
+    sb.from('produtos').select('unidade').eq('loja_id', lojaId).eq('codigo_produto', codigoProduto).maybeSingle(),
+  ])
+  if (!it?.unidade_compra || !prod?.unidade) return 1
+  return fatorConhecido(it.unidade_compra, prod.unidade) ?? 1
 }
 
 /** Ligado o produto, o CFOP de entrada passa a considerar o tipo dele (uso e consumo com ST = 1.407, reunião com o
