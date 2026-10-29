@@ -73,9 +73,30 @@ export function formatarCfop(d: string | null): string | null {
   return s.length === 4 ? `${s[0]}.${s.slice(1)}` : d
 }
 
-export function sugerirCfopEntrada(e: { cfopNota: string | null; memoriaProduto: string | null }): { cfop: string | null; origem: 'produto' | 'tabela' | 'regra' | null } {
+/**
+ * CFOP de entrada pelo tipo do produto (regra da contabilidade, reunião com o Ramon 27/10/2026): compra com ICMS por
+ * substituição tributária (CST 10/30/60/70, CSOSN 201/202/203/500 ou CFOP 54xx na nota) entra como 1.403 (matéria-prima,
+ * revenda, embalagem...) ou 1.407 (uso e consumo); sem ST, 1.102 ou 1.556. Ativo: 1.406 / 1.551. Outra UF troca o 1 por
+ * 2. Só para compra (nota 5101–5405 / 6101–6405); bonificação, comodato, remessa etc. seguem a tabela. Sem tipo: null.
+ */
+export function cfopEntradaPorTipo(e: { cfopNota: string | null; tipoItem: string | null; cst?: string | null; csosn?: string | null }): string | null {
+  const nota = soDigitos(e.cfopNota)
+  if (!/^[56]\d{3}$/.test(nota)) return null
+  const fim = Number(nota.slice(1))
+  if (!((fim >= 101 && fim <= 125) || (fim >= 401 && fim <= 405))) return null
+  const tipo = (e.tipoItem ?? '').trim()
+  if (!tipo || tipo === '09') return null // sem tipo ou serviço: não dá para decidir
+  const comSt = fim >= 401 || ['10', '30', '60', '70'].includes(e.cst ?? '') || ['201', '202', '203', '500'].includes(e.csosn ?? '')
+  const uf = nota[0] === '6' ? '2' : '1'
+  const final = tipo === '07' ? (comSt ? '407' : '556') : tipo === '08' ? (comSt ? '406' : '551') : (comSt ? '403' : '102')
+  return uf + final
+}
+
+export function sugerirCfopEntrada(e: { cfopNota: string | null; memoriaProduto: string | null; tipoItem?: string | null; cst?: string | null; csosn?: string | null }): { cfop: string | null; origem: 'produto' | 'tabela' | 'regra' | null } {
   const mem = soDigitos(e.memoriaProduto)
   if (cfopValido(mem)) return { cfop: mem, origem: 'produto' }
+  const porTipo = cfopEntradaPorTipo({ cfopNota: e.cfopNota, tipoItem: e.tipoItem ?? null, cst: e.cst, csosn: e.csosn })
+  if (porTipo) return { cfop: porTipo, origem: 'regra' }
   const nota = soDigitos(e.cfopNota)
   if (CFOP_ENTRADA_TABELA[nota]) return { cfop: CFOP_ENTRADA_TABELA[nota], origem: 'tabela' }
   const primeiro: Record<string, string> = { '5': '1', '6': '2', '7': '3' }
@@ -185,10 +206,10 @@ export type ConfigInicialItem = {
 export function configInicialItem(e: {
   item: { cfop: string | null; valorTotalItem: number; fiscal: { cst: string | null; csosn: string | null } }
   crt: string | null; finalidade: string | null; memoriaProduto: MemoriaItem | null; memoriaFornecedor: MemoriaItem | null
-  unidadeProduto: string | null; localNota: number | null
+  unidadeProduto: string | null; localNota: number | null; tipoProduto?: string | null
 }): ConfigInicialItem {
   const f = sugerirFlagsCusto({ memoriaProduto: e.memoriaProduto?.flags ?? null, memoriaFornecedor: e.memoriaFornecedor?.flags ?? null, crt: e.crt, cst: e.item.fiscal.cst, csosn: e.item.fiscal.csosn })
-  const c = sugerirCfopEntrada({ cfopNota: e.item.cfop, memoriaProduto: e.memoriaProduto?.cfopEntrada ?? null })
+  const c = sugerirCfopEntrada({ cfopNota: e.item.cfop, memoriaProduto: e.memoriaProduto?.cfopEntrada ?? null, tipoItem: e.tipoProduto ?? null, cst: e.item.fiscal.cst, csosn: e.item.fiscal.csosn })
   // R7: NF complementar/ajuste e item sem valor nascem fora do estoque (não criam entrada a custo zero).
   const movimenta = !(e.finalidade === '2' || e.finalidade === '3') && e.item.valorTotalItem > 0
   return {

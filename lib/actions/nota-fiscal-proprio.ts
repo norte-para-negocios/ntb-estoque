@@ -14,11 +14,11 @@ import { espelharNotaNoFrio } from '@/lib/estoque/nf-frio'
 import { localPadraoEntrada } from '@/lib/estoque/nf-sefaz'
 import { importarNotaPorChave, sincronizarSefaz } from '@/lib/estoque/sefaz-sync'
 import { lerCte, ratearFreteCte, validarCteImportado } from '@/lib/estoque/cte-xml'
-import { carregarCmc } from '@/lib/estoque/nf-memoria'
+import { carregarCmc, carregarMemoria } from '@/lib/estoque/nf-memoria'
 import { carregarCredencialLoja } from '@/lib/estoque/sefaz-certificado'
 import { enviarManifestacao } from '@/lib/estoque/sefaz-rede'
 import { decidirEnvioManifestacao, ehTipoManifestacao, resultadoManifestacao, validarJustificativa, type EstadoManifestacao, type TipoManifestacao } from '@/lib/estoque/sefaz-manifestacao'
-import { avaliarItemCompra, decidirConferencia, flagsParaTexto, validarConfigItem, type AlertaItem, type ConfigItemNF, type ItemCompraGravado } from '@/lib/estoque/nf-item-regras'
+import { avaliarItemCompra, decidirConferencia, sugerirCfopEntrada, flagsParaTexto, validarConfigItem, type AlertaItem, type ConfigItemNF, type ItemCompraGravado } from '@/lib/estoque/nf-item-regras'
 import { decidirConfirmacaoEntrada, resultadoLancamento } from '@/lib/estoque/nf-entrada'
 
 // Ações da tela de Notas Fiscais em loja de estoque próprio (sem Omie): conferir itens, confirmar a entrada, desfazer e excluir.
@@ -124,9 +124,29 @@ export async function vincularItemNF(compraItemId: number, codigoProduto: number
   if ('error' in ctx) return ctx
   const { data, error } = await createServiceClient().rpc('vincular_item_compra', { p_loja: ctx.lojaId, p_compra_item: compraItemId, p_produto: codigoProduto, p_fator: fator > 0 ? fator : 1, p_user: ctx.userId })
   if (error) return { error: error.message }
+  await recalcularCfopDoItem(ctx.lojaId, compraItemId, codigoProduto)
   const notaId = (data as { nota_id: number | null }).nota_id
   if (notaId) await atualizarSituacao(ctx.lojaId, Number(notaId))
   return { ok: true }
+}
+
+/** Ligado o produto, o CFOP de entrada passa a considerar o tipo dele (uso e consumo com ST = 1.407, reunião com o
+ *  Ramon 27/10/2026). Só troca o que o sistema sugeriu: CFOP escolhido à mão ou item já lançado não muda. */
+async function recalcularCfopDoItem(lojaId: number, compraItemId: number, codigoProduto: number): Promise<void> {
+  const sb = createServiceClient()
+  const { data: it } = await sb.from('compras_proprio_itens').select('id, compra_id, c_prod, cfop, fiscal, origem_cfop, lancado')
+    .eq('id', compraItemId).eq('loja_id', lojaId).maybeSingle()
+  if (!it || it.lancado || it.origem_cfop === 'manual') return
+  const [{ data: prod }, { data: compra }] = await Promise.all([
+    sb.from('produtos').select('tipo_item').eq('loja_id', lojaId).eq('codigo_produto', codigoProduto).maybeSingle(),
+    sb.from('compras_proprio').select('fornecedor_cnpj').eq('id', it.compra_id).eq('loja_id', lojaId).maybeSingle(),
+  ])
+  const memoria = await carregarMemoria(lojaId, compra?.fornecedor_cnpj ?? null, [codigoProduto], [])
+  const fiscal = (it.fiscal ?? {}) as { cst?: string | null; csosn?: string | null }
+  const c = sugerirCfopEntrada({ cfopNota: it.cfop, memoriaProduto: memoria.porProduto.get(codigoProduto)?.cfopEntrada ?? null, tipoItem: prod?.tipo_item ?? null, cst: fiscal.cst ?? null, csosn: fiscal.csosn ?? null })
+  if (!c.cfop) return
+  const { error } = await sb.from('compras_proprio_itens').update({ cfop_entrada: c.cfop, origem_cfop: c.origem }).eq('id', compraItemId).eq('loja_id', lojaId).eq('lancado', false)
+  if (error) console.error(`nota-fiscal-proprio: CFOP do item ${compraItemId}`, error.message)
 }
 
 /** Lote e validade do item antes da entrada (o gatilho de lotes usa na hora do movimento). Item já lançado não muda. */

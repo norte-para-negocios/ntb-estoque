@@ -33,6 +33,17 @@ async function carregarProdutos(lojaId: number): Promise<ProdutoCad[]> {
   return todos
 }
 
+/** Tipo do produto (00 revenda, 01 matéria-prima, 07 uso e consumo...): decide o CFOP de entrada (cfopEntradaPorTipo). */
+async function tiposDosProdutos(lojaId: number, codigos: number[]): Promise<Map<number, string | null>> {
+  const out = new Map<number, string | null>()
+  const ids = [...new Set(codigos)]
+  if (!ids.length) return out
+  const { data, error } = await createServiceClient().from('produtos').select('codigo_produto, tipo_item').eq('loja_id', lojaId).in('codigo_produto', ids.slice(0, 300))
+  if (error) console.error(`nf-sefaz loja ${lojaId}: tipo dos produtos`, error.message)
+  for (const p of data ?? []) out.set(Number(p.codigo_produto), p.tipo_item ?? null)
+  return out
+}
+
 export async function localPadraoEntrada(lojaId: number): Promise<number | null> {
   const sb = createServiceClient()
   const { data } = await sb.from('local_estoques').select('codigo_local_estoque, padrao, descricao').eq('loja_id', lojaId).is('deleted_at', null).order('padrao', { ascending: false }).order('id').limit(1)
@@ -48,16 +59,17 @@ export async function sugestoesDosItens(lojaId: number, nfe: NfeLida, casamentos
 ): Promise<{ itensFiscais: ItemNfe[]; configs: ConfigInicialItem[]; alertasItens: { linha: number; alertas: AlertaItem[] }[]; aviso: string | null }> {
   const { itens: itensFiscais, aviso } = itensComDespesasDoTotal(nfe)
   const codigos = casamentos.map((c) => c.codigoProduto).filter((c): c is number => c != null)
-  const [memoria, cmc] = await Promise.all([
+  const [memoria, cmc, tipos] = await Promise.all([
     carregarMemoria(lojaId, nfe.fornecedor.cnpj || null, codigos, nfe.itens.map((i) => i.cProd)),
     carregarCmc(lojaId, codigos),
+    tiposDosProdutos(lojaId, codigos),
   ])
   const configs: ConfigInicialItem[] = itensFiscais.map((i, idx) => {
     const cod = casamentos[idx].codigoProduto
     const cfg = configInicialItem({
       item: { cfop: i.cfop, valorTotalItem: i.valorTotalItem, fiscal: { cst: i.fiscal.cst, csosn: i.fiscal.csosn } }, crt: nfe.crt, finalidade: nfe.finalidade,
       memoriaProduto: cod != null ? memoria.porProduto.get(cod) ?? null : null, memoriaFornecedor: memoria.porCodigoFornecedor.get(i.cProd) ?? null,
-      unidadeProduto: cod != null ? unidadeDe(cod) : null, localNota: local,
+      unidadeProduto: cod != null ? unidadeDe(cod) : null, localNota: local, tipoProduto: cod != null ? tipos.get(cod) ?? null : null,
     })
     const manualLocal = opts.locaisManuais?.get(i.linha)
     if (manualLocal) cfg.codigoLocal = manualLocal

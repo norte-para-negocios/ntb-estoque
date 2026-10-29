@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  sugerirFlagsCusto, flagsParaTexto, flagsDeTexto, flagsParaOmie, sugerirCfopEntrada, formatarCfop, cfopValido,
+  sugerirFlagsCusto, flagsParaTexto, flagsDeTexto, flagsParaOmie, sugerirCfopEntrada, cfopEntradaPorTipo, formatarCfop, cfopValido,
   alertasDoItem, configInicialItem, podeLancarSozinho, decidirConferencia, avaliarItemCompra, validarConfigItem, previaCustoItem, grupoUnidade, fatorConhecido, UNIDADES_ESTOQUE,
 } from './nf-item-regras.ts'
 
@@ -126,4 +126,22 @@ test('item religado a outro produto: o aviso de fator usa a unidade do produto n
   // 1 UND8 = 1 ML: suspeito (a 185 grava a unidade do produto novo ao religar; antes ficava UN e o aviso sumia)
   assert.deepEqual(avaliarItemCompra(g, { cmc: null, finalidade: '1' }).alertas.map((a) => a.tipo), ['fator_suspeito'])
   assert.deepEqual(avaliarItemCompra({ ...g, fator: 750 }, { cmc: null, finalidade: '1' }).alertas, [])
+})
+
+test('CFOP de entrada pelo tipo do produto (Ramon 27/10: uso e consumo com ST = 1.407)', () => {
+  assert.equal(cfopEntradaPorTipo({ cfopNota: '5102', tipoItem: '07', cst: '60' }), '1407') // grampo para fios, 60 mil, CST 60
+  assert.equal(cfopEntradaPorTipo({ cfopNota: '5102', tipoItem: '07', cst: '00' }), '1556')
+  assert.equal(cfopEntradaPorTipo({ cfopNota: '5405', tipoItem: '07' }), '1407')
+  assert.equal(cfopEntradaPorTipo({ cfopNota: '5405', tipoItem: '01' }), '1403')
+  assert.equal(cfopEntradaPorTipo({ cfopNota: '5102', tipoItem: '01', csosn: '102' }), '1102') // macarrão, matéria-prima
+  assert.equal(cfopEntradaPorTipo({ cfopNota: '5102', tipoItem: '00', csosn: '500' }), '1403')
+  assert.equal(cfopEntradaPorTipo({ cfopNota: '6102', tipoItem: '07' }), '2556')
+  assert.equal(cfopEntradaPorTipo({ cfopNota: '5102', tipoItem: '08' }), '1551')
+  assert.equal(cfopEntradaPorTipo({ cfopNota: '5910', tipoItem: '01' }), null) // bonificação segue a tabela
+  assert.equal(cfopEntradaPorTipo({ cfopNota: '5908', tipoItem: '08' }), null) // comodato
+  assert.equal(cfopEntradaPorTipo({ cfopNota: '5102', tipoItem: null }), null)
+  // memória do produto continua mandando; sem memória, o tipo vence a tabela
+  assert.deepEqual(sugerirCfopEntrada({ cfopNota: '5405', memoriaProduto: '1403', tipoItem: '07' }), { cfop: '1403', origem: 'produto' })
+  assert.deepEqual(sugerirCfopEntrada({ cfopNota: '5405', memoriaProduto: null, tipoItem: '01' }), { cfop: '1403', origem: 'regra' })
+  assert.deepEqual(sugerirCfopEntrada({ cfopNota: '5929', memoriaProduto: null, tipoItem: '07' }), { cfop: '1556', origem: 'tabela' })
 })
