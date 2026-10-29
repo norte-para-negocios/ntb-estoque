@@ -312,7 +312,7 @@ export default async function NotaFiscalItensPage({
         </div>
         <MenuNota chave={nf.c_chave_nfe ?? null}>
           {nf.n_id_receb && <a href={`/api/nota-fiscal/${nf.id}/xml`} download className={btnClass('ghost')}><Download className="size-4" />Baixar XML</a>}
-          {nf.n_id_receb && !proprio && <a href={`/api/nota-fiscal/${nf.id}/danfe`} target="_blank" rel="noopener noreferrer" className={btnClass('ghost')}><FileText className="size-4" />Abrir DANFE</a>}
+          {nf.n_id_receb && (!proprio || (nf.origem === 'sefaz' && !!nf.c_chave_nfe)) && <a href={`/api/nota-fiscal/${nf.id}/danfe`} target="_blank" rel="noopener noreferrer" className={btnClass('ghost')}><FileText className="size-4" />Abrir DANFE</a>}
           {itensNF.length > 0 && <DialogImprimirEtiqueta href={base} trigger={<button type="button" className={btnClass('ghost')}><Printer className="size-4" />Etiquetas de todos os itens</button>} />}
           {/* Só com a nota do banco principal: ids do Contabo podem apontar para outra nota (as ações buscam por id + loja). */}
           {nfSupabase && (
