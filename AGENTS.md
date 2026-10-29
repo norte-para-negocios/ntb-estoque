@@ -2066,3 +2066,13 @@ Plano: `docs/propostas/2026-10-27-plano-financeiro.html` (trilha A). Espelho NOV
 - **Conferir depois do deploy**: `scripts/conferir-financeiro-omie.sql` (só leitura: em aberto e pago/recebido no mês por loja, cobertura, avisos pendentes, guarda) contra Finanças › Contas a Pagar/Receber do Omie. Logs: `sync-cron.log` e `select * from integration_attempts where model like '[BLOQUEIO OMIE]%'`.
 - **Espelho antigo**: `contas_pagar`/`contas_receber`/`contas_correntes` (052–054) e `scripts/sync-financeiro.mjs` estão mortos desde 27/06 e não foram tocados; podem ser descartados depois da A1.
 - **Pendente**: lançamentos de conta corrente anteriores a 03/09/2026 (`ListarLancCC` não entrou); rateio por departamento ignorado; título com rateio mudado para categoria única pela API não limpa o rateio antigo (a lista do `ListarMovimentos` só diz algo quando tem rateio); varredura por página pode pular título que muda de situação durante a leitura (a conferência um a um corrige o que ficou "aberto"; título já fechado pulado no backfill só volta se mudar de novo); telas/relatórios (A1).
+
+## Excel da contabilidade: entradas de NF no formato do Omie (29/10/2026)
+
+Pedido do Ramon (reunião 27/10): na loja de estoque próprio (ODARA) o relatório de entradas para a contabilidade precisa sair igual ao que ele baixa do Omie no Sertão (`NFS_ENT_SVVM_SET26_R5.xlsx`, aba BD). Botão "Excel da contabilidade" em `/nota-fiscal` (só loja `proprio`) → `GET /nota-fiscal/contabilidade?ini&fim[&situacao=concluidas]`.
+
+- Uma linha por item, as **195 colunas na ordem do Omie** (`lib/nota-fiscal/entradas-colunas.ts`, não reordenar: as tabelas dinâmicas do Ramon apontam para a aba BD). Sem dado = `N/D` (pedido dele: a coluna existe mesmo vazia).
+- Período pela **data de registro** (`notas_fiscais.created_at`, dia da Bahia), como no Omie; padrão = mês passado. Nota só com o resumo da SEFAZ (sem itens) não gera linha.
+- Fontes: XML completo (`sefaz_documentos`, impostos, transporte, parcelas, endereço do emitente, IBS/CBS) + entrada conferida (`compras_proprio_itens`: produto interno, CFOP de entrada, local, quantidade/unidade do estoque, custo) + categoria do item (`nota_fiscal_items.categoria_contabil_id`). Ciência da operação vem de `sefaz_documentos.ciencia_cstat`.
+- As 4 colunas "Entrada - Situação Tributária" seguem a regra observada na planilha do Sertão (ICMS 60 se a nota veio com ST, senão 90; IPI 49; PIS/COFINS 98): é a configuração do Omie, a contabilidade confere.
+- Regras puras: `lib/nota-fiscal/entradas-contabil-puro.ts` (`node --test lib/nota-fiscal/entradas-contabil-puro.test.ts`); leitura: `entradas-contabil-loader.ts`. Conferido com os dados reais da ODARA de out/2026 (52 notas, 322 linhas).

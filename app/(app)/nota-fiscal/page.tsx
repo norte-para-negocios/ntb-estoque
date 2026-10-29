@@ -253,6 +253,7 @@ export default async function NotaFiscalPage({ searchParams }: { searchParams: P
           <>
             <a href={`/nota-fiscal/relatorio?${exportQs}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')}><FileText className="size-4" /> Relatório PDF</a>
             <a href={`/nota-fiscal/export?${exportQs}`} className={btnClass('outline')}><Download className="size-4" /> Excel</a>
+            {proprio && <a href={`/nota-fiscal/contabilidade?ini=${per.ini}&fim=${per.fim}`} title="Uma linha por item, as 195 colunas do relatório de entradas do Omie (pela data de registro)" className={btnClass('outline')}><Download className="size-4" /> Excel da contabilidade</a>}
             {proprio && <Link href="/nota-fiscal/etapas" className={btnClass('outline')}><KanbanSquare className="size-4" /> Etapas do recebimento</Link>}
             {podeBuscarChave && <BuscarPorChave />}
             {podeLancarManual && (
