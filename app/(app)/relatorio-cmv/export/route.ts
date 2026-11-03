@@ -2,7 +2,7 @@ import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
 import { hojeBahiaISO } from '@/lib/data-bahia'
 import { gerarPlanilhaMulti, planilhaResponse, type AbaPlanilha } from '@/lib/excel'
 import { carregarCmv } from '@/lib/relatorios/cmv-loader'
-import { agruparCmv, cmvFormulaOmie, custoForaDoNormal, textoCustoForaDoNormal } from '@/lib/relatorios/cmv-puro'
+import { agruparCmv, cmvFormulaOmie, custoForaDoNormal, pctDoFaturamento, textoCustoForaDoNormal } from '@/lib/relatorios/cmv-puro'
 import { DIM_DA_ABA, lerParamsCmv, textoFonte } from '@/lib/relatorios/cmv-params'
 import { exigirDev } from '@/lib/recursos-dev'
 
@@ -15,6 +15,7 @@ export async function GET(request: Request) {
   const p = lerParamsCmv(Object.fromEntries(new URL(request.url).searchParams.entries()), hojeBahiaISO())
   const aba = p.aba === 'estoque' ? 'produtos' : p.aba
   const d = await carregarCmv(lojaId, p.ini, p.fim, { tipos: p.tipos, familias: p.familias }, DIM_DA_ABA[aba])
+  if (d.erro) return new Response(d.erro, { status: 502 })
   if (!d.linhas.length) return new Response('Sem vendas no período/filtro selecionado', { status: 404 })
   const linhas = d.fonte === 'proprio' ? d.linhas : agruparCmv(d.linhas, DIM_DA_ABA[aba])
   const nome = aba === 'familias' ? 'Família' : aba === 'tipos' ? 'Tipo' : 'Produto'
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
   const abas: AbaPlanilha[] = [{
     rows: linhas.filter((l) => l.faturamento !== 0 || l.cmv !== 0).map((l) => ({
       rotulo: l.rotulo, familia: l.familia, tipo: l.tipo, quant: l.quant, faturamento: l.faturamento, cmv: l.cmv,
-      margem: Math.round((l.faturamento - l.cmv) * 100) / 100, cmvOmie: l.cmvOmie, obs: l.custoSuspeito ? 'Custo de hoje acima do preço de venda: ficou zero' : Math.abs(l.cmvOmie - l.cmv) > 0.005 ? 'Custo do Omie fora do normal: trocado pelo custo normal do produto' : l.semCusto ? 'Sem custo' : '', pct: l.faturamento > 0 ? Math.round(((l.faturamento - l.cmv) / l.faturamento) * 1000) / 10 : null, consumo: l.consumo,
+      margem: Math.round((l.faturamento - l.cmv) * 100) / 100, cmvOmie: l.cmvOmie, obs: l.custoSuspeito ? 'Custo de hoje acima do preço de venda: ficou zero' : Math.abs(l.cmvOmie - l.cmv) > 0.005 ? 'Custo do Omie fora do normal: trocado pelo custo normal do produto' : l.semCusto ? 'Sem custo' : '', pct: pctDoFaturamento(l.faturamento - l.cmv, l.faturamento), pctCmv: pctDoFaturamento(l.cmv, l.faturamento), consumo: l.consumo,
     })),
     colunas: [
       { key: 'rotulo', label: nome, tipo: 'texto', largura: 44 },
@@ -33,6 +34,7 @@ export async function GET(request: Request) {
       { key: 'faturamento', label: 'Faturamento', tipo: 'moeda', largura: 16, somar: true },
       { key: 'cmv', label: 'CMV', tipo: 'moeda', largura: 16, somar: true },
       ...(d.fonte === 'kardex' ? [{ key: 'cmvOmie', label: 'CMV pelo custo do Omie', tipo: 'moeda' as const, largura: 18, somar: true }] : []),
+      { key: 'pctCmv', label: 'CMV %', tipo: 'numero', largura: 10 },
       { key: 'margem', label: 'Margem bruta', tipo: 'moeda', largura: 16, somar: true },
       { key: 'pct', label: 'Margem %', tipo: 'numero', largura: 10 },
       ...(d.fonte === 'kardex' ? [{ key: 'consumo', label: 'Consumo OP (CPV)', tipo: 'moeda' as const, largura: 16, somar: true }] : []),

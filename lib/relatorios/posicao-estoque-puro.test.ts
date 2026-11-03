@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { locaisSumidos, custoValido, escolherFoto, montarPosicao, textoAvisoSuspeito, motivoSuspeita, foraDaEscalaDaUnidade, resumirSaldoConferir, type LinhaFoto, type MetaProduto, type OpcoesPosicao } from './posicao-estoque-puro.ts'
+import { locaisSumidos, custoValido, escolherFoto, montarPosicao, textoAvisoSuspeito, acaoAvisoSuspeito, motivoSuspeita, foraDaEscalaDaUnidade, resumirSaldoConferir, type LinhaFoto, type MetaProduto, type OpcoesPosicao } from './posicao-estoque-puro.ts'
 
 const P = (o: Partial<MetaProduto> & { codigo_produto: number }): MetaProduto => ({
   codigo: String(o.codigo_produto), descricao: `Produto ${o.codigo_produto}`, familia: 'Insumos', tipo: '01', unidade: 'KG', ncm: '0000.00.00', inativo: false, ...o,
@@ -128,9 +128,14 @@ test('linhas valorizadas pelo banco: custo suspeito usa a referência e entra no
 
 // Ramon 02/11: a ODARA (estoque próprio) não usa Omie — o aviso não pode falar em Omie.
 test('aviso de custo suspeito em loja de estoque próprio não menciona o Omie', () => {
+  // pedido do cliente 03/11: conta produtos (não linhas), português simples, e a correção é "na entrada"
   const t = textoAvisoSuspeito(1, -1876.05, 'proprio')!
-  assert.equal(t, '1 linha com custo médio fora do normal: o total usa o custo de referência nela (pelo custo médio do sistema o total daria R$\u00a01.876,05 a menos)')
+  assert.equal(t, '1 produto com custo médio fora do normal: o total usa o custo de referência nele. Com o custo médio, o total daria R$\u00a01.876,05 a menos.')
   assert.doesNotMatch(t, /omie/i)
+  assert.equal(textoAvisoSuspeito(3, 0, 'proprio'), '3 produtos com custo médio fora do normal: o total usa o custo de referência neles.')
+  assert.equal(acaoAvisoSuspeito('proprio'), 'Toque para ver a lista e corrija o custo ou a unidade na entrada.')
+  assert.doesNotMatch(acaoAvisoSuspeito('proprio'), /omie/i)
+  assert.match(acaoAvisoSuspeito('omie'), /no Omie/)
 }, )
 
 // Revisão 20/10: na visão SPED o aviso só traz produtos que estão no Bloco H (o prato negativo não entra no bloco).

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { totaisFormula, periodoValorMovimento, agruparCmv, cmvFormulaOmie, custoForaDoNormal, custoMedioAtual, escolherFonteCmv, linhaVazia, montarLinhasEstimado, montarLinhasKardex, resumoCmv, textoCustoForaDoNormal, type LinhaCmv } from './cmv-puro.ts'
+import { estadoTelaCmv, pctDoFaturamento, totaisFormula, periodoValorMovimento, agruparCmv, cmvFormulaOmie, custoForaDoNormal, custoMedioAtual, escolherFonteCmv, linhaVazia, montarLinhasEstimado, montarLinhasKardex, resumoCmv, textoCustoForaDoNormal, type LinhaCmv } from './cmv-puro.ts'
 
 test('escolherFonteCmv: próprio, kardex só com o período inteiro coberto, senão estimado', () => {
   const k = { kardexDesde: '2026-09-12', kardexAte: '2026-10-16' }
@@ -182,4 +182,27 @@ test('custo fora do normal (290): troca só no estoque inicial/final aparece no 
   // produto com movimento contado mas sem diferença de valor não entra na lista nem na contagem
   const igual = montarLinhasKardex([{ n_cod_prod: 2, ...zero, ei: 5, ef: 5, vendas_omie: 0, consumo_op_omie: 0, ei_omie: 5, ef_omie: 5, ajustados: 3, ajustados_estoque: 0, sem_referencia: 0, custo_referencia: 1 }], [], new Map())
   assert.equal(custoForaDoNormal(igual).movimentos, 0)
+})
+
+test('pctDoFaturamento: CMV % e Margem % com 1 casa; faturamento zero ou negativo = null ("—")', () => {
+  assert.equal(pctDoFaturamento(30, 100), 30)
+  assert.equal(pctDoFaturamento(1, 3), 33.3)
+  assert.equal(pctDoFaturamento(2, 3), 66.7)
+  assert.equal(pctDoFaturamento(120, 100), 120)
+  assert.equal(pctDoFaturamento(-5, 100), -5)
+  assert.equal(pctDoFaturamento(10, 0), null)
+  assert.equal(pctDoFaturamento(0, 0), null)
+  assert.equal(pctDoFaturamento(10, -50), null)
+})
+
+test('pctDoFaturamento: CMV % + Margem % = 100 na mesma linha', () => {
+  const fat = 87.45, cmv = 23.18
+  assert.equal(Math.round(((pctDoFaturamento(cmv, fat) ?? 0) + (pctDoFaturamento(fat - cmv, fat) ?? 0)) * 10) / 10, 100)
+})
+
+test('estadoTelaCmv: erro de leitura nunca vira "Sem vendas no período"', () => {
+  assert.equal(estadoTelaCmv({ erro: 'permission denied for function lucro_proprio', linhas: [] }), 'erro')
+  assert.equal(estadoTelaCmv({ erro: 'timeout', linhas: [linhaVazia('a', 'A')] }), 'erro')
+  assert.equal(estadoTelaCmv({ erro: null, linhas: [] }), 'vazio')
+  assert.equal(estadoTelaCmv({ erro: null, linhas: [linhaVazia('a', 'A')] }), 'dados')
 })

@@ -51,7 +51,7 @@ export async function GET(request: Request) {
         { key: 'valor', label: 'Valor', tipo: 'moeda', largura: 16, somar: true },
         { key: 'situacao', label: 'Observação', tipo: 'texto', largura: 28 },
       ]
-  const suspeito = textoAvisoSuspeito(r.total.suspeitas.length, r.total.ajusteOmie, proprio ? 'proprio' : 'omie')
+  const suspeito = textoAvisoSuspeito(proprio ? new Set(r.total.suspeitas.map((l) => l.codProduto)).size : r.total.suspeitas.length, r.total.ajusteOmie, proprio ? 'proprio' : 'omie')
   const sc = sped ? null : r.saldoConferir
   const temSaldoConferir = !!sc && (sc.acumulados.length > 0 || sc.inativos.length > 0)
   const brlX = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -77,7 +77,7 @@ export async function GET(request: Request) {
       { key: 'valor', label: 'Valor usado', tipo: 'moeda', largura: 16, somar: true },
       { key: 'motivo', label: 'Por quê', tipo: 'texto', largura: 60 },
     ] as ColunaExcel[],
-    opts: { titulo: proprio ? 'Linhas com custo médio fora do normal' : 'Linhas com custo médio errado no Omie', subtitulo: `O total da posição usa o custo de referência do produto nestas linhas. Corrija o custo (ou a unidade) ${proprio ? 'no cadastro' : 'no Omie'}.`, autoFiltro: true },
+    opts: { titulo: proprio ? 'Linhas com custo médio fora do normal' : 'Linhas com custo médio errado no Omie', subtitulo: `O total da posição usa o custo de referência do produto nestas linhas. ${proprio ? 'Corrija o custo ou a unidade na entrada.' : 'Corrija o custo (ou a unidade) no Omie.'}`, autoFiltro: true },
     nome: 'Custo suspeito',
   }] : []), ...(temSaldoConferir && sc ? [{
     rows: [
@@ -89,11 +89,11 @@ export async function GET(request: Request) {
       { key: 'codigo', label: 'Código', tipo: 'texto', largura: 14 },
       { key: 'descricao', label: 'Produto', tipo: 'texto', largura: 44 },
       { key: 'unidade', label: 'Unidade', tipo: 'texto', largura: 8 },
-      { key: 'saldo', label: 'Saldo no Omie', tipo: 'numero', largura: 14 },
+      { key: 'saldo', label: proprio ? 'Saldo' : 'Saldo no Omie', tipo: 'numero', largura: 14 },
       { key: 'comprado', label: 'Entrou em 12 meses (notas, produção, ajustes)', tipo: 'numero', largura: 18 },
       { key: 'valor', label: 'Valor no total', tipo: 'moeda', largura: 16 },
     ] as ColunaExcel[],
-    opts: { titulo: 'Saldos do Omie a conferir', subtitulo: 'O total soma estes saldos como o Omie. Saldo maior que tudo o que entrou em 12 meses (notas, produção, ajustes) = falta de baixa (consumo, perda, produção). Confira com inventário.', autoFiltro: true },
+    opts: { titulo: proprio ? 'Saldos a conferir' : 'Saldos do Omie a conferir', subtitulo: (proprio ? 'O total soma estes saldos. ' : 'O total soma estes saldos como o Omie. ') + 'Saldo maior que tudo o que entrou em 12 meses (notas, produção, ajustes) = falta de baixa (consumo, perda, produção). Confira com inventário.', autoFiltro: true },
     nome: 'Saldo a conferir',
   }] : [])])
   return planilhaResponse(sped ? 'inventario-bloco-h' : 'posicao-estoque', buffer)
