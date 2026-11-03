@@ -115,5 +115,13 @@ if [ "$bloco" -eq 3 ] && [ "$hora" = "06" ]; then hit /api/cron/snapshot-op-plan
 # 03h de Brasilia), em lotes; so o banco.
 if [ "$bloco" -eq 2 ] && [ "$hora" = "06" ]; then hit /api/cron/podar-historico; fi
 
+# Poda de logs (Fase 1, B2, 03/11/2026): a rota /api/cron/prune existia mas so estava no vercel.json (inativo), entao NADA era
+# podado desde 03/09: 209 mil webhooks (244 MB) e 281 mil tentativas de integracao (72 MB). 1x por dia (bloco 5 = min 50-59,
+# 06 UTC = 03h50 em Brasilia, bloco que so tem o sync-fechamentos-frio). Apaga SO webhooks e integration_attempts, em lotes e
+# com teto de 50 mil linhas por rodada (as duas tabelas alimentam o outbox); NAO apaga avisos RecebimentoProduto.* nem log de
+# NFC-e/cupom/OP (ver lib/cron/prune-regras.ts) e nunca toca em NF, OP ou movimento. O /api/cron/arquivar (que apaga NF e OP
+# antigas do banco quente depois de mandar ao Storage) NAO esta agendado de proposito: precisa de decisao do dono.
+if [ "$bloco" -eq 5 ] && [ "$hora" = "06" ]; then hit /api/cron/prune; fi
+
 # Mantem o log enxuto (ultimas ~2000 linhas, uns poucos dias).
 tail -n 2000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"

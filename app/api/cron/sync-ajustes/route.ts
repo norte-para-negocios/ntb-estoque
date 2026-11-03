@@ -3,6 +3,7 @@ import { getLojasAtivas, getLojasEspelhoCompleto, assertCronAuth } from '@/lib/o
 import { FILTRO_IGNORADO, syncAjustes, syncAjustesJanela } from '@/lib/omie/sync-ajustes'
 import { janelaProibida } from '@/lib/estoque/espelho-lojas'
 import { registrarFrente, verificarGuarda } from '@/lib/omie/espelho-ciclo'
+import { resultadosDeSettled, statusDoCron } from '@/lib/cron/resposta-puro'
 
 export const maxDuration = 300
 
@@ -54,12 +55,15 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({
-    ok: falhas.length === 0,
-    total_lojas: lojasSync.length,
-    ok_lojas: lojasSync.length - falhas.length,
-    linhas_gravadas: totalLinhas,
-    por_loja: porLoja,
-    falhas,
-  })
+  return NextResponse.json(
+    {
+      ok: falhas.length === 0,
+      total_lojas: lojasSync.length,
+      ok_lojas: lojasSync.length - falhas.length,
+      linhas_gravadas: totalLinhas,
+      por_loja: porLoja,
+      falhas,
+    },
+    { status: statusDoCron(resultadosDeSettled(lojasSync, results)) }
+  )
 }

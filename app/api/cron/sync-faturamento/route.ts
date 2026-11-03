@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { syncFaturamento } from '@/lib/omie/faturamento'
 import { getLojasAtivas, assertCronAuth } from '@/lib/omie/sync-all'
+import { corpoDoCron, resultadosDeSettled, statusDoCron } from '@/lib/cron/resposta-puro'
 
 // Sincronização noturna do faturamento (tipo/família) para todas as lojas com
 // integração Omie. Antes desta rota não existia NENHUM cron pra isso -- a única
@@ -16,6 +17,6 @@ export async function GET(request: Request) {
   }
   const lojas = await getLojasAtivas()
   const results = await Promise.allSettled(lojas.map((loja) => syncFaturamento(loja, { meses: 2 })))
-  const ok = results.filter((r) => r.status === 'fulfilled').length
-  return NextResponse.json({ total: lojas.length, ok, falhas: lojas.length - ok })
+  const resultados = resultadosDeSettled(lojas, results)
+  return NextResponse.json(corpoDoCron(resultados), { status: statusDoCron(resultados) })
 }

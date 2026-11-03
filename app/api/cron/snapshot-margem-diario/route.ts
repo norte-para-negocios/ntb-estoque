@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getLojasAtivas, assertCronAuth } from '@/lib/omie/sync-all'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
+import { statusDoCron } from '@/lib/cron/resposta-puro'
 
 export const maxDuration = 300
 
@@ -189,5 +190,7 @@ export async function GET(request: Request) {
   // nenhum produto elegivel/posicao no mesmo dia e mais provavel de ser
   // problema sistemico do que coincidencia).
   const houveAlgumSucesso = resumo.some((r) => r.sucesso)
-  return NextResponse.json({ total_lojas: lojas.length, resumo }, { status: houveAlgumSucesso ? 200 : 502 })
+  // Falha parcial (alguma loja com erro real, mesmo que outra tenha gravado) -> 500; "sucesso sem dado" não é erro.
+  const parcial = statusDoCron(resumo.map((r) => ({ loja: r.loja_id, ok: !r.erro, erro: r.erro })))
+  return NextResponse.json({ total_lojas: lojas.length, resumo }, { status: houveAlgumSucesso ? parcial : 502 })
 }

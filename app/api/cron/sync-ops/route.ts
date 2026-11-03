@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { syncOrdensProducao } from '@/lib/omie/ordem-producao'
 import { getLojasAtivas, assertCronAuth } from '@/lib/omie/sync-all'
+import { corpoDoCron, resultadosDeSettled, statusDoCron } from '@/lib/cron/resposta-puro'
 
 export const maxDuration = 300
 
@@ -19,6 +20,6 @@ export async function GET(request: Request) {
   const results = await Promise.allSettled(
     lojas.map((loja) => syncOrdensProducao(loja, dmy(de), dmy(ate)))
   )
-  const ok = results.filter((r) => r.status === 'fulfilled').length
-  return NextResponse.json({ total: lojas.length, ok, falhas: lojas.length - ok })
+  const resultados = resultadosDeSettled(lojas, results)
+  return NextResponse.json(corpoDoCron(resultados), { status: statusDoCron(resultados) })
 }

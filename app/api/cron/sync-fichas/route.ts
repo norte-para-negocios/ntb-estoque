@@ -3,6 +3,7 @@ import { assertCronAuth, getLojasEspelhoCompleto } from '@/lib/omie/sync-all'
 import { sincronizarFichasLoja } from '@/lib/omie/fichas'
 import { rodarLojasEspelho } from '@/lib/omie/espelho-ciclo'
 import { janelaProibida } from '@/lib/estoque/espelho-lojas'
+import { resultadosDoEspelho, statusComTotal502 } from '@/lib/cron/resposta-puro'
 
 export const maxDuration = 300
 
@@ -17,6 +18,6 @@ export async function GET(request: Request) {
   const lojas = await getLojasEspelhoCompleto()
   const r = await rodarLojasEspelho(lojas, 'fichas', ORCAMENTO_MS, (loja, prazoMs) => sincronizarFichasLoja(loja, { prazoMs }))
   const falhas = r.filter((x) => x.erro)
-  const status = lojas.length && falhas.length === lojas.length ? 502 : 200
+  const status = statusComTotal502(resultadosDoEspelho(r)) // todas falharam 502; parcial 500 (Fase 1, B1)
   return NextResponse.json({ ok: falhas.length === 0, total: lojas.length, lojas: r }, { status })
 }

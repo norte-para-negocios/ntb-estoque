@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { relerNotasComAvisoPendente, syncNotasFiscais } from '@/lib/omie/nota-fiscal'
 import { getLojasAtivas, assertCronAuth } from '@/lib/omie/sync-all'
+import { corpoDoCron, resultadosDeSettled, statusDoCron } from '@/lib/cron/resposta-puro'
 
 export const maxDuration = 300
 
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
       return r.relidas
     })
   )
-  const ok = results.filter((r) => r.status === 'fulfilled').length
+  const resultados = resultadosDeSettled(lojas, results)
   const relidas = results.reduce((s, r) => s + (r.status === 'fulfilled' ? r.value : 0), 0)
-  return NextResponse.json({ total: lojas.length, ok, falhas: lojas.length - ok, relidas })
+  return NextResponse.json({ ...corpoDoCron(resultados), relidas }, { status: statusDoCron(resultados) })
 }

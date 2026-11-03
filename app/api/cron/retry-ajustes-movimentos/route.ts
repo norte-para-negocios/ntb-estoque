@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { retryMovimentosTransferenciaPendentes } from '@/lib/actions/transferencia'
 import { retryMovimentosManuaisPendentes } from '@/lib/actions/movimentacoes'
 import { getLojasAtivas, assertCronAuth } from '@/lib/omie/sync-all'
+import { corpoDoCron, resultadoDeRetry, statusDoCron } from '@/lib/cron/resposta-puro'
 
 export const maxDuration = 300
 
@@ -40,6 +41,7 @@ export async function GET(request: Request) {
   // nao pode virar 502 so por falta de trabalho.
   const houveTrabalhoOuErro = tentadas > 0 || resultados.some((r) => r.erro)
   const falhaTotal = houveTrabalhoOuErro && sucesso === 0 && encerradas === 0
+  const porLoja = resultados.map(resultadoDeRetry)
   return NextResponse.json(
     {
       lojas: lojas.length,
@@ -49,7 +51,8 @@ export async function GET(request: Request) {
       encerradas,
       transferencia: resultadosTransferencia,
       manuais: resultadosManuais,
+      erros: corpoDoCron(porLoja).erros,
     },
-    { status: falhaTotal ? 502 : 200 }
+    { status: falhaTotal ? 502 : statusDoCron(porLoja) } // total 502 (regra antiga); parcial 500 (Fase 1, B1)
   )
 }
