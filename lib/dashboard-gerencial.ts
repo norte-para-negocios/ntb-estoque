@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import { buscarFatAgregado } from '@/lib/faturamento-frio'
+import { rotuloProdutoAgregado } from '@/lib/dashboard-gerencial-puro'
 
 // Cache em memoria de curta duracao -- home/PainelGerencial recalculava os
 // mesmos 10 agregados toda vez que a pagina carregava, mesmo em visitas
@@ -103,6 +104,7 @@ export async function buscarNomePorCodigo(
       .from('produtos')
       .select('codigo_produto, descricao, codigo')
       .eq('loja_id', lojaId)
+      .order('id') // tiebreak da paginação (sem ordem, páginas podem repetir/pular linhas)
       .range(p * PAGE, p * PAGE + PAGE - 1)
     if (error || !data?.length) break
     for (const row of data as { codigo_produto: number; descricao: string | null; codigo: string | null }[]) {
@@ -227,8 +229,7 @@ export async function carregarDashboardGerencial(
   const nomePorCodigo = await buscarNomePorCodigo(supabase, lojaId)
   const qtdePorProdutoMapa = new Map<string, number>()
   for (const r of qtdePorProdutoRows) {
-    const cod = Number(r.rotulo)
-    const nome = nomePorCodigo.get(cod) ?? `Produto ${cod}`
+    const nome = rotuloProdutoAgregado(r.rotulo, nomePorCodigo)
     qtdePorProdutoMapa.set(nome, (qtdePorProdutoMapa.get(nome) ?? 0) + r.qtde_itens)
   }
 

@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { getCurrentLojaId } from '@/lib/auth'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import { modoDaLoja } from '@/lib/estoque/ledger'
@@ -15,6 +16,8 @@ export type CmvCarregado = {
   dataFoto: string | null; opcoes: { tipos: Opcao[]; familias: Opcao[] }; filtrosIgnorados: boolean
   /** a RPC já troca o custo fora do normal (migration 290): só então a tela fala da troca */
   custoTrocado: boolean
+  /** a leitura principal falhou: a tela mostra só este erro (nunca "Sem vendas no período") */
+  erro: string | null
 }
 
 /**
@@ -54,23 +57,31 @@ export async function carregarCmv(lojaId: number, ini: string, fim: string, filt
   if (avisoKardex) avisos.push(fonte === 'kardex' ? avisoKardex : `${avisoKardex} Por isso o CMV abaixo é estimado.`)
 
   if (fonte === 'proprio') {
+    const vazioProprio = (erro: string): CmvCarregado => ({ fonte, linhas: [], avisos, cobertura: null, dataFoto: null, opcoes: { tipos: [], familias: [] }, filtrosIgnorados: false, custoTrocado: false, erro })
+    // lucro_proprio só executa como service_role (igual a relatorio-lucro/dados.ts): com o cliente da sessão a RPC era
+    // recusada e a tela dizia "Sem vendas no período". Service role ignora RLS, então a loja vem SEMPRE da sessão.
+    const lojaSessao = await getCurrentLojaId()
+    if (lojaSessao !== lojaId) return vazioProprio('A loja selecionada mudou. Recarregue a página.')
+    let falha: string | null = null
     const rows = await rpcTodos<{ rotulo: string; quantidade: number; faturamento: number; cmv: number; itens_sem_baixa: number; itens_sem_custo: number }>(
-      supabase, 'lucro_proprio', { p_loja: lojaId, p_ini: ini, p_fim: fim, p_dim: por },
-      (e) => avisos.push(`Falha ao ler o custo das vendas (${e.message}). Os valores podem estar incompletos.`))
+      createServiceClient(), 'lucro_proprio', { p_loja: lojaSessao, p_ini: ini, p_fim: fim, p_dim: por },
+      (e) => { falha = e.message })
+    if (falha) return vazioProprio(`Não foi possível ler o custo das vendas (${falha}). Tente de novo em instantes.`)
     const linhas = rows.map((r) => ({
       ...linhaVazia(r.rotulo, r.rotulo, por === 'familia' ? { familia: r.rotulo } : por === 'tipo' ? { tipo: r.rotulo } : undefined),
       quant: Number(r.quantidade) || 0, faturamento: Number(r.faturamento) || 0, cmv: Number(r.cmv) || 0,
       semCusto: (Number(r.itens_sem_baixa) || 0) + (Number(r.itens_sem_custo) || 0),
     }))
-    return { fonte, linhas, avisos, cobertura: null, dataFoto: null, opcoes: { tipos: [], familias: [] }, filtrosIgnorados: filtros.tipos.length + filtros.familias.length > 0, custoTrocado: false }
+    return { fonte, linhas, avisos, cobertura: null, dataFoto: null, opcoes: { tipos: [], familias: [] }, filtrosIgnorados: filtros.tipos.length + filtros.familias.length > 0, custoTrocado: false, erro: null }
   }
 
   const vendas = await carregarItens(lojaId, ini, fim, { tipos: filtros.tipos, familias: filtros.familias, situacao: 'validas' })
   if (vendas.aviso) avisos.push(vendas.aviso)
 
   if (fonte === 'kardex') {
+    let erroKardex: string | null = null
     const [rpc, prods] = await Promise.all([
-      lerCmvKardex(supabase, lojaId, ini, fim, (e) => avisos.push(`Falha ao ler o kardex (${e.message}). Os valores podem estar incompletos.`)),
+      lerCmvKardex(supabase, lojaId, ini, fim, (e) => { erroKardex = e.message; avisos.push(`Falha ao ler o kardex (${e.message}). Os valores podem estar incompletos.`) }),
       buscarTodasLinhas<{ codigo_produto: number; descricao: string | null; codigo: string | null; descricao_familia: string | null; tipo_item: string | null }>(
         (from, to) => supabase.from('produtos').select('codigo_produto, descricao, codigo, descricao_familia, tipo_item').eq('loja_id', lojaId).order('id').range(from, to),
         undefined, (e) => avisos.push(`Falha ao ler o cadastro (${e.message}).`)),
@@ -83,7 +94,9 @@ export async function carregarCmv(lojaId: number, ini: string, fim: string, filt
       return (!filtros.tipos.length || filtros.tipos.includes(m?.tipoCod || '_')) && (!filtros.familias.length || filtros.familias.includes(m?.familia || 'Sem família'))
     }
     const linhas = montarLinhasKardex(rpc.filter((r) => passa(Number(r.n_cod_prod))), vendas.linhas, meta)
-    return { fonte, linhas, avisos, cobertura, dataFoto: null, opcoes: vendas.opcoes, filtrosIgnorados: false, custoTrocado: rpc.some((r) => 'vendas_omie' in r) }
+    // sem nenhuma linha do kardex por erro, a tela não pode dizer "Sem vendas"
+    const erro = erroKardex && !rpc.length ? `Não foi possível ler o kardex (${erroKardex}). Tente de novo em instantes.` : null
+    return { fonte, linhas, avisos, cobertura, dataFoto: null, opcoes: vendas.opcoes, filtrosIgnorados: false, custoTrocado: rpc.some((r) => 'vendas_omie' in r), erro }
   }
 
   // estimado: custo médio da foto mais recente que tem local real
@@ -95,5 +108,5 @@ export async function carregarCmv(lojaId: number, ini: string, fim: string, filt
         undefined, (e) => avisos.push(`Falha ao ler o custo médio (${e.message}). O CMV pode estar incompleto.`))
     : []
   const linhas = montarLinhasEstimado(vendas.linhas, custoMedioAtual(foto))
-  return { fonte, linhas, avisos, cobertura, dataFoto, opcoes: vendas.opcoes, filtrosIgnorados: false, custoTrocado: false }
+  return { fonte, linhas, avisos, cobertura, dataFoto, opcoes: vendas.opcoes, filtrosIgnorados: false, custoTrocado: false, erro: null }
 }
