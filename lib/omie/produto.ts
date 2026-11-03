@@ -1,5 +1,7 @@
 import { omieRequest, logIntegrationAttempt, type LojaOmie } from './client'
 import { createServiceClient } from '@/lib/supabase/server'
+import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
+import { novosParaVendas, type ProdutoOmieLocal } from './novos-para-vendas'
 
 interface OmieProduto {
   codigo_produto: number
@@ -296,13 +298,39 @@ export async function syncProdutos(loja: LojaOmie) {
           .maybeSingle()
         const integracaoKey = lojaRow?.integracao_api_key
         if (integracaoKey) {
-          // Coletar todos os produtos sincronizados nesta execução pra mandar pro vendas
-          const { data: todosProdutos } = await supabase
-            .from('produtos')
-            .select('codigo, descricao, valor_unitario')
-            .eq('loja_id', loja.id)
-            .not('codigo', 'is', null)
-          if (todosProdutos?.length) {
+          // Coletar todos os produtos sincronizados nesta execução pra mandar pro vendas.
+          // Paginado (03/11/2026): sem isso o PostgREST cortava em 1000 e o resto do catálogo nunca sincronizava.
+          let leituraFalhou = false
+          const todosProdutos = await buscarTodasLinhas<ProdutoOmieLocal>(
+            (from, to) =>
+              supabase
+                .from('produtos')
+                .select('codigo, descricao, valor_unitario, tipo_item, codigo_familia, descricao_familia, inativo, bloqueado, dinc:full_object->info->>dInc')
+                .eq('loja_id', loja.id)
+                .not('codigo', 'is', null)
+                .order('id')
+                .range(from, to) as unknown as PromiseLike<{ data: ProdutoOmieLocal[] | null; error: { message: string } | null }>,
+            undefined,
+            () => { leituraFalhou = true },
+          )
+          const urlProdutosVendas = `${vendasUrl.replace(/\/$/, '')}/api/integracao/produtos`
+          // Produto novo do Omie (tipo 00/04, incluído a partir de 29/10/2026) entra sozinho no cardápio
+          // (pedido do Ramon 03/11; regras em ./novos-para-vendas.ts e, do lado do Vendas, lib/produtosNovosOmie.ts).
+          const novos = leituraFalhou ? [] : novosParaVendas(todosProdutos)
+          for (let i = 0; i < novos.length; i += 500) {
+            await fetch(urlProdutosVendas, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${integracaoKey}` },
+              body: JSON.stringify({ novos: novos.slice(i, i + 500) }),
+            })
+              .then(async (r) => {
+                const j = (await r.json().catch(() => ({}))) as { criados?: { omieCodigo: string }[]; errors?: string[] }
+                if (j.criados?.length) console.log(`produtos novos no Norte Vendas, loja ${loja.id}:`, j.criados.map((c) => c.omieCodigo).join(', '))
+                if (!r.ok || j.errors?.length) console.error(`produtos novos no Norte Vendas, loja ${loja.id}: HTTP ${r.status}`, j.errors ?? '')
+              })
+              .catch((e) => console.error(`produtos novos no Norte Vendas, loja ${loja.id}:`, e))
+          }
+          if (todosProdutos.length) {
             const updates = todosProdutos
               .filter(p => p.codigo && p.descricao)
               .map(p => ({
@@ -313,7 +341,7 @@ export async function syncProdutos(loja: LojaOmie) {
             // Enviar em lotes de 500 (mesmo teto da rota PATCH do vendas)
             for (let i = 0; i < updates.length; i += 500) {
               const lote = updates.slice(i, i + 500)
-              await fetch(`${vendasUrl.replace(/\/$/, '')}/api/integracao/produtos`, {
+              await fetch(urlProdutosVendas, {
                 method: 'PATCH',
                 headers: {
                   'Content-Type': 'application/json',
