@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 // Números do dia do menu novo (só desenvolvedores). Só leitura, contagens com `head: true` (nada de linhas
 // trafegando); cada uma isolada: se uma falhar, só aquela tela fica sem número.
 
@@ -13,6 +15,7 @@ import { montarNumeros, type Numeros } from '@/lib/central/numeros'
 type Res = { count: number | null; error: unknown }
 
 export async function numerosDaCentral(): Promise<Numeros> {
+  const __d = viaDesktop('central-numeros#numerosDaCentral', numerosDaCentral, []); if (__d) return __d as never
   await exigirDevAcao()
   const lojaId = await getCurrentLojaId()
   const db = createServiceClient()
