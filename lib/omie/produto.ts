@@ -329,22 +329,16 @@ export async function syncProdutos(loja: LojaOmie) {
               })
               .catch((e) => console.error(`produtos novos no Norte Vendas, loja ${loja.id}:`, e))
           }
-          // Nome/preço dos já ligados: MESMA leitura de antes, sem paginar, de propósito (03/11/2026). Paginada, ela
-          // renomearia 92 itens do cardápio do Sertão (nomes recadastrados à mão em 17/09, ex. "Heineken 330ml" →
-          // "Long Heineken 330 ML") e mudaria 3 preços: o corte em 1000 é o que hoje deixa esses itens de fora.
-          // Decidir quem manda no nome/preço antes de mexer aqui.
-          const { data: todosProdutosAntigo } = await supabase
-            .from('produtos')
-            .select('codigo, descricao, valor_unitario')
-            .eq('loja_id', loja.id)
-            .not('codigo', 'is', null)
-          if (todosProdutosAntigo?.length) {
+          // Já ligados: só o PREÇO vem do Omie (03/11/2026, decisão do dono: "o preço é Omie"; o nome do cardápio é do
+          // Norte Vendas e pode ser bem diferente do Omie, ex. "Heineken 330ml" × "Long Heineken 330 ML"). Lê tudo,
+          // paginado: antes cortava em 1000 e boa parte do cardápio do Sertão nunca recebia o preço.
+          const todosProdutosAntigo = leituraFalhou ? [] : todosProdutos
+          if (todosProdutosAntigo.length) {
             const updates = todosProdutosAntigo
-              .filter(p => p.codigo && p.descricao)
+              .filter(p => p.codigo && Number(p.valor_unitario) > 0)
               .map(p => ({
                 omieCodigo: p.codigo!,
-                nome: p.descricao!,
-                preco: Number(p.valor_unitario) || 0,
+                preco: Number(p.valor_unitario),
               }))
             // Enviar em lotes de 500 (mesmo teto da rota PATCH do vendas)
             for (let i = 0; i < updates.length; i += 500) {
