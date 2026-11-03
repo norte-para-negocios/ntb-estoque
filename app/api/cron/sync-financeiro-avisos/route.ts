@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { assertCronAuth, getLojasFinanceiroOmie } from '@/lib/omie/sync-all'
 import { processarAvisosLoja, type ResumoAvisos } from '@/lib/financeiro-omie/avisos'
+import { statusComTotal502 } from '@/lib/cron/resposta-puro'
 
 export const maxDuration = 120
 
@@ -27,5 +28,7 @@ export async function GET(request: Request) {
     }
   }
   const falhas = out.filter((x) => 'erro' in x && x.erro && !x.erro.startsWith('orçamento'))
-  return NextResponse.json({ ok: falhas.length === 0, lojas: out }, { status: lojas.length && falhas.length === lojas.length ? 502 : 200 })
+  // orçamento esgotado é adiamento, não falha; só erro real conta (todas falharam 502, parcial 500: Fase 1, B1)
+  const resultados = out.map((x, i) => ({ loja: 'loja' in x ? x.loja : lojas[i]?.id ?? 0, ok: !falhas.includes(x), erro: falhas.includes(x) && 'erro' in x ? x.erro : null }))
+  return NextResponse.json({ ok: falhas.length === 0, lojas: out }, { status: statusComTotal502(resultados) })
 }

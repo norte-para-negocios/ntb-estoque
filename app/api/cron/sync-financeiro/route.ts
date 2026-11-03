@@ -3,6 +3,7 @@ import { assertCronAuth, getLojasFinanceiroOmie } from '@/lib/omie/sync-all'
 import { rodarLojasEspelho } from '@/lib/omie/espelho-ciclo'
 import { janelaProibida } from '@/lib/estoque/espelho-lojas'
 import { sincronizarFinanceiroLoja } from '@/lib/financeiro-omie/sync-loja'
+import { resultadosDoEspelho, statusComTotal502 } from '@/lib/cron/resposta-puro'
 
 export const maxDuration = 180
 
@@ -21,5 +22,5 @@ export async function GET(request: Request) {
   const { api: lojas } = await getLojasFinanceiroOmie()
   const r = await rodarLojasEspelho(lojas, 'financeiro', ORCAMENTO_MS, (loja, prazoMs) => sincronizarFinanceiroLoja(loja, { prazoMs }))
   const falhas = r.filter((x) => x.erro)
-  return NextResponse.json({ ok: falhas.length === 0, total: lojas.length, lojas: r }, { status: lojas.length && falhas.length === lojas.length ? 502 : 200 })
+  return NextResponse.json({ ok: falhas.length === 0, total: lojas.length, lojas: r }, { status: statusComTotal502(resultadosDoEspelho(r)) })
 }

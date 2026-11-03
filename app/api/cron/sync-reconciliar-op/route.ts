@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { reconciliarOPsFantasmas } from '@/lib/omie/ordem-producao'
 import { getLojasAtivas, assertCronAuth, lojasOpTempoReal } from '@/lib/omie/sync-all'
+import { corpoDoCron, statusDoCron } from '@/lib/cron/resposta-puro'
 
 export const maxDuration = 300
 
@@ -23,5 +24,9 @@ export async function GET(request: Request) {
     loja_id: lojas[i].id,
     ...(r.status === 'fulfilled' ? r.value : { erro: r.reason instanceof Error ? r.reason.message : String(r.reason) }),
   }))
-  return NextResponse.json({ total_lojas: lojas.length, resumo })
+  const resultados = resumo.map((r) => {
+    const erro = 'erro' in r && r.erro ? r.erro : null
+    return { loja: r.loja_id, ok: !erro, erro }
+  })
+  return NextResponse.json({ total_lojas: lojas.length, resumo, ...corpoDoCron(resultados) }, { status: statusDoCron(resultados) })
 }

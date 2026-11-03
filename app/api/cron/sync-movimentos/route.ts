@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getLojasAtivas, assertCronAuth } from '@/lib/omie/sync-all'
 import { syncMovimentos } from '@/lib/omie/sync-movimentos'
+import { resultadosDeSettled, statusDoCron } from '@/lib/cron/resposta-puro'
 
 export const maxDuration = 300
 
@@ -32,11 +33,14 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({
-    ok: falhas.length === 0,
-    total_lojas: lojas.length,
-    ok_lojas: lojas.length - falhas.length,
-    linhas_gravadas: totalLinhas,
-    falhas,
-  })
+  return NextResponse.json(
+    {
+      ok: falhas.length === 0,
+      total_lojas: lojas.length,
+      ok_lojas: lojas.length - falhas.length,
+      linhas_gravadas: totalLinhas,
+      falhas,
+    },
+    { status: statusDoCron(resultadosDeSettled(lojas, results)) }
+  )
 }
