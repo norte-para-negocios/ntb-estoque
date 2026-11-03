@@ -10,3 +10,4 @@ $SSH "sudo -u postgres pg_dump -d ntb_frio --schema-only --no-owner --no-privile
 node scripts/limpar-schema.mjs "$TMP/estoque.sql" schema/estoque.sql
 node scripts/limpar-schema.mjs "$TMP/frio.sql" schema/frio.sql
 rm -rf "$TMP"
+node scripts/hash-esquema.mjs

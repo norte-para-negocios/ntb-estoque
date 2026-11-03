@@ -1,9 +1,12 @@
 // Autenticação e utilidades das rotas /api/offline/* (canal do app desktop). Só servidor.
 import { gzipSync } from 'node:zlib'
 import { createServiceClient } from '@/lib/supabase/server'
+import { ESQUEMA_HASH } from '@/lib/offline/esquema-atual'
+import { decidirEsquema } from '@/lib/offline/esquema-puro'
 import { criarLimitador, ipDoCliente } from '@/lib/seguranca/regras'
 
-export const OFFLINE_VERSAO_MINIMA = '1.0.0'
+// Subir (env OFFLINE_VERSAO_MINIMA) só depois de publicar o instalador novo: app abaixo disso recebe 426.
+export const OFFLINE_VERSAO_MINIMA = process.env.OFFLINE_VERSAO_MINIMA || '1.0.0'
 
 export type UsuarioCanal = { userId: string; email: string | null; lojas: number[]; permitidas: number[]; admin: boolean; lojaAtual: number | null }
 
@@ -28,6 +31,14 @@ export async function autenticarCanal(req: Request): Promise<UsuarioCanal | Resp
   if (compararVersao(versao, OFFLINE_VERSAO_MINIMA) < 0) {
     return erro(426, 'Atualize o app Norte Estoque para continuar sincronizando.', { tipo: 'versao' })
   }
+  // O app manda o hash do esquema que carrega; esquema antigo = 426 (o app mostra a mensagem de `erro`).
+  const esquema = decidirEsquema({
+    hashApp: req.headers.get('x-ntb-esquema'),
+    hashAtual: ESQUEMA_HASH,
+    aceitos: (process.env.OFFLINE_ESQUEMAS_ACEITOS ?? '').split(',').map((x) => x.trim()).filter(Boolean),
+    exigirHash: process.env.OFFLINE_EXIGIR_HASH === '1',
+  })
+  if (!esquema.ok) return erro(esquema.status, esquema.mensagem, { tipo: 'versao' })
   const auth = req.headers.get('authorization')
   if (!auth?.startsWith('Bearer ')) return erro(401, 'Sessão ausente.')
   const svc = createServiceClient()
