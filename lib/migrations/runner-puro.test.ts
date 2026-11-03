@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { versaoDoArquivo, classificarSql, montarAplicacao, montarSsh, SQL_CONSULTA_CONTROLE } from './runner-puro.ts'
+import { versaoDoArquivo, classificarSql, montarAplicacao, montarSsh, SQL_CONSULTA_CONTROLE, SQL_CONTROLE_EXISTE } from './runner-puro.ts'
 
 test('versaoDoArquivo aceita só NNN_nome.sql', () => {
   assert.equal(versaoDoArquivo('309_controle_migrations.sql'), 309)
@@ -70,4 +70,7 @@ test('montarSsh exige o alvo por variável de ambiente e nunca embute host ou ch
 test('consulta de controle só lê', () => {
   assert.match(SQL_CONSULTA_CONTROLE(309), /^set default_transaction_read_only = on;/)
   assert.doesNotMatch(SQL_CONSULTA_CONTROLE(309), /insert|update|delete|create|drop/i)
+  assert.match(SQL_CONTROLE_EXISTE, /^set default_transaction_read_only = on;/)
+  // a consulta de existência não pode citar a tabela fora do to_regclass (falharia antes da 309)
+  assert.doesNotMatch(SQL_CONTROLE_EXISTE.replace(/to_regclass\('public\.schema_migrations'\)/, ''), /schema_migrations/)
 })

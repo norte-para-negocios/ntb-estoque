@@ -12,7 +12,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import { spawnSync } from 'node:child_process'
-import { versaoDoArquivo, montarAplicacao, montarSsh, SQL_CONSULTA_CONTROLE } from '../lib/migrations/runner-puro.ts'
+import { versaoDoArquivo, montarAplicacao, montarSsh, SQL_CONSULTA_CONTROLE, SQL_CONTROLE_EXISTE } from '../lib/migrations/runner-puro.ts'
 
 const args = process.argv.slice(2)
 const seco = args.includes('--seco')
@@ -37,8 +37,9 @@ try {
   const sql = fs.readFileSync(caminho, 'utf8')
 
   // 1) so leitura: o controle existe? essa versao ja foi aplicada?
-  const linha = psql(SQL_CONSULTA_CONTROLE(versao)).split('\n').map((l) => l.trim()).filter(Boolean).pop() ?? ''
-  const [controleExiste, jaAplicada] = linha.split('|').map((v) => v === 't')
+  const ultima = (txt) => txt.split('\n').map((l) => l.trim()).filter(Boolean).pop() ?? ''
+  const controleExiste = ultima(psql(SQL_CONTROLE_EXISTE)) === 't'
+  const jaAplicada = controleExiste && ultima(psql(SQL_CONSULTA_CONTROLE(versao))) === 't'
   if (jaAplicada) {
     console.error(`${arquivo}: versao ${versao} ja consta em schema_migrations. Nada a fazer.`)
     process.exit(1)

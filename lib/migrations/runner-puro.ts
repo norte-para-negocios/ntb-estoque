@@ -39,9 +39,11 @@ export function montarAplicacao(p: { arquivo: string; sql: string; modo: 'real' 
 }
 
 /** Só leitura: o controle existe? esta versão já foi aplicada? Saída: `controle|ja` (t/f|t/f). */
+// Duas consultas: o Postgres resolve todas as tabelas na análise da query inteira, então um `case when to_regclass(...)`
+// não protege o `exists` quando a tabela ainda não existe (antes da 309 a consulta única falhava).
+export const SQL_CONTROLE_EXISTE = 'set default_transaction_read_only = on;\nselect to_regclass(\'public.schema_migrations\') is not null;\n'
 export const SQL_CONSULTA_CONTROLE = (versao: number) =>
-  `set default_transaction_read_only = on;\nselect to_regclass('public.schema_migrations') is not null, ` +
-  `case when to_regclass('public.schema_migrations') is null then false else exists (select 1 from public.schema_migrations where versao = ${Number(versao)}) end;\n`
+  `set default_transaction_read_only = on;\nselect exists (select 1 from public.schema_migrations where versao = ${Number(versao)});\n`
 
 /** Argumentos do ssh. O alvo vem do ambiente (o repo é público: nada de host ou chave no código). */
 export function montarSsh(env: Record<string, string | undefined>): string[] {

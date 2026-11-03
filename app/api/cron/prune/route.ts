@@ -6,7 +6,8 @@ import { MODELOS_LOG_PROTEGIDOS, RETENCAO, TOPICOS_WEBHOOK_PROTEGIDOS } from '@/
 
 export const maxDuration = 300
 
-const LOTE = 2000
+// 500: ids de 6 dígitos em `.in('id', ids)` passam de ~8 KB de URL perto de 1000 e o PostgREST responde 414.
+const LOTE = 500
 const ORCAMENTO_MS = 150_000
 // Teto por rodada: as duas tabelas têm gatilho outbox_capture (espelho/failover), então cada linha apagada também vira uma
 // linha de ~1-2 KB no outbox (hoje 160 MB/dia só de inserts). Com ~440 mil linhas atrasadas, apagar tudo de uma vez

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { exigirLeitura, todosPulados } from './venda-proprio-leituras.ts'
+import { exigirLeitura, todosPulados, ehConflitoIdempotencia } from './venda-proprio-leituras.ts'
 
 test('exigirLeitura: erro da consulta vira exceção com o que se tentou ler', () => {
   assert.throws(() => exigirLeitura({ data: null, error: { message: 'timeout' } }, 'fichas'), /Falha ao ler fichas: timeout/)
@@ -30,4 +30,9 @@ test('todosPulados: todos os itens voltam retentáveis, na ordem, com o erro', (
     { codigo: '?', ok: false, op: 'pulada', baixa: 'pulada', erro: 'Falha ao ler fichas: timeout' },
     { codigo: 'X2', ok: false, op: 'pulada', baixa: 'pulada', erro: 'Falha ao ler fichas: timeout' },
   ])
+})
+
+test('conflito de idempotência é reconhecido (não retentável)', () => {
+  assert.equal(ehConflitoIdempotencia('conflito de idempotência: VENDA|x já gravado com outra quantidade'), true)
+  assert.equal(ehConflitoIdempotencia('statement timeout'), false)
 })

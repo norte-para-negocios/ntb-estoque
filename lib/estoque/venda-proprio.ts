@@ -11,7 +11,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { localDaVenda, type LojaLocais } from '@/lib/vendas/local-venda'
 import { planejarBaixa, type ItemVendaProprio, type ResultadoItemProprio } from './plano-baixa'
 import { estornar, saida } from './ledger'
-import { exigirLeitura, todosPulados } from './venda-proprio-leituras'
+import { exigirLeitura, todosPulados, ehConflitoIdempotencia } from './venda-proprio-leituras'
 
 /** Executa o plano: saidas em ORDEM de codigo_produto (evita deadlock entre vendas simultaneas) e devolve na ordem original dos itens. */
 export async function baixarVendaProprio(
@@ -91,7 +91,11 @@ export async function baixarVendaProprio(
     } catch (e) {
       const erro = e instanceof Error ? e.message : 'Falha ao baixar o estoque'
       // Com pedidoRef (sempre, ver acima) a saida e idempotente: reenviar e seguro, entao conta como "nada gravado" (retentavel).
-      resultados[p.indice] = { codigo: p.codigo, ok: false, op: 'pulada', baixa: 'pulada', erro }
+      // Exceção: conflito de idempotência (migration 308, PF002) = o mesmo pedido já foi baixado com outra quantidade.
+      // Reenviar daria o mesmo conflito para sempre: vira 'erro' (o gerente confere), nunca 'pulada'.
+      resultados[p.indice] = ehConflitoIdempotencia(erro)
+        ? { codigo: p.codigo, ok: false, op: 'erro', baixa: 'erro', erro: 'Este pedido já baixou este item com outra quantidade. Confira a venda.' }
+        : { codigo: p.codigo, ok: false, op: 'pulada', baixa: 'pulada', erro }
     }
   }
   return resultados
