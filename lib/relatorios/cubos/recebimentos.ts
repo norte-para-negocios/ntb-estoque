@@ -1,6 +1,7 @@
 // Cubo "Recebimentos" (nota fiscal de entrada, uma linha por item da nota) — os campos e rótulos são os do Omie
 // (omie-rea/relatorios/COM/rel-com-recebimentos-por-periodo/fields.json). A linha vem da RPC cubo_recebimentos (migration 299).
-import { statusNF } from '../../nf-status'
+// @ts-ignore: o import com extensão .ts é exigido pelo node --test (type stripping); o tsc do Next não o aceita
+import { statusNF } from '../../nf-status.ts'
 import type { Linha } from '../pivot.ts'
 import type { CampoCubo, Cubo, TipoCampo } from './tipos.ts'
 
