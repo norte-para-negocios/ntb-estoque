@@ -31,7 +31,9 @@ async function marcarDoc(lojaId: number, nsu: string, campos: Record<string, unk
 }
 
 async function notaPorChave(lojaId: number, chave: string): Promise<{ id: number } | null> {
-  const { data } = await createServiceClient().from('notas_fiscais').select('id').eq('loja_id', lojaId).eq('c_chave_nfe', chave).is('deleted_at', null).maybeSingle()
+  const { data, error } = await createServiceClient().from('notas_fiscais').select('id').eq('loja_id', lojaId).eq('c_chave_nfe', chave).is('deleted_at', null).maybeSingle()
+  // Erro aqui não pode virar "nota inexistente" (gravaria a nota de novo): falha alto e o documento fica para reprocessar.
+  if (error) throw new Error(`Falha ao ler a nota pela chave: ${error.message}`)
   return data ? { id: Number(data.id) } : null
 }
 
@@ -101,11 +103,13 @@ async function processarDocumento(ctx: Ctx, doc: DocDistribuido, r: ResultadoSyn
 async function darCiencias(ctx: Ctx, cred: CredencialLoja, r: ResultadoSync): Promise<void> {
   if (!ctx.autoCiencia) return
   const sb = createServiceClient()
-  const { data: pend } = await sb.from('sefaz_documentos').select('id, chave').eq('loja_id', ctx.lojaId).eq('tipo', 'resNFe').is('ciencia_em', null).is('ignorado', null)
+  const { data: pend, error: ePend } = await sb.from('sefaz_documentos').select('id, chave').eq('loja_id', ctx.lojaId).eq('tipo', 'resNFe').is('ciencia_em', null).is('ignorado', null)
     .not('chave', 'is', null).order('id').limit(MAX_CIENCIAS_POR_EXECUCAO)
+  if (ePend) throw new Error(`Falha ao ler as notas que esperam ciência: ${ePend.message}`)
   for (const d of pend ?? []) {
     // já temos o XML completo desta chave: não precisa de ciência
-    const { data: completo } = await sb.from('sefaz_documentos').select('id').eq('loja_id', ctx.lojaId).eq('chave', d.chave).eq('tipo', 'procNFe').limit(1)
+    const { data: completo, error: eComp } = await sb.from('sefaz_documentos').select('id').eq('loja_id', ctx.lojaId).eq('chave', d.chave).eq('tipo', 'procNFe').limit(1)
+    if (eComp) throw new Error(`Falha ao ler o XML completo da nota: ${eComp.message}`)
     if (completo?.length) { await sb.from('sefaz_documentos').update({ ciencia_em: new Date().toISOString(), ciencia_cstat: 'xml-completo' }).eq('id', d.id); continue }
     try {
       const c = await enviarCiencia({ chave: d.chave as string, cnpj: ctx.cnpj, tpAmb: ctx.ambiente, cred })
@@ -123,10 +127,12 @@ async function darCiencias(ctx: Ctx, cred: CredencialLoja, r: ResultadoSync): Pr
 async function buscarCompletosPorChave(ctx: Ctx, cred: CredencialLoja, r: ResultadoSync): Promise<void> {
   const sb = createServiceClient()
   const limite = new Date(Date.now() - ESPERA_BUSCA_CHAVE_MS).toISOString()
-  const { data: pend } = await sb.from('sefaz_documentos').select('id, chave').eq('loja_id', ctx.lojaId).eq('tipo', 'resNFe').not('ciencia_em', 'is', null).is('ignorado', null)
+  const { data: pend, error: ePend } = await sb.from('sefaz_documentos').select('id, chave').eq('loja_id', ctx.lojaId).eq('tipo', 'resNFe').not('ciencia_em', 'is', null).is('ignorado', null)
     .not('chave', 'is', null).or(`busca_chave_em.is.null,busca_chave_em.lt.${limite}`).order('id').limit(MAX_CIENCIAS_POR_EXECUCAO)
+  if (ePend) throw new Error(`Falha ao ler as notas que esperam o XML completo: ${ePend.message}`)
   for (const d of pend ?? []) {
-    const { data: completo } = await sb.from('sefaz_documentos').select('id').eq('loja_id', ctx.lojaId).eq('chave', d.chave).eq('tipo', 'procNFe').limit(1)
+    const { data: completo, error: eComp } = await sb.from('sefaz_documentos').select('id').eq('loja_id', ctx.lojaId).eq('chave', d.chave).eq('tipo', 'procNFe').limit(1)
+    if (eComp) throw new Error(`Falha ao ler o XML completo da nota: ${eComp.message}`)
     if (completo?.length) continue
     await sb.from('sefaz_documentos').update({ busca_chave_em: new Date().toISOString() }).eq('id', d.id)
     try {
@@ -151,9 +157,10 @@ async function buscarCompletosPorChave(ctx: Ctx, cred: CredencialLoja, r: Result
  * fica com processado=false e o erro; aqui ele é reprocessado (só banco, nenhuma chamada à SEFAZ), até 20 por ciclo.
  */
 async function reprocessarComErro(ctx: Ctx, r: ResultadoSync): Promise<void> {
-  const { data } = await createServiceClient().from('sefaz_documentos').select('nsu, schema, xml, completo')
+  const { data, error } = await createServiceClient().from('sefaz_documentos').select('nsu, schema, xml, completo')
     .eq('loja_id', ctx.lojaId).eq('processado', false).not('erro', 'is', null).in('tipo', ['procEventoNFe', 'resEvento', 'resNFe'])
     .not('xml', 'is', null).order('id').limit(20)
+  if (error) throw new Error(`Falha ao ler os documentos com erro: ${error.message}`)
   for (const d of (data ?? []) as DocDistribuido[]) await processarDocumento(ctx, d, r)
 }
 
@@ -161,16 +168,21 @@ export async function sincronizarSefaz(lojaId: number): Promise<ResultadoSync> {
   const r = vazio(lojaId)
   const sb = createServiceClient()
   const agora = Date.now()
-  const { data: loja } = await sb.from('lojas').select('id, cnpj, uf, modo_estoque, ativo, certificado_path').eq('id', lojaId).maybeSingle()
+  const { data: loja, error: eLoja } = await sb.from('lojas').select('id, cnpj, uf, modo_estoque, ativo, certificado_path').eq('id', lojaId).maybeSingle()
+  if (eLoja) return { ...r, ok: false, erro: `Falha ao ler a loja: ${eLoja.message}` }
   if (!loja || loja.modo_estoque !== 'proprio') return { ...r, ok: false, motivo: 'A loja não usa estoque próprio.' }
   if (!loja.ativo) return { ...r, ok: false, motivo: 'Loja inativa.' }
   const cnpj = String(loja.cnpj ?? '').replace(/\D/g, '')
   if (cnpj.length !== 14) return { ...r, ok: false, motivo: 'A loja precisa de um CNPJ válido para consultar as notas na SEFAZ.' }
   if (!loja.certificado_path) return { ...r, ok: false, motivo: 'A loja não tem certificado digital cadastrado.' }
 
-  let { data: nsu } = await sb.from('sefaz_nsu').select('*').eq('loja_id', lojaId).maybeSingle()
+  const lidoNsu = await sb.from('sefaz_nsu').select('*').eq('loja_id', lojaId).maybeSingle()
+  // Erro na leitura do NSU não pode virar "loja nova" (criaria outra linha / recomeçaria do NSU 0).
+  if (lidoNsu.error) return { ...r, ok: false, erro: `Falha ao ler o NSU da loja: ${lidoNsu.error.message}` }
+  let nsu = lidoNsu.data
   if (!nsu) {
-    const { data: criado } = await sb.from('sefaz_nsu').insert({ loja_id: lojaId, cnpj }).select('*').single()
+    const { data: criado, error: eCriado } = await sb.from('sefaz_nsu').insert({ loja_id: lojaId, cnpj }).select('*').single()
+    if (eCriado) return { ...r, ok: false, erro: `Falha ao criar o NSU da loja: ${eCriado.message}` }
     nsu = criado
   }
   if (!nsu || !nsu.ativo) return { ...r, ok: true, motivo: 'Consulta à SEFAZ desligada para esta loja.' }
@@ -239,11 +251,14 @@ export async function sincronizarSefaz(lojaId: number): Promise<ResultadoSync> {
 export async function importarNotaPorChave(lojaId: number, chave: string): Promise<{ ok: true; situacao: 'completa' | 'resumo' | 'nao_encontrada'; notaId: number | null } | { error: string }> {
   const sb = createServiceClient()
   const chDig = (chave ?? '').replace(/\D/g, '')
-  const [{ data: loja }, { data: nsu }, { data: tent }] = await Promise.all([
+  const [{ data: loja, error: eLoja }, { data: nsu, error: eNsu }, { data: tent, error: eTent }] = await Promise.all([
     sb.from('lojas').select('id, cnpj, uf, modo_estoque, ativo, is_test, certificado_path').eq('id', lojaId).maybeSingle(),
     sb.from('sefaz_nsu').select('ambiente, auto_lancar, auto_ciencia, bloqueado_ate').eq('loja_id', lojaId).maybeSingle(),
     sb.from('sefaz_busca_chave').select('ultima_em').eq('loja_id', lojaId).eq('chave', chDig).maybeSingle(),
   ])
+  // A espera da SEFAZ e a última tentativa decidem se pode consultar: sem conseguir ler, não consulta.
+  const eLeitura = eLoja ?? eNsu ?? eTent
+  if (eLeitura) return { error: `Falha ao ler a configuração da SEFAZ: ${eLeitura.message}` }
   const pre = prechecarBuscaPorChave({ chave, loja, nsu, tentativa: tent, agora: Date.now() })
   if ('error' in pre) return pre
   const { chave: ch, cnpj } = pre
@@ -251,7 +266,8 @@ export async function importarNotaPorChave(lojaId: number, chave: string): Promi
   const agoraIso = new Date().toISOString()
   // a tentativa é gravada ANTES da consulta: dois cliques não consultam duas vezes
   if (tent) {
-    const { data: upd } = await sb.from('sefaz_busca_chave').update({ ultima_em: agoraIso, cstat: null }).eq('loja_id', lojaId).eq('chave', ch).eq('ultima_em', tent.ultima_em).select('chave')
+    const { data: upd, error: eUpd } = await sb.from('sefaz_busca_chave').update({ ultima_em: agoraIso, cstat: null }).eq('loja_id', lojaId).eq('chave', ch).eq('ultima_em', tent.ultima_em).select('chave')
+    if (eUpd) return { error: `Falha ao gravar a tentativa: ${eUpd.message}` }
     if (!upd?.length) return { error: 'Esta chave já foi consultada há menos de 1 hora.' }
   } else {
     const { error } = await sb.from('sefaz_busca_chave').insert({ loja_id: lojaId, chave: ch, ultima_em: agoraIso })
@@ -284,6 +300,7 @@ export async function importarNotaPorChave(lojaId: number, chave: string): Promi
 
 /** Lojas de estoque próprio com certificado e consulta ligada (para o cron). */
 export async function lojasParaSefaz(): Promise<number[]> {
-  const { data } = await createServiceClient().from('lojas').select('id').eq('modo_estoque', 'proprio').eq('ativo', true).not('certificado_path', 'is', null).eq('is_test', false)
+  const { data, error } = await createServiceClient().from('lojas').select('id').eq('modo_estoque', 'proprio').eq('ativo', true).not('certificado_path', 'is', null).eq('is_test', false)
+  if (error) throw new Error(`Falha ao ler as lojas da SEFAZ: ${error.message}`)
   return (data ?? []).map((l) => Number(l.id))
 }

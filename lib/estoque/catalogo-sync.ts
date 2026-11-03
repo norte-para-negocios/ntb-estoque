@@ -62,12 +62,13 @@ async function getJson(url: string, key: string): Promise<{ status: number; json
 
 /** Lojas do modo próprio (ativas) com a ligação ao Vendas já feita ou ainda por fazer. */
 export async function lojasProprio(): Promise<Loja[]> {
-  const { data } = await createServiceClient()
+  const { data, error } = await createServiceClient()
     .from('lojas')
     .select('id, nome, cnpj, integracao_api_key, vendas_store_id')
     .eq('modo_estoque', 'proprio')
     .eq('ativo', true)
     .order('id')
+  if (error) throw new Error(`Falha ao ler as lojas de estoque próprio: ${error.message}`)
   return (data ?? []) as Loja[]
 }
 
@@ -113,7 +114,8 @@ export async function vincularLojaAoVendas(loja: Loja): Promise<{ ok: true; stor
 export async function notificarVendasLoja(lojaId: number): Promise<void> {
   const base = urlVendas()
   if (!base) return
-  const { data: loja } = await createServiceClient().from('lojas').select('nome, cnpj, ativo, integracao_api_key, vendas_store_id').eq('id', lojaId).maybeSingle()
+  const { data: loja, error } = await createServiceClient().from('lojas').select('nome, cnpj, ativo, integracao_api_key, vendas_store_id').eq('id', lojaId).maybeSingle()
+  if (error) { console.error(`sync-catalogo: loja ${lojaId} não avisada ao Vendas (falha ao ler a loja):`, error.message); return }
   if (!loja?.integracao_api_key || !loja.vendas_store_id) return
   await fetch(`${base}/api/integracao/lojas`, {
     method: 'PATCH',
@@ -135,7 +137,9 @@ async function montarPayload(lojaId: number, produtos: string[], grupos: number[
 
   if (grupos.length) {
     // inclui os ancestrais: o Vendas precisa do pai antes do filho
-    const { data: todos } = await supabase.from('grupos_produto').select('id, pai_id, nome, ordem, ativo, vendas_ref, updated_at').eq('loja_id', lojaId)
+    const { data: todos, error: eGrupos } = await supabase.from('grupos_produto').select('id, pai_id, nome, ordem, ativo, vendas_ref, updated_at').eq('loja_id', lojaId)
+    // Payload montado com leitura que falhou seria entregue vazio e o outbox marcado como entregue: falha alto (fila fica pendente).
+    if (eGrupos) throw new Error(`Falha ao ler os grupos: ${eGrupos.message}`)
     const porId = new Map((todos ?? []).map((g) => [g.id as number, g]))
     const incluir = new Set<number>()
     for (const id of grupos) {
@@ -161,18 +165,20 @@ async function montarPayload(lojaId: number, produtos: string[], grupos: number[
   }
 
   if (produtos.length) {
-    const { data } = await supabase
+    const { data, error: eProd } = await supabase
       .from('produtos')
       .select('codigo, descricao, valor_unitario, inativo, eh_mae, produto_pai_codigo, grupo_id, atributos, unidade, tipo_item, ncm, vendas_ref, updated_at, codigo_produto')
       .eq('loja_id', lojaId)
       .in('codigo', produtos)
       .eq('pdv', true).in('tipo_item', ['00', '04'])  // só o que é vendável vai para o cardápio (insumos ficam só no Estoque)
+    if (eProd) throw new Error(`Falha ao ler os produtos: ${eProd.message}`)
     const rows = (data ?? []) as ProdutoRow[]
     // mãe precisa existir no Vendas antes das variações; busca também as mães referenciadas
     const paiIds = [...new Set(rows.map((r) => r.produto_pai_codigo).filter((x): x is number => x != null))]
     const codigoDoPai = new Map<number, string>()
     if (paiIds.length) {
-      const { data: pais } = await supabase.from('produtos').select('codigo_produto, codigo').eq('loja_id', lojaId).in('codigo_produto', paiIds)
+      const { data: pais, error: ePais } = await supabase.from('produtos').select('codigo_produto, codigo').eq('loja_id', lojaId).in('codigo_produto', paiIds)
+      if (ePais) throw new Error(`Falha ao ler os produtos mãe: ${ePais.message}`)
       for (const p of pais ?? []) codigoDoPai.set(p.codigo_produto as number, p.codigo as string)
     }
     const lista: ProdutoSync[] = rows
@@ -202,14 +208,16 @@ function proximaTentativa(tentativas: number): string {
 
 export async function drenarOutbox(lojaId: number, limite = 100): Promise<{ entregues: number; falhas: number; pendentes: number }> {
   const supabase = createServiceClient()
-  const { data: loja } = await supabase.from('lojas').select('id, integracao_api_key, vendas_store_id').eq('id', lojaId).maybeSingle()
+  const { data: loja, error: eLoja } = await supabase.from('lojas').select('id, integracao_api_key, vendas_store_id').eq('id', lojaId).maybeSingle()
+  if (eLoja) throw new Error(`Falha ao ler a loja: ${eLoja.message}`)
   const base = urlVendas()
   if (!loja?.integracao_api_key || !loja.vendas_store_id || !base) return { entregues: 0, falhas: 0, pendentes: 0 }
 
-  const { data: fila } = await supabase
+  const { data: fila, error: eFila } = await supabase
     .from('sync_outbox').select('id, entidade, ref, operacao, tentativas')
     .eq('loja_id', lojaId).eq('status', 'pending').lte('proxima_tentativa', new Date().toISOString())
     .order('id').limit(limite)
+  if (eFila) throw new Error(`Falha ao ler a fila de entrega: ${eFila.message}`)
   if (!fila?.length) return { entregues: 0, falhas: 0, pendentes: 0 }
 
   const produtos = fila.filter((f) => f.entidade === 'produto').map((f) => f.ref as string)
@@ -277,7 +285,8 @@ export async function entregarAgora(lojaId: number): Promise<void> {
  */
 export async function reconciliarCatalogo(lojaId: number): Promise<{ aplicadoDoVendas: number; enfileirados: number; erro?: string }> {
   const supabase = createServiceClient()
-  const { data: loja } = await supabase.from('lojas').select('id, integracao_api_key, vendas_store_id').eq('id', lojaId).maybeSingle()
+  const { data: loja, error: eLoja } = await supabase.from('lojas').select('id, integracao_api_key, vendas_store_id').eq('id', lojaId).maybeSingle()
+  if (eLoja) return { aplicadoDoVendas: 0, enfileirados: 0, erro: `Falha ao ler a loja: ${eLoja.message}` }
   const base = urlVendas()
   if (!loja?.integracao_api_key || !loja.vendas_store_id || !base) return { aplicadoDoVendas: 0, enfileirados: 0 }
 
@@ -298,9 +307,10 @@ export async function reconciliarCatalogo(lojaId: number): Promise<{ aplicadoDoV
   }
 
   // o que o Estoque tem e o Vendas nunca recebeu / mudou depois da última sincronização
-  const { data: pend } = await supabase
+  const { data: pend, error: ePend } = await supabase
     .from('produtos').select('codigo, vendas_ref, updated_at, sync_atualizado_em')
     .eq('loja_id', lojaId).not('codigo', 'is', null).eq('pdv', true).eq('inativo', false)
+  if (ePend) return { aplicadoDoVendas: aplicado, enfileirados: 0, erro: `Falha ao ler os produtos a enviar: ${ePend.message}` }
   const deveEnviar = (pend ?? []).filter((p) => !p.vendas_ref || !p.sync_atualizado_em || (p.updated_at as string) > (p.sync_atualizado_em as string))
   let enfileirados = 0
   for (const p of deveEnviar) {
@@ -310,7 +320,8 @@ export async function reconciliarCatalogo(lojaId: number): Promise<{ aplicadoDoV
     )
     if (!error) enfileirados++
   }
-  const { data: gp } = await supabase.from('grupos_produto').select('id').eq('loja_id', lojaId).is('vendas_ref', null)
+  const { data: gp, error: eGp } = await supabase.from('grupos_produto').select('id').eq('loja_id', lojaId).is('vendas_ref', null)
+  if (eGp) return { aplicadoDoVendas: aplicado, enfileirados, erro: `Falha ao ler os grupos a enviar: ${eGp.message}` }
   for (const g of gp ?? []) {
     const { error } = await supabase.from('sync_outbox').upsert(
       { loja_id: lojaId, entidade: 'grupo', ref: String(g.id), operacao: 'upsert' },
