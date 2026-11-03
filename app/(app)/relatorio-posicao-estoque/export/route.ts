@@ -1,4 +1,5 @@
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
+import { modoDaLoja } from '@/lib/estoque/ledger'
 import { gerarPlanilhaMulti, planilhaResponse, type ColunaExcel } from '@/lib/excel'
 import { textoAvisoSuspeito } from '@/lib/relatorios/posicao-estoque-puro'
 import { carregarPosicao, lerOpcoesPosicao, rotuloTipo } from '@/lib/relatorios/posicao-estoque-loader'
@@ -12,13 +13,14 @@ export async function GET(request: Request) {
   if (!(await getAtorGestao()).podeGerir) return new Response('Sem permissão', { status: 403 })
   const lojaId = await getCurrentLojaId()
   const op = lerOpcoesPosicao(Object.fromEntries(new URL(request.url).searchParams.entries()))
-  const r = await carregarPosicao(lojaId, op)
+  const [r, modo] = await Promise.all([carregarPosicao(lojaId, op), modoDaLoja(lojaId)])
+  const proprio = modo === 'proprio'
   if (!r.linhas.length) return new Response('Sem posição de estoque para o filtro selecionado', { status: 404 })
   const sped = op.ver === 'sped'
   const rows = r.linhas.map((l) => ({
     codigo: l.codigo, descricao: l.descricao, local: l.local ?? '', familia: l.familia, tipo: rotuloTipo(l.tipo), ncm: l.ncm, unidade: l.unidade,
     inativo: l.inativo ? 'Sim' : 'Não', quant: l.quant, reservado: l.reservado, disponivel: l.disponivel, cmc: l.cmc, valor: l.valor,
-    situacao: l.custoSuspeito ? 'Custo suspeito no Omie (custo de referência)' : '', posse: '0', posseDesc: 'Item de propriedade do informante e em seu poder',
+    situacao: l.custoSuspeito ? (proprio ? 'Custo suspeito (custo de referência)' : 'Custo suspeito no Omie (custo de referência)') : '', posse: '0', posseDesc: 'Item de propriedade do informante e em seu poder',
   }))
   const colunas: ColunaExcel[] = sped
     ? [
@@ -49,7 +51,7 @@ export async function GET(request: Request) {
         { key: 'valor', label: 'Valor', tipo: 'moeda', largura: 16, somar: true },
         { key: 'situacao', label: 'Observação', tipo: 'texto', largura: 28 },
       ]
-  const suspeito = textoAvisoSuspeito(r.total.suspeitas.length, r.total.ajusteOmie)
+  const suspeito = textoAvisoSuspeito(r.total.suspeitas.length, r.total.ajusteOmie, proprio ? 'proprio' : 'omie')
   const sc = sped ? null : r.saldoConferir
   const temSaldoConferir = !!sc && (sc.acumulados.length > 0 || sc.inativos.length > 0)
   const brlX = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -69,13 +71,13 @@ export async function GET(request: Request) {
       { key: 'descricao', label: 'Produto', tipo: 'texto', largura: 44 },
       { key: 'local', label: 'Local', tipo: 'texto', largura: 20 },
       { key: 'quant', label: 'Saldo', tipo: 'numero', largura: 12 },
-      { key: 'cmcOmie', label: 'CMC no Omie', tipo: 'numero', largura: 16 },
+      { key: 'cmcOmie', label: proprio ? 'Custo médio' : 'CMC no Omie', tipo: 'numero', largura: 16 },
       { key: 'referencia', label: 'Custo de referência', tipo: 'numero', largura: 16 },
-      { key: 'valorOmie', label: 'Valor no Omie', tipo: 'moeda', largura: 18, somar: true },
+      { key: 'valorOmie', label: proprio ? 'Valor pelo custo médio' : 'Valor no Omie', tipo: 'moeda', largura: 18, somar: true },
       { key: 'valor', label: 'Valor usado', tipo: 'moeda', largura: 16, somar: true },
       { key: 'motivo', label: 'Por quê', tipo: 'texto', largura: 60 },
     ] as ColunaExcel[],
-    opts: { titulo: 'Linhas com custo médio errado no Omie', subtitulo: 'O total da posição usa o custo de referência do produto nestas linhas. Corrija o custo (ou a unidade) no Omie.', autoFiltro: true },
+    opts: { titulo: proprio ? 'Linhas com custo médio fora do normal' : 'Linhas com custo médio errado no Omie', subtitulo: `O total da posição usa o custo de referência do produto nestas linhas. Corrija o custo (ou a unidade) ${proprio ? 'no cadastro' : 'no Omie'}.`, autoFiltro: true },
     nome: 'Custo suspeito',
   }] : []), ...(temSaldoConferir && sc ? [{
     rows: [

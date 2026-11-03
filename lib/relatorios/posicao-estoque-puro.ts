@@ -162,10 +162,13 @@ export function montarPosicao(foto: LinhaFoto[], produtos: MetaProduto[], locais
 
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 /** Aviso único das telas/planilhas (Posição, Estoque Valorizado). `ajusteOmie` = valor pelo CMC do Omie − valor usado. */
-export function textoAvisoSuspeito(n: number, ajusteOmie: number): string | null {
+export type OrigemCusto = 'omie' | 'proprio'
+export function textoAvisoSuspeito(n: number, ajusteOmie: number, origem: OrigemCusto = 'omie'): string | null {
   if (!(n > 0)) return null
-  const dif = Math.abs(ajusteOmie) < 0.005 ? '' : ` (pelo custo do Omie o total daria ${brl(Math.abs(ajusteOmie))} a ${ajusteOmie > 0 ? 'mais' : 'menos'})`
-  return `${n} ${n === 1 ? 'linha' : 'linhas'} com custo médio errado no Omie: o total usa o custo de referência ${n === 1 ? 'nela' : 'nelas'}${dif}`
+  const fonte = origem === 'proprio' ? 'pelo custo médio do sistema' : 'pelo custo do Omie'
+  const dif = Math.abs(ajusteOmie) < 0.005 ? '' : ` (${fonte} o total daria ${brl(Math.abs(ajusteOmie))} a ${ajusteOmie > 0 ? 'mais' : 'menos'})`
+  const oque = origem === 'proprio' ? 'com custo médio fora do normal' : 'com custo médio errado no Omie'
+  return `${n} ${n === 1 ? 'linha' : 'linhas'} ${oque}: o total usa o custo de referência ${n === 1 ? 'nela' : 'nelas'}${dif}`
 }
 
 // Mesmos limites da migration 295 (posicao_valorizada): só para o texto do motivo; quem decide a suspeita é o banco.

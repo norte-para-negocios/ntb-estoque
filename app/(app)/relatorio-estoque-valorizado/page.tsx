@@ -266,7 +266,7 @@ export default async function RelatorioEstoqueValorizadoPage({
       )}
 
       {suspeitas.length > 0 && (
-        <AvisoCustoSuspeito suspeitas={suspeitas} ajusteOmie={ajusteOmie} totalAjustado={verLocal ? totalValorLocal : totalValor} />
+        <AvisoCustoSuspeito suspeitas={suspeitas} ajusteOmie={ajusteOmie} totalAjustado={verLocal ? totalValorLocal : totalValor} origem={proprio ? 'proprio' : 'omie'} />
       )}
       {saldoConferir && <AvisoSaldoConferir resumo={saldoConferir} total={verLocal ? totalValorLocal : totalValor} />}
 

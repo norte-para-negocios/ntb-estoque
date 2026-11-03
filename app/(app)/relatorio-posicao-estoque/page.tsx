@@ -11,6 +11,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { FiltrosFaturamento } from '@/components/faturamento/FiltrosFaturamento'
 import { CartaoResumo } from '@/components/faturamento/CartaoResumo'
 import { formatCustoUnit } from '@/lib/num-br'
+import { modoDaLoja } from '@/lib/estoque/ledger'
 import { carregarPosicao, lerOpcoesPosicao, paramsBasePosicao, rotuloTipo, type SpPosicao } from '@/lib/relatorios/posicao-estoque-loader'
 
 const LIMITE = 500
@@ -21,7 +22,8 @@ export default async function PosicaoEstoquePage({ searchParams }: { searchParam
   if (!(await getAtorGestao()).podeGerir) notFound()
   const lojaId = await getCurrentLojaId()
   const op = lerOpcoesPosicao(await searchParams)
-  const r = await carregarPosicao(lojaId, op)
+  const [r, modo] = await Promise.all([carregarPosicao(lojaId, op), modoDaLoja(lojaId)])
+  const origem = modo === 'proprio' ? 'proprio' : 'omie'
   const base = paramsBasePosicao(op)
   const href = (over: Record<string, string>) => {
     const q = new URLSearchParams()
@@ -41,7 +43,7 @@ export default async function PosicaoEstoquePage({ searchParams }: { searchParam
         title="Posição de estoque"
         icon={Warehouse}
         voltarHref="/relatorios"
-        description="Quantidade, custo médio e valor de cada produto em cada local, com um total só (negativos entram, como no Omie)."
+        description={`Quantidade, custo médio e valor de cada produto em cada local, com um total só (negativos entram${origem === 'proprio' ? '' : ', como no Omie'}).`}
         actions={r.linhas.length > 0 ? <a href={`/relatorio-posicao-estoque/export?${exportQs}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')}><Download className="size-4" /> Baixar</a> : undefined}
       />
 
@@ -61,13 +63,14 @@ export default async function PosicaoEstoquePage({ searchParams }: { searchParam
 
       {r.erros.length > 0 && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">Falha ao ler {r.erros.join(', ')}. O total pode estar incompleto; recarregue a página.</p>}
       {r.locaisSumidos.length > 0 && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">O Omie não devolveu na última leitura o(s) local(is) {r.locaisSumidos.join(', ')}, que tinham saldo na foto anterior: o saldo deles não está nesta posição.</p>}
-      {r.fotoEmLeitura && <p className="text-[13px] text-text-muted">A foto de hoje ainda está sendo lida do Omie: mostrando a de {fmtData(r.dataFoto!)}.</p>}
+      {r.fotoEmLeitura && <p className="text-[13px] text-text-muted">A foto de hoje ainda está sendo lida{origem === 'proprio' ? '' : ' do Omie'}: mostrando a de {fmtData(r.dataFoto!)}.</p>}
       {sped && <p className="text-[13px] text-text-muted">Inventário no formato do Bloco H (registro H010): só produtos ativos com saldo positivo, somados em todos os locais, valor unitário = valor ÷ quantidade. Posição da foto de {r.dataFoto ? fmtData(r.dataFoto) : '—'}.</p>}
       {r.total.suspeitas.length > 0 && (
         <AvisoCustoSuspeito
           suspeitas={r.total.suspeitas.map((l) => ({ ...l, chave: `${l.codProduto}:${l.local}` }))}
           ajusteOmie={r.total.ajusteOmie}
           totalAjustado={r.total.valor}
+          origem={origem}
         />
       )}
       {r.saldoConferir && !sped && <AvisoSaldoConferir resumo={r.saldoConferir} total={r.total.valor} />}

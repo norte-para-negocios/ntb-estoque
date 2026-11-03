@@ -126,6 +126,13 @@ test('linhas valorizadas pelo banco: custo suspeito usa a referência e entra no
   assert.equal(textoAvisoSuspeito(0, 0), null)
 })
 
+// Ramon 02/11: a ODARA (estoque próprio) não usa Omie — o aviso não pode falar em Omie.
+test('aviso de custo suspeito em loja de estoque próprio não menciona o Omie', () => {
+  const t = textoAvisoSuspeito(1, -1876.05, 'proprio')!
+  assert.equal(t, '1 linha com custo médio fora do normal: o total usa o custo de referência nela (pelo custo médio do sistema o total daria R$\u00a01.876,05 a menos)')
+  assert.doesNotMatch(t, /omie/i)
+}, )
+
 // Revisão 20/10: na visão SPED o aviso só traz produtos que estão no Bloco H (o prato negativo não entra no bloco).
 test('SPED: aviso de custo suspeito só com os produtos do Bloco H', () => {
   const fotoBanco: LinhaFoto[] = [
