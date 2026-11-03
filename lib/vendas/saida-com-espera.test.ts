@@ -54,3 +54,35 @@ test('conclusão da OP: esgotou as esperas, sobe o erro', async () => {
   await assert.rejects(repetirSeCalculoPendente(async () => { throw new Error('ainda não foi concluído o cálculo do saldo de estoque e CMC do produto') }, { esperasMs: [1, 1], dormir: async () => {} }))
   assert.ok(ehCalculoPendente('movimentos de estoque pendentes de cálculo'))
 })
+
+test('Sem CMC: espera que não cabe no prazo não acontece (devolve Sem CMC na hora, o cron assume)', async () => {
+  let chamadas = 0
+  const esperas: number[] = []
+  const r = await comEsperaDeCmc(async () => { chamadas++; return { status: 'Sem CMC' } }, {
+    esperasMs: [62_000],
+    dormir: async (ms) => { esperas.push(ms) },
+    podeEsperar: () => false,
+  })
+  assert.equal(r.status, 'Sem CMC')
+  assert.equal(chamadas, 1)
+  assert.deepEqual(esperas, [])
+})
+
+test('Sem CMC: podeEsperar recebe o tamanho da espera', async () => {
+  const pedidas: number[] = []
+  const respostas = ['Sem CMC', 'Concluido']
+  const r = await comEsperaDeCmc(async () => ({ status: respostas.shift()! }), {
+    esperasMs: [62_000],
+    dormir: async () => {},
+    podeEsperar: (ms) => { pedidas.push(ms); return true },
+  })
+  assert.equal(r.status, 'Concluido')
+  assert.deepEqual(pedidas, [62_000])
+})
+
+test('Sem CMC sem esperas (produto sem OP): 1 tentativa só', async () => {
+  let chamadas = 0
+  const r = await comEsperaDeCmc(async () => { chamadas++; return { status: 'Sem CMC' } }, { esperasMs: [], dormir: async () => {} })
+  assert.equal(r.status, 'Sem CMC')
+  assert.equal(chamadas, 1)
+})

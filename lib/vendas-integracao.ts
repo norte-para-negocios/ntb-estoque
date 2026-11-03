@@ -13,6 +13,7 @@
 // Falha TRANSITORIA na OP (ou na nota, ver app/api/integracao/nota-fiscal) vai
 // pra vendas_integracao_fila e o cron retry-integracao-vendas reenvia.
 import { comEsperaDeCmc, repetirSeCalculoPendente } from '@/lib/vendas/saida-com-espera'
+import { cabeNoPrazo, esperasCmcDaSaida, passouDoPrazo } from '@/lib/vendas/prazo-venda'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { incluirOrdemProducao, concluirOrdemProducao, fetchOrdemProducao, consultarOPPorCodInt } from '@/lib/omie/ordem-producao'
 import { codigoOPDaVenda, chaveSaidaVenda, classificarErroSaidaVenda, decidirOPVenda, patchOPNaoConcluida, type VinculoOP } from '@/lib/vendas/venda-idempotente'
@@ -71,7 +72,7 @@ async function lerVinculo(supabase: SupabaseClient, lojaId: number, codIntOP: st
 }
 
 /** Cria e conclui 1 OP. Nao grava fila: quem chama decide o que fazer com o erro. */
-async function tentarOp(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp): Promise<ResultadoOp & { tipoErro?: TipoErroOmie }> {
+async function tentarOp(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp, opcoes: { semRepetir?: boolean } = {}): Promise<ResultadoOp & { tipoErro?: TipoErroOmie }> {
   let nCodOP: number | undefined
   let erroConclusao: string | undefined
   try {
@@ -82,7 +83,7 @@ async function tentarOp(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp)
       nQtde: p.quantidade,
       obs: p.obs,
       codigoLocalEstoque: p.codigoLocalEstoque ?? undefined,
-    })
+    }, { semRepetir: opcoes.semRepetir })
     nCodOP = criada?.nCodOP
     if (!nCodOP) return { ok: false, erro: 'Omie não retornou a OP criada', tipoErro: 'transitorio' }
     await marcarVinculo(supabase, loja.id, p.cCodIntOP, { n_cod_op: nCodOP, estado: 'criada' })
@@ -165,9 +166,15 @@ async function darSaida(
   obs: string,
   origem: 'PDV' | 'AJU',
   marca: string | null = null,
-  vendaChave: string | null = null
+  vendaChave: string | null = null,
+  envio: { esperasMs?: number[]; ateMs?: number; semRepetir?: boolean; adiar?: boolean } = {}
 ): Promise<{ ok: boolean; status: string; erro?: string }> {
   const data = dataCriacaoBahia(hojeBahiaISO())!
+  // Adiada (prazo da resposta ao Vendas, 03/11/2026): grava a saída como 'Erro' sem tentativa, sem chamar o Omie; o cron
+  // retry-ajustes-movimentos pega primeiro quem nunca foi tentado (ultima_tentativa_em nula).
+  const inicial = envio.adiar
+    ? { status: 'Erro', descricao_status: 'Aguardando envio ao Omie (venda adiada para o reenvio automático)', tentativas: 0 }
+    : { status: 'Processando' }
   const gravar = (comChave: boolean) => supabase
     .from('movimentos')
     .insert({
@@ -184,7 +191,7 @@ async function darSaida(
       ...(marca ? { obs_item: marca } : {}),
       // Chave da saída desta venda (migration 178): o mesmo pedido reenviado não grava outra saída.
       ...(vendaChave && comChave ? { venda_chave: vendaChave } : {}),
-      status: 'Processando',
+      ...inicial,
     })
     .select('id, tentativas')
     .single<{ id: number; tentativas: number | null }>()
@@ -203,6 +210,7 @@ async function darSaida(
     return { ok: jaTem?.status === 'Concluido', status: jaTem?.status ?? 'Concluido' }
   }
   if (error || !mov) return { ok: false, status: 'Erro', erro: error?.message ?? 'Falha ao gravar movimento' }
+  if (envio.adiar) return { ok: false, status: 'Na fila' }
   // Logo após a OP o Omie ainda calcula o custo do que foi produzido ("Sem CMC" por alguns segundos): espera e tenta
   // de novo aqui mesmo em vez de deixar pro cron de 1 h. "Sem CMC" não lança nada no Omie, então repetir é seguro.
   let tentativas = mov.tentativas ?? 0
@@ -211,11 +219,11 @@ async function darSaida(
       { id: mov.id, codigo_local_estoque: local, id_prod: codigoProduto, quan: -Math.abs(quantidade), tipo: 'SAI', motivo: 'PDV', origem, obs, data, tentativas },
       loja,
       loja.id,
-      { auditar: false }
+      { auditar: false, semRepetir: envio.semRepetir }
     )
     if (res.status === 'Sem CMC') tentativas++
     return res
-  }, { esperasMs: [6000, 12000, 20000] })
+  }, { esperasMs: envio.esperasMs ?? [6000, 12000, 20000], podeEsperar: (ms) => cabeNoPrazo(envio.ateMs, Date.now(), ms) })
   // 'Erro'/'Sem CMC' ficam em `movimentos` e o cron retry-ajustes-movimentos reenvia.
   return { ok: r.status === 'Concluido', status: r.status, erro: r.erro }
 }
@@ -236,7 +244,7 @@ export type ResultadoItemVenda = {
  * incluir → grava o vínculo e cria+conclui; consultar → procura a OP no Omie pelo código (criada por uma execução que
  * caiu no meio) e segue dali; concluir → só conclui; pronta → não chama o Omie.
  */
-async function opDaVendaSemDuplicar(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp, pedidoRef: string, ocorrencia: number): Promise<ResultadoOp & { tipoErro?: TipoErroOmie }> {
+async function opDaVendaSemDuplicar(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp, pedidoRef: string, ocorrencia: number, opcoes: { semRepetir?: boolean } = {}): Promise<ResultadoOp & { tipoErro?: TipoErroOmie }> {
   let v = await lerVinculo(supabase, loja.id, p.cCodIntOP)
   let acao = decidirOPVenda(v)
   if (acao === 'incluir') {
@@ -278,7 +286,7 @@ async function opDaVendaSemDuplicar(supabase: SupabaseClient, loja: LojaVenda, p
       return { ok: false, nCodOP, erro: msg, tipoErro: 'permanente' }
     }
   }
-  const r = await tentarOp(supabase, loja, p)
+  const r = await tentarOp(supabase, loja, p, opcoes)
   if (!r.ok && r.tipoErro === 'ja_existe') {
     const achada = await consultarOPPorCodInt(loja, p.cCodIntOP).catch(() => null)
     if (achada) {
@@ -294,8 +302,11 @@ export async function processarItemVenda(
   supabase: SupabaseClient,
   loja: LojaVenda,
   item: ItemVenda,
-  ctx: { pedidoRef: string | null; obs: string; dData: string; indice: number; ocorrencia?: number; cupom?: string | number | null }
+  // ateMs (03/11/2026): prazo da resposta ao Vendas (lib/vendas/prazo-venda.ts). Depois dele nada mais chama o Omie
+  // nesta requisição: a OP vai para a fila e a saída fica para o cron, e a resposta diz isso (o Vendas trata como ok).
+  ctx: { pedidoRef: string | null; obs: string; dData: string; indice: number; ocorrencia?: number; cupom?: string | number | null; ateMs?: number }
 ): Promise<ResultadoItemVenda> {
+  const comPrazo = ctx.ateMs !== undefined
   const { data: produto } = await supabase
     .from('produtos')
     .select('codigo_produto')
@@ -332,11 +343,17 @@ export async function processarItemVenda(
       codigoLocalEstoque: localMapeado ?? null,
       dData: ctx.dData,
     }
-    const r = ctx.pedidoRef
-      ? await opDaVendaSemDuplicar(supabase, loja, payload, ctx.pedidoRef, ctx.ocorrencia ?? 0)
-      : await tentarOp(supabase, loja, payload)
+    // Prazo vencido: a OP vai direto para a fila (mesmo cCodIntOP, derivado do pedido: o Omie recusa o 2º com o mesmo
+    // código, e o cron trata "já existe" como feito). Se a fila falhar, segue o caminho normal.
+    const adiada = passouDoPrazo(ctx.ateMs) && (await enfileirar(supabase, loja.id, 'op', ctx.pedidoRef, payload, 'Adiada: prazo da resposta ao Norte Vendas'))
+    const r: ResultadoOp & { tipoErro?: TipoErroOmie } = adiada
+      ? { ok: false, naFila: true }
+      : ctx.pedidoRef
+        ? await opDaVendaSemDuplicar(supabase, loja, payload, ctx.pedidoRef, ctx.ocorrencia ?? 0, { semRepetir: comPrazo })
+        : await tentarOp(supabase, loja, payload, { semRepetir: comPrazo })
     nCodOP = r.nCodOP
-    if (r.ok) op = 'criada'
+    if (r.naFila) op = 'na_fila'
+    else if (r.ok) op = 'criada'
     else if (r.semEstrutura) op = 'sem_estrutura'
     else if (r.tipoErro === 'transitorio' && (await enfileirar(supabase, loja.id, 'op', ctx.pedidoRef, payload, r.erro ?? ''))) op = 'na_fila'
     else {
@@ -349,7 +366,10 @@ export async function processarItemVenda(
   if (local) {
     const o = obsDaBaixa(ctx.obs, item.comNota, item.cupom ?? ctx.cupom)
     const chave = ctx.pedidoRef ? chaveSaidaVenda(ctx.pedidoRef, produto.codigo_produto, ctx.ocorrencia ?? 0) : null
-    const s = await darSaida(supabase, loja, produto.codigo_produto, item.quantidade, local, o.obs, origemDaVenda(item.comNota), o.marca, chave)
+    const envio = comPrazo
+      ? { esperasMs: esperasCmcDaSaida(op === 'criada'), ateMs: ctx.ateMs, semRepetir: true, adiar: passouDoPrazo(ctx.ateMs) }
+      : {}
+    const s = await darSaida(supabase, loja, produto.codigo_produto, item.quantidade, local, o.obs, origemDaVenda(item.comNota), o.marca, chave, envio)
     baixa = s.status
   }
 

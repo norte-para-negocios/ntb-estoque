@@ -42,14 +42,16 @@ export async function reenviarMovimentoManual(
   mov: MovimentoManualRow,
   loja: LojaOmie,
   lojaId: number,
-  opts: { auditar?: boolean } = {}
+  // semRepetir (03/11/2026): a venda do Norte Vendas tem prazo; limite/consumo redundante do Omie volta na hora
+  // como 'Erro' (o cron retry-ajustes-movimentos reenvia) em vez de esperar 60 s e repetir.
+  opts: { auditar?: boolean; semRepetir?: boolean } = {}
 ): Promise<{ id: number; status: string; erro?: string }> {
   const supabase = createServiceClient()
 
   try {
     const custo = mov.custo_informado == null ? null : Number(mov.custo_informado)
     const informado = mov.tipo === 'ENT' && custo != null && custo > 0
-    const cmc = informado ? null : (await getPosicaoProduto(loja, mov.codigo_local_estoque, mov.id_prod, dataOmieBR(null)))?.n_cmc ?? 0
+    const cmc = informado ? null : (await getPosicaoProduto(loja, mov.codigo_local_estoque, mov.id_prod, dataOmieBR(null), { semRepetir: opts.semRepetir }))?.n_cmc ?? 0
     const v = valorDoAjusteManual(mov.tipo, custo, cmc)
 
     if ('semCmc' in v) {
@@ -100,6 +102,7 @@ export async function reenviarMovimentoManual(
       endpoint: 'v1/estoque/ajuste',
       call: 'IncluirAjusteEstoque',
       data: param,
+      semRepetir: opts.semRepetir,
     })
 
     await logIntegrationAttempt({

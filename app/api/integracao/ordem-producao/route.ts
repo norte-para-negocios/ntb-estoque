@@ -7,6 +7,7 @@ import { baixarEstoqueLocal } from '@/lib/estoque-local/baixa'
 import { processarItemVenda, type ResultadoItemVenda } from '@/lib/vendas-integracao'
 import { localDaVenda, type LojaLocais } from '@/lib/vendas/local-venda'
 import { baixarVendaProprio } from '@/lib/estoque/venda-proprio'
+import { prazoDaRota } from '@/lib/vendas/prazo-venda'
 
 // Rota externa (nao-sessao) pro ntb-vendas disparar Ordem de Producao ao concluir
 // uma venda. Autenticada por API key por loja (lojas.integracao_api_key, migration
@@ -60,6 +61,8 @@ function hojeBR(): string {
 }
 
 export async function POST(request: Request) {
+  // Prazo da resposta (03/11/2026): o Vendas desiste em 150 s e marca a baixa "incerto" (ver lib/vendas/prazo-venda.ts).
+  const ateMs = prazoDaRota(Date.now())
   const auth = request.headers.get('authorization') ?? ''
   const apiKey = auth.startsWith('Bearer ') ? auth.slice(7).trim() : ''
   if (!apiKey) {
@@ -115,7 +118,7 @@ export async function POST(request: Request) {
         itensReais.push({ codigo: item?.codigo ?? '?', ok: false, op: 'pulada', baixa: 'pulada', erro: 'Item inválido' })
         continue
       }
-      itensReais.push(await processarItemVenda(supabase, loja, item, { pedidoRef: body.pedidoRef ?? null, obs, dData, indice: i, ocorrencia: ocorrencias[i], cupom: body.cupom ?? null }))
+      itensReais.push(await processarItemVenda(supabase, loja, item, { pedidoRef: body.pedidoRef ?? null, obs, dData, indice: i, ocorrencia: ocorrencias[i], cupom: body.cupom ?? null, ateMs }))
     }
     return NextResponse.json({ lojaId: loja.id, resultados: itensReais })
   }

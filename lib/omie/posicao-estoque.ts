@@ -33,7 +33,8 @@ export async function getPosicaoProduto(
   loja: LojaOmie,
   codigoLocalEstoque: number,
   produtoCodigo: number,
-  dataPosicao: string // formato d/m/Y
+  dataPosicao: string, // formato d/m/Y
+  opts: { semRepetir?: boolean } = {}
 ): Promise<{ n_cmc: number; n_saldo: number } | null> {
   const res = await omieRequest<OmiePosResponse>({
     loja_id: loja.id,
@@ -50,6 +51,7 @@ export async function getPosicaoProduto(
       lista_produtos: { nCodProd: produtoCodigo },
       cExibeTodos: 'S',
     },
+    semRepetir: opts.semRepetir,
   })
 
   const p = res.produtos?.[0]
