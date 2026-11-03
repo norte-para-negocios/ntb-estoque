@@ -14,6 +14,7 @@
 // pra vendas_integracao_fila e o cron retry-integracao-vendas reenvia.
 import { comEsperaDeCmc, repetirSeCalculoPendente } from '@/lib/vendas/saida-com-espera'
 import { cabeNoPrazo, esperasCmcDaSaida, passouDoPrazo } from '@/lib/vendas/prazo-venda'
+import { ehProdutoServico, resultadoServico } from '@/lib/vendas/servico-venda'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { incluirOrdemProducao, concluirOrdemProducao, fetchOrdemProducao, consultarOPPorCodInt } from '@/lib/omie/ordem-producao'
 import { codigoOPDaVenda, chaveSaidaVenda, classificarErroSaidaVenda, decidirOPVenda, patchOPNaoConcluida, type VinculoOP } from '@/lib/vendas/venda-idempotente'
@@ -309,11 +310,13 @@ export async function processarItemVenda(
   const comPrazo = ctx.ateMs !== undefined
   const { data: produto } = await supabase
     .from('produtos')
-    .select('codigo_produto')
+    .select('codigo_produto, tipo_item')
     .eq('loja_id', loja.id)
     .eq('codigo', item.codigo)
-    .maybeSingle<{ codigo_produto: number }>()
+    .maybeSingle<{ codigo_produto: number; tipo_item: string | null }>()
   if (!produto) return { codigo: item.codigo, ok: false, op: 'pulada', baixa: 'pulada', erro: 'Produto sem cadastro correspondente no ntb-estoque' }
+  // Serviço (tipo_item 09): sem OP e sem saída, sem chamar o Omie (decisão do dono 03/11/2026, igual ao modo próprio).
+  if (ehProdutoServico(produto.tipo_item)) return resultadoServico(item.codigo)
 
   // Setor (ex.: Pizzaria -> PIZZA) > cozinha/bar > local padrão da loja.
   const localMapeado = localDaVenda(loja, item)
