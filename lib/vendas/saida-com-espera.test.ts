@@ -86,3 +86,13 @@ test('Sem CMC sem esperas (produto sem OP): 1 tentativa só', async () => {
   assert.equal(r.status, 'Sem CMC')
   assert.equal(chamadas, 1)
 })
+
+test('conclusão da OP: espera do cálculo pendente que não cabe no prazo não acontece (sobe o erro)', async () => {
+  let n = 0
+  const esperas: number[] = []
+  await assert.rejects(repetirSeCalculoPendente(async () => { n++; throw new Error('movimentos de estoque pendentes de cálculo') }, {
+    esperasMs: [8000, 15000], dormir: async (ms) => { esperas.push(ms) }, podeEsperar: (ms) => ms < 10_000,
+  }))
+  assert.equal(n, 2)
+  assert.deepEqual(esperas, [8000])
+})

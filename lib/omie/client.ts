@@ -1,5 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { bloqueioDaResposta, ehChamadaDeEscrita, msRestantesBloqueio, podeRepetirLimite, registrarBloqueio } from './erros-omie'
+import { prazoOmieAtual } from './contexto-prazo'
+import { MSG_ADIADA_PRAZO, podeChamarOmie, timeoutDaChamadaMs } from '@/lib/vendas/prazo-venda'
 
 const OMIE_BASE_URL = 'https://app.omie.com.br/api/'
 
@@ -89,8 +91,12 @@ export async function omieRequest<T = unknown>({
   endpoint,
   call,
   data,
-  semRepetir = false,
+  semRepetir: semRepetirParam = false,
 }: OmieRequestParams): Promise<T> {
+  // Dentro da rota de venda (contexto de prazo, lib/omie/contexto-prazo.ts): não repete, não dorme, leitura com 30 s
+  // e nada começa depois do prazo. Pior caso da rota em lib/vendas/prazo-venda.ts (PIOR_CASO_ROTA_MS).
+  const prazo = prazoOmieAtual()
+  const semRepetir = semRepetirParam || prazo !== undefined
   // App desktop (banco local): não tem as chaves do Omie; ações que falam com o Omie vão ao
   // servidor (ou à fila sem internet) antes de chegar aqui -- isto é só a trava final.
   if (process.env.NTB_MODO_LOCAL === '1') {
@@ -121,6 +127,7 @@ export async function omieRequest<T = unknown>({
   }
 
   const escrita = ehChamadaDeEscrita(call)
+  if (!podeChamarOmie(prazo)) throw new OmieError(MSG_ADIADA_PRAZO, 'PRAZO')
   const body = JSON.stringify({
     app_key: omie_app_key,
     app_secret: omie_app_secret,
@@ -138,7 +145,7 @@ export async function omieRequest<T = unknown>({
         body,
         // Sem timeout, uma chamada pendurada segurava a tela ate o nginx cortar (60s).
         // Escrita: 30s e nao retenta (ver catch). Leitura: 60s e retenta (seguro).
-        signal: AbortSignal.timeout(escrita ? 30_000 : 60_000),
+        signal: AbortSignal.timeout(timeoutDaChamadaMs(escrita, prazo !== undefined)),
       })
 
       // Rate limit do Omie

@@ -26,7 +26,7 @@ export function ehCalculoPendente(msg: string): boolean {
 
 export async function repetirSeCalculoPendente(
   tentar: () => Promise<unknown>,
-  opts: { esperasMs?: number[]; dormir?: (ms: number) => Promise<void> } = {},
+  opts: { esperasMs?: number[]; dormir?: (ms: number) => Promise<void>; podeEsperar?: (ms: number) => boolean } = {},
 ): Promise<void> {
   const esperas = opts.esperasMs ?? [8000, 15000, 25000]
   const dormir = opts.dormir ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
@@ -37,6 +37,7 @@ export async function repetirSeCalculoPendente(
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       if (!ehCalculoPendente(msg) || i >= esperas.length) throw e
+      if (opts.podeEsperar && !opts.podeEsperar(esperas[i])) throw e
       await dormir(esperas[i])
     }
   }

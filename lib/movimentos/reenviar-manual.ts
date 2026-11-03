@@ -11,6 +11,7 @@ import { registrarAuditoria } from '@/lib/auditoria'
 import { origemDoAjuste } from '@/lib/vendas/local-venda'
 import { motivoOmieDoAjuste, valorDoAjusteManual } from '@/lib/omie/motivo-ajuste'
 import { bloqueioDaResposta, ehRecusaDoDisjuntor } from '@/lib/omie/erros-omie'
+import { ehAdiadaPorPrazo } from '@/lib/vendas/prazo-venda'
 
 export type MovimentoManualRow = {
   id: number
@@ -134,7 +135,8 @@ export async function reenviarMovimentoManual(
     const msg = e instanceof Error ? e.message : String(e)
     // Bloqueio do Omie (real ou do nosso disjuntor) não é culpa do movimento: não gasta tentativa. Até 19/10/2026
     // contava, e 91 baixas de venda do Sertão bateram no teto de 30 sem nunca ter chegado no Omie.
-    const naoContaTentativa = ehRecusaDoDisjuntor(msg) || bloqueioDaResposta(msg, undefined) != null
+    // Adiada pelo prazo da rota de venda (o Omie nem foi chamado) também não conta.
+    const naoContaTentativa = ehRecusaDoDisjuntor(msg) || bloqueioDaResposta(msg, undefined) != null || ehAdiadaPorPrazo(msg)
     await supabase
       .from('movimentos')
       .update({

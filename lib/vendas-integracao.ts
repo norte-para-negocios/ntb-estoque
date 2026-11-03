@@ -13,7 +13,8 @@
 // Falha TRANSITORIA na OP (ou na nota, ver app/api/integracao/nota-fiscal) vai
 // pra vendas_integracao_fila e o cron retry-integracao-vendas reenvia.
 import { comEsperaDeCmc, repetirSeCalculoPendente } from '@/lib/vendas/saida-com-espera'
-import { cabeNoPrazo, esperasCmcDaSaida, passouDoPrazo } from '@/lib/vendas/prazo-venda'
+import { cabeNoPrazo, decidirFilaJaExiste, ehRecusaPorConcorrencia, ESPERA_CONCORRENCIA_MS, esperasCmcDaSaida, linhaOPLocalSemConsulta, passouDoPrazo } from '@/lib/vendas/prazo-venda'
+import { comPrazoOmie, prazoOmieAtual } from '@/lib/omie/contexto-prazo'
 import { ehProdutoServico, resultadoServico } from '@/lib/vendas/servico-venda'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { incluirOrdemProducao, concluirOrdemProducao, fetchOrdemProducao, consultarOPPorCodInt } from '@/lib/omie/ordem-producao'
@@ -72,6 +73,70 @@ async function lerVinculo(supabase: SupabaseClient, lojaId: number, codIntOP: st
   return data ?? null
 }
 
+/** Espera do cálculo pendente/Sem CMC só se terminar antes do prazo da rota (sem prazo: sempre). */
+const cabeAgora = (ms: number) => cabeNoPrazo(prazoOmieAtual(), Date.now(), ms)
+
+/**
+ * Reflete a OP da venda em ordens_producao (03/11/2026). Consulta o Omie (fetchOrdemProducao) e marca a origem / a
+ * falha de conclusão; se a consulta não rola (prazo da rota vencido: omieRequest nem chama; ou Omie falhou), grava a
+ * linha mínima — sem ela o retry-op-conclusao, que lê ordens_producao.conclusao_status, nunca acharia a OP.
+ */
+async function registrarOPLocal(supabase: SupabaseClient, loja: LojaVenda, nCodOP: number, p: PayloadOp, erroConclusao?: string) {
+  if (loja.is_test) return
+  const agoraISO = new Date().toISOString()
+  const status = erroConclusao ? statusFalhaConclusaoOP(erroConclusao) : undefined
+  const consultou = await fetchOrdemProducao(loja, nCodOP).then(() => true, () => false)
+  if (consultou) {
+    const { data } = await supabase
+      .from('ordens_producao')
+      // Marca a origem ("Venda ntb-vendas #pedido [Produção]": a tela mostra "Norte Vendas"; o sync não sobrescreve
+      // `observacao`) e, se a conclusão falhou, deixa a OP para o retry-op-conclusao.
+      .update(erroConclusao ? { ...patchOPNaoConcluida(p.obs, erroConclusao, agoraISO), conclusao_status: status } : { observacao: p.obs })
+      .eq('loja_id', loja.id)
+      .eq('identificacao_n_cod_op', nCodOP)
+      .select('id')
+    if (data?.length) return
+  }
+  const { error } = await supabase
+    .from('ordens_producao')
+    .upsert(linhaOPLocalSemConsulta(loja.id, nCodOP, p, { concluida: !erroConclusao, erro: erroConclusao, status, agoraISO }), { onConflict: 'loja_id,identificacao_n_cod_op' })
+  if (error) console.error('vendas-integracao: falha ao gravar OP local', nCodOP, error.message)
+}
+
+/** Conclui uma OP que já existe no Omie. Falha transitória: OP marcada para o retry-op-conclusao. */
+async function concluirOPExistente(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp, nCodOP: number): Promise<ResultadoOp & { tipoErro?: TipoErroOmie }> {
+  try {
+    await repetirSeCalculoPendente(() => concluirOrdemProducao(loja, nCodOP, p.dData, p.quantidade, 'Concluída automaticamente (venda ntb-vendas)'), { podeEsperar: cabeAgora })
+    await marcarVinculo(supabase, loja.id, p.cCodIntOP, { n_cod_op: nCodOP, estado: 'concluida' })
+    await registrarOPLocal(supabase, loja, nCodOP, p)
+    return { ok: true, nCodOP }
+  } catch (e) {
+    // A OP existe no Omie: não reenfileirar a criação (duplicaria).
+    const msg = e instanceof Error ? e.message : String(e)
+    await registrarOPLocal(supabase, loja, nCodOP, p, msg)
+    const tipoErro = classificarErroOmie(msg) === 'transitorio' ? 'transitorio' : 'permanente'
+    return { ok: false, nCodOP, naFila: tipoErro === 'transitorio', erro: msg, tipoErro }
+  }
+}
+
+/**
+ * O Omie disse que a OP deste cCodIntOP já existe (revisão 03/11/2026): confere pelo código e conclui se ainda não
+ * estiver concluída. Nunca dá como feita uma OP só criada (antes a fila marcava Concluido sem conferir).
+ */
+async function confirmarOPJaExistente(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp): Promise<ResultadoOp & { tipoErro?: TipoErroOmie }> {
+  let achada: { nCodOP: number; concluida: boolean } | null
+  try {
+    achada = await consultarOPPorCodInt(loja, p.cCodIntOP)
+  } catch (e) {
+    return { ok: false, erro: e instanceof Error ? e.message : String(e), tipoErro: 'transitorio' }
+  }
+  const decisao = decidirFilaJaExiste(achada)
+  if (decisao === 'pendente' || !achada) return { ok: false, erro: 'O Omie diz que a OP já existe, mas a consulta pelo código não achou', tipoErro: 'transitorio' }
+  await marcarVinculo(supabase, loja.id, p.cCodIntOP, { n_cod_op: achada.nCodOP, estado: achada.concluida ? 'concluida' : 'criada' })
+  if (decisao === 'concluido') return { ok: true, nCodOP: achada.nCodOP }
+  return concluirOPExistente(supabase, loja, p, achada.nCodOP)
+}
+
 /** Cria e conclui 1 OP. Nao grava fila: quem chama decide o que fazer com o erro. */
 async function tentarOp(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp, opcoes: { semRepetir?: boolean } = {}): Promise<ResultadoOp & { tipoErro?: TipoErroOmie }> {
   let nCodOP: number | undefined
@@ -91,7 +156,7 @@ async function tentarOp(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp,
     // "Movimentos pendentes de cálculo" logo após criar a OP é passageiro: espera e tenta de novo (ex.: ½ Portuguesa,
     // 29/09 — ficou criada e não concluída porque nada a reenviava).
     const opCriada = nCodOP
-    await repetirSeCalculoPendente(() => concluirOrdemProducao(loja, opCriada, p.dData, p.quantidade, 'Concluída automaticamente (venda ntb-vendas)'))
+    await repetirSeCalculoPendente(() => concluirOrdemProducao(loja, opCriada, p.dData, p.quantidade, 'Concluída automaticamente (venda ntb-vendas)'), { podeEsperar: cabeAgora })
     await marcarVinculo(supabase, loja.id, p.cCodIntOP, { n_cod_op: opCriada, estado: 'concluida' })
     await logIntegrationAttempt({
       loja_id: loja.id,
@@ -117,22 +182,16 @@ async function tentarOp(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp,
       error: tipoErro !== 'sem_estrutura',
       error_message: nCodOP ? `[OP ${nCodOP} criada, conclusão falhou] ${msg}` : msg,
     })
-    // OP criada mas conclusao falhou: a OP existe no Omie; o sync + retry-op-conclusao
-    // (crons existentes) cuidam da conclusao. Nao reenfileirar (duplicaria a OP).
-    if (nCodOP) return { ok: false, nCodOP, erro: msg, tipoErro: 'permanente' }
+    // OP criada mas conclusao falhou: a OP existe no Omie; o retry-op-conclusao conclui (a OP local fica marcada no
+    // finally). Nao reenfileirar (duplicaria a OP). Falha transitória (limite, tempo, prazo da rota) = "na fila".
+    if (nCodOP) {
+      const transitorio = tipoErro === 'transitorio'
+      return { ok: false, nCodOP, naFila: transitorio, erro: msg, tipoErro: transitorio ? 'transitorio' : 'permanente' }
+    }
     return { ok: false, semEstrutura: tipoErro === 'sem_estrutura', erro: msg, tipoErro }
   } finally {
-    if (nCodOP && !loja.is_test) {
-      await fetchOrdemProducao(loja, nCodOP).catch(() => {})
-      // Marca a origem na OP local ("Venda ntb-vendas #pedido [Produção]"): a tela de OPs mostra "Norte Vendas".
-      // O sync do Omie não sobrescreve `observacao`, então a marca fica.
-      await supabase
-        .from('ordens_producao')
-        // OP criada mas não concluída: marca pro cron retry-op-conclusao concluir depois (antes ficava esquecida).
-        .update(erroConclusao ? { ...patchOPNaoConcluida(p.obs, erroConclusao, new Date().toISOString()), conclusao_status: statusFalhaConclusaoOP(erroConclusao) } : { observacao: p.obs })
-        .eq('loja_id', loja.id)
-        .eq('identificacao_n_cod_op', nCodOP)
-    }
+    // Depois do prazo da rota a consulta nem sai (omieRequest lança na hora) e grava a linha mínima.
+    if (nCodOP) await registrarOPLocal(supabase, loja, nCodOP, p, erroConclusao)
   }
 }
 
@@ -215,7 +274,7 @@ async function darSaida(
   // Logo após a OP o Omie ainda calcula o custo do que foi produzido ("Sem CMC" por alguns segundos): espera e tenta
   // de novo aqui mesmo em vez de deixar pro cron de 1 h. "Sem CMC" não lança nada no Omie, então repetir é seguro.
   let tentativas = mov.tentativas ?? 0
-  const r = await comEsperaDeCmc(async () => {
+  const tentarComCmc = () => comEsperaDeCmc(async () => {
     const res = await reenviarMovimentoManual(
       { id: mov.id, codigo_local_estoque: local, id_prod: codigoProduto, quan: -Math.abs(quantidade), tipo: 'SAI', motivo: 'PDV', origem, obs, data, tentativas },
       loja,
@@ -225,6 +284,13 @@ async function darSaida(
     if (res.status === 'Sem CMC') tentativas++
     return res
   }, { esperasMs: envio.esperasMs ?? [6000, 12000, 20000], podeEsperar: (ms) => cabeNoPrazo(envio.ateMs, Date.now(), ms) })
+  let r = await tentarComCmc()
+  // Rota com prazo (sem repetição no omieRequest): outra requisição do mesmo método em andamento passa em segundos;
+  // 1 repetição curta se couber no prazo. Senão fica 'Erro' para o retry-ajustes-movimentos.
+  if (envio.ateMs !== undefined && r.status === 'Erro' && ehRecusaPorConcorrencia(r.erro) && cabeNoPrazo(envio.ateMs, Date.now(), ESPERA_CONCORRENCIA_MS)) {
+    await new Promise((res) => setTimeout(res, ESPERA_CONCORRENCIA_MS))
+    r = await tentarComCmc()
+  }
   // 'Erro'/'Sem CMC' ficam em `movimentos` e o cron retry-ajustes-movimentos reenvia.
   return { ok: r.status === 'Concluido', status: r.status, erro: r.erro }
 }
@@ -270,36 +336,24 @@ async function opDaVendaSemDuplicar(supabase: SupabaseClient, loja: LojaVenda, p
       return { ok: false, erro: msg, tipoErro: classificarErroOmie(msg) }
     }
   }
-  if (acao === 'concluir' && v?.n_cod_op) {
-    const nCodOP = v.n_cod_op
-    try {
-      await repetirSeCalculoPendente(() => concluirOrdemProducao(loja, nCodOP, p.dData, p.quantidade, 'Concluída automaticamente (venda ntb-vendas)'))
-      await marcarVinculo(supabase, loja.id, p.cCodIntOP, { n_cod_op: nCodOP, estado: 'concluida' })
-      return { ok: true, nCodOP }
-    } catch (e) {
-      // A OP existe no Omie: não reenfileirar (duplicaria). Grava a OP local marcada para o retry-op-conclusao.
-      const msg = e instanceof Error ? e.message : String(e)
-      if (!loja.is_test) {
-        await fetchOrdemProducao(loja, nCodOP).catch(() => {})
-        await supabase.from('ordens_producao').update({ ...patchOPNaoConcluida(p.obs, msg, new Date().toISOString()), conclusao_status: statusFalhaConclusaoOP(msg) })
-          .eq('loja_id', loja.id).eq('identificacao_n_cod_op', nCodOP)
-      }
-      return { ok: false, nCodOP, erro: msg, tipoErro: 'permanente' }
-    }
-  }
+  if (acao === 'concluir' && v?.n_cod_op) return concluirOPExistente(supabase, loja, p, v.n_cod_op)
   const r = await tentarOp(supabase, loja, p, opcoes)
-  if (!r.ok && r.tipoErro === 'ja_existe') {
-    const achada = await consultarOPPorCodInt(loja, p.cCodIntOP).catch(() => null)
-    if (achada) {
-      await marcarVinculo(supabase, loja.id, p.cCodIntOP, { n_cod_op: achada.nCodOP, estado: achada.concluida ? 'concluida' : 'criada' })
-      if (achada.concluida) return { ok: true, nCodOP: achada.nCodOP }
-    }
-  }
+  if (!r.ok && r.tipoErro === 'ja_existe') return confirmarOPJaExistente(supabase, loja, p)
   return r
 }
 
 /** Processa 1 item vendido: OP (se o produto tem estrutura) + saida de estoque. */
 export async function processarItemVenda(
+  supabase: SupabaseClient,
+  loja: LojaVenda,
+  item: ItemVenda,
+  ctx: Parameters<typeof processarItemVendaNoPrazo>[3]
+): Promise<ResultadoItemVenda> {
+  // Toda chamada ao Omie deste item respeita o prazo da rota (lib/omie/contexto-prazo.ts, pior caso em prazo-venda.ts).
+  return comPrazoOmie(ctx.ateMs, () => processarItemVendaNoPrazo(supabase, loja, item, ctx))
+}
+
+async function processarItemVendaNoPrazo(
   supabase: SupabaseClient,
   loja: LojaVenda,
   item: ItemVenda,
@@ -423,10 +477,15 @@ export async function processarFilaVendas(supabase: SupabaseClient, limitePorLoj
       let resultado: unknown = null
       let definitivo = false
       if (linha.tipo === 'op') {
-        const t = await tentarOp(supabase, loja, linha.payload as PayloadOp)
-        if (t.ok || t.semEstrutura || t.tipoErro === 'ja_existe') {
+        const payloadOp = linha.payload as PayloadOp
+        let t = await tentarOp(supabase, loja, payloadOp)
+        // "Já cadastrada" (revisão 03/11/2026): confere pelo código e conclui se preciso; só é Concluido com a OP
+        // concluída no Omie. Conclusão que falha deixa a OP marcada para o retry-op-conclusao e a linha Pendente.
+        const jaExistia = !t.ok && t.tipoErro === 'ja_existe'
+        if (jaExistia) t = await confirmarOPJaExistente(supabase, loja, payloadOp)
+        if (t.ok || t.semEstrutura) {
           ok = true
-          resultado = { nCodOP: t.nCodOP ?? null, semEstrutura: !!t.semEstrutura, jaExistia: t.tipoErro === 'ja_existe' }
+          resultado = { nCodOP: t.nCodOP ?? null, semEstrutura: !!t.semEstrutura, jaExistia }
         } else {
           erro = t.erro ?? 'Falha'
           definitivo = t.tipoErro === 'permanente'
