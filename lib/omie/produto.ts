@@ -329,30 +329,8 @@ export async function syncProdutos(loja: LojaOmie) {
               })
               .catch((e) => console.error(`produtos novos no Norte Vendas, loja ${loja.id}:`, e))
           }
-          // Já ligados: só o PREÇO vem do Omie (03/11/2026, decisão do dono: "o preço é Omie"; o nome do cardápio é do
-          // Norte Vendas e pode ser bem diferente do Omie, ex. "Heineken 330ml" × "Long Heineken 330 ML"). Lê tudo,
-          // paginado: antes cortava em 1000 e boa parte do cardápio do Sertão nunca recebia o preço.
-          const todosProdutosAntigo = leituraFalhou ? [] : todosProdutos
-          if (todosProdutosAntigo.length) {
-            const updates = todosProdutosAntigo
-              .filter(p => p.codigo && Number(p.valor_unitario) > 0)
-              .map(p => ({
-                omieCodigo: p.codigo!,
-                preco: Number(p.valor_unitario),
-              }))
-            // Enviar em lotes de 500 (mesmo teto da rota PATCH do vendas)
-            for (let i = 0; i < updates.length; i += 500) {
-              const lote = updates.slice(i, i + 500)
-              await fetch(urlProdutosVendas, {
-                method: 'PATCH',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${integracaoKey}`,
-                },
-                body: JSON.stringify({ updates: lote }),
-              }).catch(() => {}) // fire-and-forget
-            }
-          }
+          // Já ligados: nada é sincronizado. Nome e preço do cardápio são do Norte Vendas (03/11/2026, Ramon: "segue o
+          // preço do cardápio"; o nome do cardápio pode ser bem diferente do Omie). O Omie só cria o que é novo (acima).
         }
       } catch {
         // Silencioso: sync local já concluiu, falha na notificação não é crítica
