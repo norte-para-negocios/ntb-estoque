@@ -7,6 +7,7 @@ import { baixarEstoqueLocal } from '@/lib/estoque-local/baixa'
 import { processarItemVenda, type ResultadoItemVenda } from '@/lib/vendas-integracao'
 import { localDaVenda, type LojaLocais } from '@/lib/vendas/local-venda'
 import { baixarVendaProprio } from '@/lib/estoque/venda-proprio'
+import { normalizarPedidoRef, ehTabelaAusente } from '@/lib/vendas/registro-pedido-venda'
 
 // Rota externa (nao-sessao) pro ntb-vendas disparar Ordem de Producao ao concluir
 // uma venda. Autenticada por API key por loja (lojas.integracao_api_key, migration
@@ -83,10 +84,42 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Chave de integração inválida' }, { status: 401 })
   }
 
+  // Registro do pedido (02/11/2026, migration 308): gravado ANTES de qualquer escrita no Omie/estoque e completado no
+  // fim com os resultados. É o que GET ./status responde ao Vendas quando ele desistiu de esperar (timeout) — sem isso a
+  // baixa ficava "incerta" para sempre. Falha ao registrar = recusa SEM baixar nada (424: o Vendas reenvia depois);
+  // tabela ainda não criada = segue sem registro (a consulta de status responde 503 e o Vendas mantém incerto).
+  const pedidoRefRegistro = normalizarPedidoRef(body.pedidoRef)
+  let registroId: number | null = null
+  if (pedidoRefRegistro) {
+    const modoRegistro = loja.modo_estoque === 'nenhum' || loja.modo_estoque === 'proprio' ? loja.modo_estoque : loja.is_test ? 'teste' : 'omie'
+    const { data: reg, error: regErr } = await supabase
+      .from('venda_integracao_pedidos')
+      .insert({ loja_id: loja.id, pedido_ref: pedidoRefRegistro, itens: body.itens.map((i) => String(i?.codigo ?? '?')), modo: modoRegistro })
+      .select('id')
+      .single<{ id: number }>()
+    if (regErr || !reg) {
+      if (ehTabelaAusente(regErr)) console.warn('integracao/ordem-producao: venda_integracao_pedidos não existe (migration 308): segue sem registro')
+      else {
+        console.error('integracao/ordem-producao: falha ao registrar o pedido, nada foi baixado:', regErr?.message)
+        return NextResponse.json({ error: 'O Estoque não conseguiu registrar o pedido; nada foi baixado. Tente de novo.' }, { status: 424 })
+      }
+    } else registroId = reg.id
+  }
+  const responder = async (corpo: { lojaId: number; modo?: string; resultados: unknown[] }) => {
+    if (registroId != null) {
+      const { error } = await supabase
+        .from('venda_integracao_pedidos')
+        .update({ concluido_em: new Date().toISOString(), resultados: corpo.resultados })
+        .eq('id', registroId)
+      if (error) console.error('integracao/ordem-producao: falha ao concluir o registro do pedido', registroId, error.message)
+    }
+    return NextResponse.json(corpo)
+  }
+
   // Modo da loja (06/10/2026): 'proprio' baixa no ledger do Norte Estoque (sem OP, sem Omie); 'nenhum' nao baixa nada.
   // 'omie' (ou coluna ausente) segue o caminho de sempre, abaixo, sem nenhuma mudanca.
   if (loja.modo_estoque === 'nenhum') {
-    return NextResponse.json({
+    return responder({
       lojaId: loja.id,
       modo: 'nenhum',
       resultados: body.itens.map((i) => ({ codigo: i?.codigo ?? '?', ok: true, op: 'sem_estrutura', baixa: 'Concluido' })),
@@ -95,7 +128,7 @@ export async function POST(request: Request) {
   if (loja.modo_estoque === 'proprio') {
     const obsProprio = body.pedidoRef ? `Venda ntb-vendas #${body.pedidoRef}` : 'Venda ntb-vendas'
     const resultados = await baixarVendaProprio(supabase, loja, body.itens, body.pedidoRef ?? null, obsProprio)
-    return NextResponse.json({ lojaId: loja.id, modo: 'proprio', resultados })
+    return responder({ lojaId: loja.id, modo: 'proprio', resultados })
   }
 
   const dData = hojeBR()
@@ -117,7 +150,7 @@ export async function POST(request: Request) {
       }
       itensReais.push(await processarItemVenda(supabase, loja, item, { pedidoRef: body.pedidoRef ?? null, obs, dData, indice: i, ocorrencia: ocorrencias[i], cupom: body.cupom ?? null }))
     }
-    return NextResponse.json({ lojaId: loja.id, resultados: itensReais })
+    return responder({ lojaId: loja.id, resultados: itensReais })
   }
 
   const resultados: ResultadoItem[] = []
@@ -260,5 +293,5 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ lojaId: loja.id, resultados })
+  return responder({ lojaId: loja.id, resultados })
 }
