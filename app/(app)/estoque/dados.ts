@@ -116,7 +116,7 @@ export async function carregarMovimentos(
   // 315: custo, saldo e CMC efetivos (última revisão); sem revisão = igual ao ledger
   let q = supabase.from('estoque_movimentos_efetivo')
     .select('id, tipo, origem, ref, quantidade, custo_unitario, saldo_apos, cmc_apos, codigo_local_estoque, user_id, obs, created_at, custo_estimado, reverses_id, codigo_produto, revisado, revisado_em')
-    .eq('loja_id', lojaId).order('id', { ascending: false }).limit(limite)
+    .eq('loja_id', lojaId).order('data_ref', { ascending: false }).order('id', { ascending: false }).limit(limite)
   if (filtro.codigoProduto != null) q = q.eq('codigo_produto', filtro.codigoProduto)
   if (filtro.codigoLocal != null) q = q.eq('codigo_local_estoque', filtro.codigoLocal)
   const { data } = await q

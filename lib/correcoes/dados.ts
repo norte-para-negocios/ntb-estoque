@@ -293,7 +293,7 @@ async function entradaProprio(lojaId: number, hoje: string, avisos: string[], er
   const ini = addDias(hoje, -DIAS_NEGATIVO)
   const lotes: number[][] = []
   for (let i = 0; i < neg.length; i += 60) lotes.push(neg.slice(i, i + 60))
-  const rows = (await Promise.all(lotes.map((lote) => tudo<MRow>((f, t) => supabase.from('estoque_movimentos').select('id, codigo_produto, codigo_local_estoque, data_ref, quantidade, saldo_apos, cmc_apos').eq('loja_id', lojaId).in('codigo_produto', lote).gte('data_ref', ini).order('id').range(f, t), erro('os movimentos'))))).flat()
+  const rows = (await Promise.all(lotes.map((lote) => tudo<MRow>((f, t) => supabase.from('estoque_movimentos_efetivo').select('id, codigo_produto, codigo_local_estoque, data_ref, quantidade, saldo_apos, cmc_apos').eq('loja_id', lojaId).in('codigo_produto', lote).gte('data_ref', ini).order('data_ref').order('id').range(f, t), erro('os movimentos'))))).flat()
   const m = new Map<number, MovSaldo[]>()
   for (const r of rows) {
     const x = { data: r.data_ref.slice(0, 10), ordem: Number(r.id), local: Number(r.codigo_local_estoque), saldo: Number(r.saldo_apos), cmc: r.cmc_apos == null ? null : Number(r.cmc_apos) }

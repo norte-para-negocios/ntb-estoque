@@ -30,7 +30,7 @@ export async function disponiveisDaCompra(lojaId: number, compraId: number, sbAr
   const itemIds = lista.map((i) => n(i.id))
   const prods = [...new Set(lista.map((i) => n(i.codigo_produto)))]
   const [{ data: movs }, { data: devs, error: eDev }, { data: ps }] = await Promise.all([
-    sb.from('estoque_movimentos').select('id, quantidade, custo_unitario').eq('loja_id', lojaId).in('id', movIds),
+    sb.from('estoque_movimentos_efetivo').select('id, quantidade, custo_unitario').eq('loja_id', lojaId).in('id', movIds),
     sb.from('devolucoes_fornecedor_itens').select('compra_item_id, quantidade, devolucao:devolucoes_fornecedor(situacao)').eq('loja_id', lojaId).in('compra_item_id', itemIds),
     sb.from('produtos').select('codigo_produto, unidade').eq('loja_id', lojaId).in('codigo_produto', prods),
   ])
