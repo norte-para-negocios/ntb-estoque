@@ -4,13 +4,15 @@
 -- Para cada compra lançada da loja (compras_proprio lançada/parcial) cujo movimento de entrada (origem COMPRA, item
 -- lançado, não estornado) tem data efetiva diferente da data da nota — mesma regra da 313: dhSaiEnt do XML, senão
 -- emissão; nunca no futuro; nunca antes do início do ledger da loja; nunca em mês fechado —, grava uma revisão de data
--- (motivo 'entrada pela data da nota') e, no fim, chama reprocessar_custo UMA vez com os produtos afetados, desde a menor
--- data envolvida (antiga ou nova). Só olha entradas com data efetiva ou data da nota a partir de p_desde.
--- Idempotente: na 2ª chamada nada difere, nada é gravado e não reprocessa.
+-- (motivo 'entrada pela data da nota') e, no fim, chama reprocessar_custo UMA vez com TODOS os produtos da loja que têm
+-- movimento no ledger desde a menor data envolvida (p_desde ou a data antiga/nova de uma entrada movida) — não só os de
+-- entrada movida: produto só com par de estorno (fardo errado) também tem o CMC distorcido. Só olha entradas com data
+-- efetiva ou data da nota a partir de p_desde.
+-- Idempotente: na 2ª chamada nada difere e o reprocessamento não grava nada.
 -- Movimento com data atual em mês fechado não muda (aviso).
 --
--- Retorno: { compras, movimentos_revisados, produtos, lote_reprocesso, desde, avisos, cmv_antes, cmv_depois,
---            reprocessamento } — cmv_* = CMV por mês (YYYY-MM) a partir do mês de p_desde, por vendas_proprio_cmv.
+-- Retorno: { compras, movimentos_revisados (datas), produtos (de entrada movida), produtos_reprocessados, custos_revisados,
+--            lote_reprocesso, desde, avisos, cmv_antes, cmv_depois, reprocessamento } — cmv_* = CMV por mês (YYYY-MM) a partir do mês de p_desde, por vendas_proprio_cmv.
 -- Prévia: p_simular = true faz tudo e termina com a exceção PF900 ('Prévia: nada foi gravado', DETAIL = o retorno em
 -- JSON): a transação desfaz tudo. Em psql também dá para rodar dentro de BEGIN … ROLLBACK.
 --
@@ -28,7 +30,7 @@ set enable_seqscan = off as $$ -- mesma razão do reprocessar_custo (312): revis
 declare
   v_modo text; v_lote uuid := gen_random_uuid(); x record; v_alvo date; v_fech date; v_aberto date;
   v_compras bigint[] := '{}'; v_prods bigint[] := '{}'; v_n int := 0; v_min date; v_avisos jsonb := '[]'::jsonb;
-  v_rep jsonb; v_antes jsonb; v_depois jsonb; v_res jsonb;
+  v_rep jsonb; v_antes jsonb; v_depois jsonb; v_res jsonb; v_todos bigint[];
 begin
   select modo_estoque into v_modo from lojas where id = p_loja;
   if v_modo is distinct from 'proprio' then
@@ -72,8 +74,12 @@ begin
     v_min := least(coalesce(v_min, v_alvo), v_alvo, x.data_ref);
   end loop;
 
-  if v_n > 0 then
-    v_rep := reprocessar_custo(p_loja, v_prods, v_min, p_motivo);
+  -- todos os produtos com movimento desde a menor data envolvida
+  v_min := least(coalesce(v_min, p_desde), p_desde);
+  v_todos := array(select distinct e.codigo_produto from estoque_movimentos_efetivo e where e.loja_id = p_loja and e.data_ref >= v_min
+                   union select unnest(v_prods) order by 1);
+  if cardinality(v_todos) > 0 then
+    v_rep := reprocessar_custo(p_loja, v_todos, v_min, p_motivo);
     v_avisos := v_avisos || coalesce(v_rep->'avisos', '[]'::jsonb);
   end if;
 
@@ -85,6 +91,8 @@ begin
 
   v_res := jsonb_build_object('compras', cardinality(v_compras), 'movimentos_revisados', v_n,
                               'produtos', to_jsonb(array(select p from unnest(v_prods) p order by 1)),
+                              'produtos_reprocessados', coalesce((v_rep->>'produtos')::int, 0),
+                              'custos_revisados', coalesce((v_rep->>'movimentos_revisados')::int, 0),
                               'lote_reprocesso', v_rep->'lote', 'desde', v_min, 'avisos', v_avisos,
                               'cmv_antes', v_antes, 'cmv_depois', v_depois, 'reprocessamento', v_rep);
   if p_simular then

@@ -6,6 +6,7 @@
 -- antes × depois). lucro_proprio não precisa ser recriado: só lê vendas_proprio_cmv.
 -- Definições copiadas de pg_get_viewdef / pg_get_functiondef em PRODUÇÃO (04/11/2026); mudou só a fonte (e o kardex
 -- devolve também revisado, revisado_em, custo_original, data_ref_original para a tela mostrar "custo revisado em dd/mm").
+-- kardex_proprio: ordem "data" = (data efetiva, id), antes era só id.
 -- Modo Omie: nada muda (nenhuma das duas é lida por loja Omie).
 --
 -- Aplicar com -1 depois de 01:00: node scripts/aplicar-migration.mjs supabase/migrations/315_relatorios_custo_efetivo.sql
@@ -85,7 +86,9 @@ begin
     select b.*, (select e.id from estoque_movimentos e where e.reverses_id = b.id limit 1) as estornado_por
       from base b
      order by
-       case when p_ord = 'data' and v_asc then b.id end asc, case when p_ord = 'data' and not v_asc then b.id end desc,
+       -- 315: "data" = data efetiva, depois id (retroativo/revisado aparece no dia em que vale)
+       case when p_ord = 'data' and v_asc then b.data_ref end asc, case when p_ord = 'data' and v_asc then b.id end asc,
+       case when p_ord = 'data' and not v_asc then b.data_ref end desc, case when p_ord = 'data' and not v_asc then b.id end desc,
        case when p_ord = 'produto' and v_asc then b.p_descricao end asc, case when p_ord = 'produto' and not v_asc then b.p_descricao end desc,
        case when p_ord = 'quantidade' and v_asc then b.quantidade end asc, case when p_ord = 'quantidade' and not v_asc then b.quantidade end desc,
        case when p_ord = 'saldo' and v_asc then b.saldo_apos end asc, case when p_ord = 'saldo' and not v_asc then b.saldo_apos end desc,

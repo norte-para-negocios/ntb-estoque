@@ -19,6 +19,11 @@ declare L bigint := 8000000031601; COCA bigint := 8000000031611; CAM bigint := 8
 begin
   -- início do ledger (contagem inicial) em 13/10
   perform registrar_movimento(99316, L, 8000000031614, 'AJU', 'SALDO_INICIAL', 'ini', 5, 1.00, null, null, 0, null, null, '2026-10-13');
+  -- gelo: só um fardo errado estornado (nenhuma entrada a mover), CMC distorcido pelo par
+  perform registrar_movimento(99316, L, 8000000031614, 'ENT', 'COMPRA', 'g1', 10, 2.00, null, null, 0, null, null, '2026-10-14');
+  r := registrar_movimento(99316, L, 8000000031614, 'ENT', 'COMPRA', 'g2', 100, 60.00, null, null, 0, null, null, '2026-10-15');
+  perform registrar_movimento(99316, L, 8000000031614, 'SAI', 'VENDA', 'g3', 5, null, null, null, 0, null, null, '2026-10-16');
+  perform estornar_movimento((r->>'id')::bigint, null, 'fardo');
   -- vendas de 20/10: coca direta; moqueca feita por OP que consome camarão (tudo sem custo)
   perform registrar_movimento(99316, L, COCA, 'SAI', 'VENDA', 'p316-1', 6, null, null, null, 0, null, null, '2026-10-20');
   perform registrar_movimento(99316, L, CAM, 'PRD', 'PRODUCAO', 'op316', -0.5, null, null, null, 0, null, null, '2026-10-20');
@@ -71,11 +76,15 @@ begin
     assert e.cmc = e.cmc_apos and e.saldo_total = e.saldo_total_apos, 'CMC de hoje = fim da cadeia: ' || row_to_json(e)::text;
   end loop;
   assert (select sum(cmv) from vendas_proprio_cmv where loja_id = 99316) = 62.74, 'CMV gravado = prévia';
+  -- gelo (só par de estorno) também foi refeito: ini 5 a 1 (13/10) + 10 a 2 → (5 + 20)/15 = 1,666667; o fardo sai da cadeia
+  assert (r->>'produtos_reprocessados')::int = 4, 'reprocessa todos os produtos com movimento desde 01/10: ' || r::text;
+  assert (select cmc from estoque_custos where loja_id = 99316 and codigo_produto = 8000000031614) = 1.666667,
+    'CMC do gelo sem o fardo: ' || (select cmc from estoque_custos where loja_id = 99316 and codigo_produto = 8000000031614);
 
   -- 3) segunda chamada não grava nada
   select count(*) into n_rev from estoque_mov_revisao;
   r := corrigir_data_entradas_compra(99316, '2026-10-01', 'de novo');
-  assert (r->>'compras')::int = 0 and (r->>'movimentos_revisados')::int = 0 and r->>'lote_reprocesso' is null, 'idempotente: ' || r::text;
+  assert (r->>'compras')::int = 0 and (r->>'movimentos_revisados')::int = 0 and (r->>'custos_revisados')::int = 0, 'idempotente: ' || r::text;
   assert (select count(*) from estoque_mov_revisao) = n_rev, 'nenhuma revisão nova';
 
   -- 4) loja Omie recusada; sem acesso pela API
