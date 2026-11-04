@@ -31,7 +31,7 @@
 -- Usada por reprocessar_custo e por lancar_compra (313), para travar tudo ANTES de gravar, sempre na mesma ordem.
 create or replace function public._cascata_custo(p_loja bigint, p_produtos bigint[], p_desde date,
     out produtos bigint[], out niveis int[], out ciclo boolean)
-language plpgsql stable security definer set search_path = public as $$
+language plpgsql stable security definer set search_path = public set enable_seqscan = off as $$
 declare v_front bigint[]; v_prox bigint[]; v_k int; v_i int; p bigint;
 begin
   produtos := array(select distinct x from unnest(coalesce(p_produtos, '{}')) x where x is not null order by 1);
@@ -75,7 +75,11 @@ revoke all on function public._travar_custo_produtos(bigint, bigint[]) from publ
 
 create or replace function public.reprocessar_custo(p_loja bigint, p_produtos bigint[], p_desde date, p_motivo text)
 returns jsonb
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public
+-- estoque_mov_revisao cresce DENTRO desta transação (milhares de linhas no 1º reprocessamento) e as estatísticas dizem
+-- que ela é minúscula: o planejador escolhia varrer a tabela inteira a cada movimento lido pela visão (15 s com 5 mil
+-- movimentos, contra 0,6 s pelo índice). Aqui só há buscas por índice.
+set enable_seqscan = off as $$
 declare
   v_modo text; v_lote uuid := gen_random_uuid();
   v_desde date; v_aberto date; v_fech date; v_avisos jsonb := '[]'::jsonb;
