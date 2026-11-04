@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { ItemConferencia } from '@/components/nota-fiscal/ConferenciaNF'
 import { carregarCmc } from '@/lib/estoque/nf-memoria'
 import { avaliarItemCompra, type ItemCompraGravado } from '@/lib/estoque/nf-item-regras'
+import { lerNfe } from '@/lib/estoque/nfe-xml'
 
 const COLUNAS_FLAGS = ['custo_icms', 'custo_icms_st', 'custo_ipi', 'custo_seguro', 'custo_pis', 'custo_cofins', 'custo_frete', 'custo_outras'] as const
 const num = (v: unknown) => Number(v ?? 0) || 0
@@ -28,6 +29,9 @@ export async function carregarConferencia(lojaId: number, notaId: number, fullOb
   if (c) {
     const { data: raw } = await sb.from('compras_proprio_itens').select('*').eq('compra_id', c.id).order('linha')
     const linhas = (raw ?? []) as Record<string, unknown>[]
+    // Notas lançadas antes da coluna `fiscal` (até ~20/10/2026) ficaram sem CST gravado: lê do XML guardado só para mostrar.
+    const semFiscal = linhas.some((i) => { const f = (i.fiscal ?? {}) as Record<string, unknown>; return !f.cst && !f.csosn })
+    const fiscalDoXml = semFiscal && chave ? await fiscalPorLinhaDoXml(sb, lojaId, chave) : new Map<number, { cst: string | null; csosn: string | null }>()
     const codigos = [...new Set(linhas.flatMap((i) => [i.codigo_produto, i.sugestao_codigo_produto]).filter((x): x is number => typeof x === 'number'))]
     const prods = new Map<number, { codigoProduto: number; codigo: string; descricao: string; unidade: string }>()
     if (codigos.length) {
@@ -63,10 +67,12 @@ export async function carregarConferencia(lojaId: number, notaId: number, fullOb
       const av = avaliarItemCompra(gravado, { cmc: cp != null ? cmc.get(cp) ?? null : null, finalidade })
       const localItem = i.codigo_local_estoque != null ? Number(i.codigo_local_estoque) : null
       const localEfetivo = localItem ?? (c.codigo_local_estoque != null ? Number(c.codigo_local_estoque) : null)
-      const fiscal = (i.fiscal ?? {}) as Record<string, unknown>
+      const fiscalGravado = (i.fiscal ?? {}) as Record<string, unknown>
+      const doXml = fiscalDoXml.get(Number(i.linha))
+      const fiscal = !fiscalGravado.cst && !fiscalGravado.csosn && doXml ? { ...fiscalGravado, cst: doXml.cst, csosn: doXml.csosn } : fiscalGravado
       itens.push({
         id: Number(i.id), linha: Number(i.linha), descricao: (i.descricao as string) ?? `Item ${i.linha}`, cProd: (i.c_prod as string) ?? null, unidade: (i.unidade_compra as string) ?? null,
-        quantidade: Number(i.quantidade), valorLiquido: Number(i.valor_total) - Number(i.desconto), lancado: !!i.lancado, fator: Number(i.fator) || 1,
+        cfopNota: (i.cfop as string) ?? null, quantidade: Number(i.quantidade), valorLiquido: Number(i.valor_total) - Number(i.desconto), lancado: !!i.lancado, fator: Number(i.fator) || 1,
         custoUnitarioBase: i.custo_unitario_base == null ? null : Number(i.custo_unitario_base),
         matchOrigem: (i.match_origem as ItemConferencia['matchOrigem']) ?? null, score: i.match_score == null ? null : Number(i.match_score),
         produto: cp != null ? prods.get(cp) ?? null : null, sugestao: cp == null && sg != null ? prods.get(sg) ?? null : null,
@@ -117,4 +123,16 @@ export async function carregarConferencia(lojaId: number, notaId: number, fullOb
     sefaz: { origem: fo.sefaz?.origem ?? null, recebidoEm: fo.sefaz?.recebidoEm ?? null, nsu: fo.sefaz?.nsu ?? null, completo: fo.sefaz?.completo !== false, alertas: fo.sefaz?.alertas ?? [] },
     documento, manifestacoes, ctes,
   }
+}
+
+/** CST/CSOSN do ICMS de cada item, lidos do XML completo da SEFAZ (só leitura, para notas antigas sem `fiscal`). */
+async function fiscalPorLinhaDoXml(sb: Awaited<ReturnType<typeof createClient>>, lojaId: number, chave: string): Promise<Map<number, { cst: string | null; csosn: string | null }>> {
+  const m = new Map<number, { cst: string | null; csosn: string | null }>()
+  const { data } = await sb.from('sefaz_documentos').select('xml').eq('loja_id', lojaId).eq('chave', chave).not('xml', 'is', null).order('id', { ascending: false }).limit(1).maybeSingle()
+  const xml = (data?.xml as string | null) ?? null
+  if (!xml) return m
+  try {
+    for (const it of lerNfe(xml).itens) m.set(it.linha, { cst: it.fiscal.cst, csosn: it.fiscal.csosn })
+  } catch { /* XML resumido ou inválido: segue sem CST, como antes */ }
+  return m
 }

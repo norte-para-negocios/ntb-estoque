@@ -13,6 +13,7 @@ import { campoCompra } from '@/components/compras-proprio/SeletorProduto'
 import { configurarItemNF } from '@/lib/actions/nota-fiscal-proprio'
 import { flagsDeTexto, flagsParaTexto, formatarCfop, previaCustoItem, ORDEM_FLAGS, UNIDADES_ESTOQUE, type FlagsCusto, type ConfigItemNF } from '@/lib/estoque/nf-item-regras'
 import type { ItemConferencia } from './ConferenciaNF'
+import { cstIcmsEntrada, rotuloCstIcms } from '@/lib/nota-fiscal/entradas-contabil-puro'
 
 const ROTULO_FLAG: Record<(typeof ORDEM_FLAGS)[number], string> = {
   icms: 'ICMS é custo de estoque', icmsSt: 'ICMS-ST é custo de estoque', ipi: 'IPI é custo de estoque', seguro: 'Seguro é custo de estoque',
@@ -90,6 +91,7 @@ export function EditorItemNF({ item, locais, editavel }: { item: ItemConferencia
                 {previa.custoUnitario != null && <> a <span className="num font-medium text-text">{fmtCusto(previa.custoUnitario)}</span></>}
                 {' '}(valor de estoque <span className="num">{fmtBRL(previa.valorEstoque)}</span>)</>
             : <>Entra no estoque: <span className="num font-medium text-text">{fmtQtd(c.quantidadeRecebida)} {und}</span></>}
+          {item.cfopNota && <> · CFOP do fornecedor <span className="num">{formatarCfop(item.cfopNota)}</span></>}
           {c.cfopEntrada && <> · CFOP de entrada <span className="num">{formatarCfop(c.cfopEntrada)}</span></>}
         </p>
         <button type="button" className="inline-flex items-center gap-1 font-medium text-brand hover:underline" onClick={() => setAberto((v) => !v)} aria-expanded={aberto}>
@@ -122,6 +124,7 @@ export function EditorItemNF({ item, locais, editavel }: { item: ItemConferencia
               <span className="font-medium text-text">CFOP de entrada</span>
               <input disabled={!editavel} className={`${campoCompra} num`} value={cfop} onChange={(e) => setCfop(e.target.value)} placeholder="ex.: 1.102" aria-label="CFOP de entrada" />
               <span className="text-text-muted">{cfop.replace(/\D/g, '').length === 4 ? formatarCfop(cfop.replace(/\D/g, '')) : ''}{c.origemCfop ? ` · ${ORIGEM_CFOP[c.origemCfop] ?? c.origemCfop}` : ''}</span>
+              {item.cfopNota && <span className="block text-text-muted">Na nota do fornecedor: <span className="num font-medium text-text">{formatarCfop(item.cfopNota)}</span></span>}
             </label>
           </div>
           <div className="flex flex-wrap gap-4">
@@ -145,7 +148,8 @@ export function EditorItemNF({ item, locais, editavel }: { item: ItemConferencia
           <div>
             <p className="font-medium text-text">Impostos da nota</p>
             <p className="num text-text-muted">
-              {item.fiscal.cst ? `CST ${item.fiscal.cst}` : item.fiscal.csosn ? `CSOSN ${item.fiscal.csosn}` : 'CST —'} · ICMS {fmtBRL(item.fiscal.icms)} · ST {fmtBRL(item.fiscal.st)} · IPI {fmtBRL(item.fiscal.ipi)}
+              {item.fiscal.cst ? `CST do fornecedor ${rotuloCstIcms(item.fiscal.cst)}` : item.fiscal.csosn ? `CSOSN do fornecedor ${item.fiscal.csosn}` : 'CST do fornecedor —'}
+              {(item.fiscal.cst || item.fiscal.csosn) && <> · CST de entrada {cstIcmsEntrada(item.fiscal.cst, item.fiscal.csosn)}</>} · ICMS {fmtBRL(item.fiscal.icms)} · ST {fmtBRL(item.fiscal.st)} · IPI {fmtBRL(item.fiscal.ipi)}
               {' '}· PIS {fmtBRL(item.fiscal.pis)} · COFINS {fmtBRL(item.fiscal.cofins)} · frete {fmtBRL(item.fiscal.frete)} · seguro {fmtBRL(item.fiscal.seguro)} · outras {fmtBRL(item.fiscal.outras)}
               {item.fiscal.freteCte > 0 && <> · CT-e {fmtBRL(item.fiscal.freteCte)}</>}
             </p>

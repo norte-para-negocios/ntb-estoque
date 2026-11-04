@@ -15,6 +15,8 @@ import { PainelEntrada, type PassoEntrada } from './PainelEntrada'
 
 export type ItemConferencia = {
   id: number; linha: number; descricao: string; cProd: string | null; unidade: string | null; quantidade: number; valorLiquido: number
+  /** CFOP que o fornecedor pôs na nota (ex.: 5910); o de entrada é `config.cfopEntrada`. */
+  cfopNota?: string | null
   lancado: boolean; fator: number; custoUnitarioBase: number | null; matchOrigem: 'depara' | 'ean' | 'descricao' | 'manual' | null; score: number | null
   produto: { codigoProduto: number; codigo: string; descricao: string; unidade: string } | null
   sugestao: { codigoProduto: number; codigo: string; descricao: string; unidade: string } | null
