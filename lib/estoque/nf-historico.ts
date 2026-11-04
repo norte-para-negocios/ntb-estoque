@@ -67,7 +67,7 @@ export function montarHistoricoNF(f: FontesHistorico): EventoHistorico[] {
         const data = typeof d.data_entrada === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.data_entrada) ? d.data_entrada.split('-').reverse().join('/') : null
         const partes = [n(d.pendentes) || n(d.ignorados) ? `${n(d.pendentes)} pendente(s), ${n(d.ignorados)} fora do estoque` : null,
                         typeof d.aviso_data === 'string' && d.aviso_data ? d.aviso_data : null].filter(Boolean)
-        add({ ...base, grupo: 'estoque', texto: `Entrada no estoque: ${itens(n(d.lancados))}${data ? `, com a data de ${data}` : ''}`,
+        add({ ...base, grupo: 'estoque', texto: `Entrada no estoque: ${itens(n(d.lancados))}${data ? `, na data da nota (${data})` : ''}`,
               tom: d.aviso_data ? 'warn' : 'ok', detalhe: partes.length ? partes.join('. ') : undefined })
         break
       }

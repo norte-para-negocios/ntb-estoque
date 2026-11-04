@@ -40,8 +40,10 @@ begin
   select max(f.mes) into v_fech from estoque_periodo_fechado f where f.loja_id = p_loja;
   v_aberto := case when v_fech is null then null else (v_fech + interval '1 month')::date end;
   if v_aberto is not null and v < v_aberto then
-    v_aviso := format('A nota é de %s, mas o mês %s está fechado: a entrada foi lançada em %s.',
-                      to_char(v, 'DD/MM/YYYY'), to_char(v_fech, 'MM/YYYY'), to_char(v_aberto, 'DD/MM/YYYY'));
+    v_aviso := format('A nota é de %s, mas %s/%s já foi fechado. A entrada ficou em %s.',
+                      to_char(v, 'DD/MM/YYYY'),
+                      (array['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'])[extract(month from v_fech)::int],
+                      extract(year from v_fech)::int, to_char(least(v_aberto, v_hoje), 'DD/MM/YYYY'));
     v := least(v_aberto, v_hoje);
   end if;
   return query select v, v_aviso;
