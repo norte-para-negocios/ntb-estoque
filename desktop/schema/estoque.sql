@@ -29,6 +29,41 @@ SET row_security = off;
 
 
 --
+-- Name: _cascata_custo(bigint, bigint[], date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._cascata_custo(p_loja bigint, p_produtos bigint[], p_desde date, OUT produtos bigint[], OUT niveis integer[], OUT ciclo boolean) RETURNS record
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    SET enable_seqscan TO 'off'
+    AS $$
+declare v_front bigint[]; v_prox bigint[]; v_k int; v_i int; p bigint;
+begin
+  produtos := array(select distinct x from unnest(coalesce(p_produtos, '{}')) x where x is not null order by 1);
+  niveis := array_fill(0, array[cardinality(produtos)]);
+  ciclo := false;
+  v_front := produtos;
+  for v_k in 1..21 loop
+    v_prox := array(
+      select distinct e.codigo_produto
+        from estoque_movimentos_efetivo cns
+        join estoque_movimentos e on e.loja_id = cns.loja_id and e.ref = cns.ref and e.origem = 'PRODUCAO'
+                                 and e.tipo = 'PRD' and e.quantidade > 0
+       where cns.loja_id = p_loja and cns.codigo_produto = any(v_front) and cns.origem = 'PRODUCAO' and cns.tipo = 'PRD'
+         and cns.quantidade < 0 and cns.data_ref >= p_desde and e.codigo_produto <> cns.codigo_produto
+       order by 1);
+    exit when cardinality(v_prox) = 0;
+    if v_k = 21 then ciclo := true; exit; end if;
+    foreach p in array v_prox loop
+      v_i := array_position(produtos, p);
+      if v_i is null then produtos := produtos || p; niveis := niveis || v_k; else niveis[v_i] := v_k; end if;
+    end loop;
+    v_front := v_prox;
+  end loop;
+end $$;
+
+
+--
 -- Name: _comprador_valido(bigint, bigint, bigint); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -41,6 +76,68 @@ begin
   if not exists (select 1 from compradores where id = p_comprador and loja_id = p_loja and ativo) then
     raise exception 'Comprador % não é desta loja ou está inativo', p_comprador using errcode = '22023';
   end if;
+end $$;
+
+
+--
+-- Name: _custo_consumo_sem_cmc(jsonb, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._custo_consumo_sem_cmc(p_res jsonb, p_lote uuid) RETURNS numeric
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare m estoque_movimentos%rowtype; v_ult numeric; v_cu numeric;
+begin
+  if coalesce((p_res ->> 'cmc')::numeric, 0) > 0 then return (p_res ->> 'cmc')::numeric; end if;
+  select * into m from estoque_movimentos where id = (p_res ->> 'id')::bigint;
+  if not found then return 0; end if;
+  if coalesce((p_res ->> 'duplicado')::boolean, false) then
+    -- repetição: devolve o custo já em vigor (revisão anterior), sem gravar de novo
+    return coalesce((select e.custo_unitario from estoque_movimentos_efetivo e where e.id = m.id), 0);
+  end if;
+  select ultimo_custo into v_ult from estoque_custos where loja_id = m.loja_id and codigo_produto = m.codigo_produto;
+  v_cu := case when coalesce(v_ult, 0) > 0 then v_ult else 0 end;
+  perform _revisar_movimento(m.id, p_lote, m.data_ref, v_cu, m.cmc_apos, m.saldo_apos, m.saldo_total_apos, true,
+    case when v_cu > 0 then 'custo estimado: insumo sem custo médio, usado o último custo conhecido'
+         else 'custo estimado: insumo sem nenhum custo conhecido' end);
+  return v_cu;
+end $$;
+
+
+--
+-- Name: _data_entrada_compra(bigint, bigint, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._data_entrada_compra(p_loja bigint, p_compra bigint, p_pedida date DEFAULT NULL::date) RETURNS TABLE(data date, aviso text)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare c compras_proprio%rowtype; v date; v_xml text; v_hoje date := (now() at time zone 'America/Sao_Paulo')::date;
+        v_ini date; v_fech date; v_aberto date; v_aviso text;
+begin
+  select * into c from compras_proprio where id = p_compra and loja_id = p_loja;
+  v := p_pedida;
+  if v is null and c.chave_acesso is not null then
+    select d.xml into v_xml from sefaz_documentos d
+     where d.loja_id = p_loja and d.chave = c.chave_acesso and d.completo and d.xml is not null
+     order by d.id desc limit 1;
+    v := coalesce(substring(v_xml from '<dhSaiEnt>(\d{4}-\d{2}-\d{2})'), substring(v_xml from '<dSaiEnt>(\d{4}-\d{2}-\d{2})'))::date;
+  end if;
+  v := coalesce(v, c.emissao, v_hoje);
+  if v > v_hoje then v := v_hoje; end if;
+  select min(m.data_ref) into v_ini from estoque_movimentos m where m.loja_id = p_loja;
+  if v_ini is not null and v < v_ini then v := v_ini; end if;
+  select max(f.mes) into v_fech from estoque_periodo_fechado f where f.loja_id = p_loja;
+  v_aberto := case when v_fech is null then null else (v_fech + interval '1 month')::date end;
+  if v_aberto is not null and v < v_aberto then
+    v_aviso := format('A nota é de %s, mas %s/%s já foi fechado. A entrada ficou em %s.',
+                      to_char(v, 'DD/MM/YYYY'),
+                      (array['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'])[extract(month from v_fech)::int],
+                      extract(year from v_fech)::int, to_char(least(v_aberto, v_hoje), 'DD/MM/YYYY'));
+    v := least(v_aberto, v_hoje);
+  end if;
+  return query select v, v_aviso;
 end $$;
 
 
@@ -403,6 +500,18 @@ end $$;
 
 
 --
+-- Name: _primeiro_dia_aberto(bigint); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._primeiro_dia_aberto(p_loja bigint) RETURNS date
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select (max(mes) + interval '1 month')::date from estoque_periodo_fechado where loja_id = p_loja
+$$;
+
+
+--
 -- Name: _rc_chave_fornecedor(bigint, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -444,6 +553,46 @@ end $$;
 
 
 --
+-- Name: _recuo_pares(bigint, bigint[], date, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._recuo_pares(p_loja bigint, p_produtos bigint[], p_desde date, p_aberto date DEFAULT NULL::date) RETURNS date
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    SET enable_seqscan TO 'off'
+    AS $$
+  select greatest(least(p_desde, min(o.data_ref)), coalesce(p_aberto, '-infinity'::date))
+    from estoque_movimentos_efetivo e join estoque_movimentos_efetivo o on o.id = e.reverses_id
+   where e.loja_id = p_loja and e.codigo_produto = any(p_produtos) and e.data_ref >= p_desde and o.data_ref < p_desde
+$$;
+
+
+--
+-- Name: _revisar_movimento(bigint, uuid, date, numeric, numeric, numeric, numeric, boolean, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._revisar_movimento(p_mov bigint, p_lote uuid, p_data date, p_custo numeric, p_cmc numeric, p_saldo numeric, p_saldo_total numeric, p_estimado boolean, p_motivo text) RETURNS bigint
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_id bigint;
+begin
+  if p_motivo is null or btrim(p_motivo) = '' then
+    raise exception 'Revisão de custo sem motivo' using errcode = '22023';
+  end if;
+  if p_data is null or p_lote is null then
+    raise exception 'Revisão de custo sem data ou sem lote' using errcode = '22023';
+  end if;
+  insert into estoque_mov_revisao (movimento_id, lote, data_efetiva, custo_unitario, cmc_apos, saldo_apos, saldo_total_apos,
+                                   custo_estimado, motivo)
+  values (p_mov, p_lote, p_data, round(p_custo, 6), round(p_cmc, 6), round(p_saldo, 6), round(p_saldo_total, 6),
+          coalesce(p_estimado, false), p_motivo)
+  returning id into v_id;
+  return v_id;
+end $$;
+
+
+--
 -- Name: _rotulo_produto(bigint, bigint); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -466,10 +615,11 @@ CREATE FUNCTION public._saida_ao_custo_da_entrada(p_loja bigint, p_local bigint,
     AS $$
 declare
   v_custos estoque_custos%rowtype; v_saldo_ant numeric; v_saldo_novo numeric; v_total_novo numeric; v_cmc_novo numeric;
-  v_exist estoque_movimentos%rowtype; v_id bigint; v_q numeric := abs(p_quantidade);
+  v_exist estoque_movimentos_efetivo%rowtype; v_id bigint; v_q numeric := abs(p_quantidade);
 begin
   if v_q = 0 then raise exception 'Quantidade zero' using errcode = '22023'; end if;
-  select * into v_exist from estoque_movimentos
+  -- 317: duplicado devolve o CMC efetivo (última revisão)
+  select * into v_exist from estoque_movimentos_efetivo
    where loja_id = p_loja and origem = 'DEVOLUCAO_FORNECEDOR' and ref = p_ref and codigo_produto = p_produto
      and codigo_local_estoque = p_local and linha = p_linha;
   if found then return jsonb_build_object('ok', true, 'duplicado', true, 'id', v_exist.id, 'cmc', v_exist.cmc_apos); end if;
@@ -549,6 +699,24 @@ CREATE FUNCTION public._sugestao_previsao(p_loja bigint, p_dias integer) RETURNS
             case when coalesce(v.janela_dias, (v.periodo_fim - v.periodo_ini) + 1) >= p_dias
                  then coalesce(v.janela_dias, (v.periodo_fim - v.periodo_ini) + 1) else -coalesce(v.janela_dias, (v.periodo_fim - v.periodo_ini) + 1) end
 $$;
+
+
+--
+-- Name: _travar_custo_produtos(bigint, bigint[]); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._travar_custo_produtos(p_loja bigint, p_produtos bigint[]) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare p bigint;
+begin
+  for p in select distinct x from unnest(coalesce(p_produtos, '{}')) x where x is not null order by 1 loop
+    perform pg_advisory_xact_lock(hashtextextended(format('custo:%s:%s', p_loja, p), 7311));
+    insert into estoque_custos (loja_id, codigo_produto) values (p_loja, p) on conflict do nothing;
+    perform 1 from estoque_custos where loja_id = p_loja and codigo_produto = p for update;
+  end loop;
+end $$;
 
 
 --
@@ -1242,6 +1410,7 @@ CREATE FUNCTION public.consumo_por_receita(p_loja bigint, p_produto bigint, p_qu
 declare
   v_modo text; v_ficha fichas_tecnicas%rowtype; v_ref text; r record; v_res jsonb; v_itens jsonb := '[]'::jsonb;
   v_negativo boolean := false; v_ids bigint[];
+  v_lote uuid := gen_random_uuid(); -- 314
 begin
   select modo_estoque into v_modo from lojas where id = p_loja;
   if v_modo is distinct from 'proprio' then raise exception 'A loja % não usa estoque próprio', p_loja using errcode = '22023'; end if;
@@ -1257,6 +1426,7 @@ begin
   for r in select * from expandir_receita(p_loja, p_produto, p_quantidade) order by 1 loop
     v_res := registrar_movimento(p_loja, p_local, r.codigo_insumo, 'SAI', p_origem, v_ref, r.quantidade, null, p_user,
                                  'Receita ' || _rotulo_produto(p_loja, p_produto) || ' v' || v_ficha.versao, 0, null, null, null);
+    perform _custo_consumo_sem_cmc(v_res, v_lote); -- 314: insumo sem custo médio usa o último custo conhecido (estimado)
     if not coalesce((v_res ->> 'duplicado')::boolean, false) then
       insert into estoque_receita_consumos (movimento_id, loja_id, ficha_id, versao, produto_vendido, quantidade_vendida)
       values ((v_res ->> 'id')::bigint, p_loja, v_ficha.id, v_ficha.versao, p_produto, p_quantidade) on conflict do nothing;
@@ -1292,6 +1462,90 @@ begin
     set contado = excluded.contado, contado_em = excluded.contado_em, contado_por = excluded.contado_por,
         motivo = coalesce(nullif(btrim(p_motivo), ''), inventario_proprio_itens.motivo);
   return jsonb_build_object('ok', true);
+end $$;
+
+
+--
+-- Name: corrigir_data_entradas_compra(bigint, date, text, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.corrigir_data_entradas_compra(p_loja bigint, p_desde date, p_motivo text, p_simular boolean DEFAULT false) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    SET enable_seqscan TO 'off'
+    AS $$ -- mesma razão do reprocessar_custo (312): revisões crescendo dentro da transação
+declare
+  v_modo text; v_lote uuid := gen_random_uuid(); x record; v_alvo date; v_fech date; v_aberto date;
+  v_compras bigint[] := '{}'; v_prods bigint[] := '{}'; v_n int := 0; v_min date; v_avisos jsonb := '[]'::jsonb;
+  v_rep jsonb; v_antes jsonb; v_depois jsonb; v_res jsonb; v_todos bigint[];
+begin
+  select modo_estoque into v_modo from lojas where id = p_loja;
+  if v_modo is distinct from 'proprio' then
+    raise exception 'A loja % não usa estoque próprio', p_loja using errcode = '22023';
+  end if;
+  if p_desde is null or p_motivo is null or btrim(p_motivo) = '' then
+    raise exception 'corrigir_data_entradas_compra: desde e motivo são obrigatórios' using errcode = '22023';
+  end if;
+  select max(mes) into v_fech from estoque_periodo_fechado where loja_id = p_loja;
+  v_aberto := case when v_fech is null then null else (v_fech + interval '1 month')::date end;
+
+  select coalesce(jsonb_object_agg(mes, cmv), '{}'::jsonb) into v_antes from (
+    select to_char(v.data, 'YYYY-MM') as mes, round(sum(c.cmv), 2) as cmv
+      from vendas_proprio v join vendas_proprio_cmv c on c.venda_id = v.id
+     where v.loja_id = p_loja and v.data >= date_trunc('month', p_desde) and not v.cancelado and not v.devolvido
+     group by 1) t;
+
+  for x in
+    select c.id as compra_id, e.id as mov_id, e.codigo_produto, e.data_ref, e.custo_unitario, e.cmc_apos, e.saldo_apos,
+           e.saldo_total_apos, e.custo_estimado, (select d.data from _data_entrada_compra(p_loja, c.id, null) d) as alvo
+      from compras_proprio c
+      join compras_proprio_itens i on i.compra_id = c.id and i.lancado and i.movimento_id is not null
+      join estoque_movimentos_efetivo e on e.id = i.movimento_id and e.origem = 'COMPRA'
+     where c.loja_id = p_loja and c.status in ('lancada', 'parcial')
+       and not exists (select 1 from estoque_movimentos s where s.reverses_id = e.id)
+     order by c.id, i.linha
+  loop
+    v_alvo := x.alvo;
+    continue when v_alvo is null or v_alvo = x.data_ref;
+    continue when greatest(v_alvo, x.data_ref) < p_desde;
+    if v_aberto is not null and x.data_ref < v_aberto then
+      v_avisos := v_avisos || to_jsonb(format('Compra %s: a entrada de %s está num mês fechado e ficou como estava.',
+                                              x.compra_id, to_char(x.data_ref, 'DD/MM/YYYY')));
+      continue;
+    end if;
+    perform _revisar_movimento(x.mov_id, v_lote, v_alvo, x.custo_unitario, x.cmc_apos, x.saldo_apos, x.saldo_total_apos,
+                               x.custo_estimado, 'entrada pela data da nota');
+    v_n := v_n + 1;
+    if not x.compra_id = any(v_compras) then v_compras := v_compras || x.compra_id; end if;
+    if not x.codigo_produto = any(v_prods) then v_prods := v_prods || x.codigo_produto; end if;
+    v_min := least(coalesce(v_min, v_alvo), v_alvo, x.data_ref);
+  end loop;
+
+  -- todos os produtos com movimento desde a menor data envolvida
+  v_min := least(coalesce(v_min, p_desde), p_desde);
+  v_todos := array(select distinct e.codigo_produto from estoque_movimentos_efetivo e where e.loja_id = p_loja and e.data_ref >= v_min
+                   union select unnest(v_prods) order by 1);
+  if cardinality(v_todos) > 0 then
+    v_rep := reprocessar_custo(p_loja, v_todos, v_min, p_motivo);
+    v_avisos := v_avisos || coalesce(v_rep->'avisos', '[]'::jsonb);
+  end if;
+
+  select coalesce(jsonb_object_agg(mes, cmv), '{}'::jsonb) into v_depois from (
+    select to_char(v.data, 'YYYY-MM') as mes, round(sum(c.cmv), 2) as cmv
+      from vendas_proprio v join vendas_proprio_cmv c on c.venda_id = v.id
+     where v.loja_id = p_loja and v.data >= date_trunc('month', p_desde) and not v.cancelado and not v.devolvido
+     group by 1) t;
+
+  v_res := jsonb_build_object('compras', cardinality(v_compras), 'movimentos_revisados', v_n,
+                              'produtos', to_jsonb(array(select p from unnest(v_prods) p order by 1)),
+                              'produtos_reprocessados', coalesce((v_rep->>'produtos')::int, 0),
+                              'custos_revisados', coalesce((v_rep->>'movimentos_revisados')::int, 0),
+                              'lote_reprocesso', v_rep->'lote', 'desde', v_min, 'avisos', v_avisos,
+                              'cmv_antes', v_antes, 'cmv_depois', v_depois, 'reprocessamento', v_rep);
+  if p_simular then
+    raise exception 'Prévia: nada foi gravado' using errcode = 'PF900', detail = v_res::text;
+  end if;
+  return v_res;
 end $$;
 
 
@@ -1426,7 +1680,7 @@ CREATE FUNCTION public.curva_abc(p_loja bigint, p_dias integer DEFAULT NULL::int
   with cfg as (select coalesce(p_dias, (select dias_curva_abc from estoque_config where loja_id = p_loja), 90) as dias),
   base as (
     select m.codigo_produto, sum(abs(m.quantidade) * coalesce(m.custo_unitario, 0)) as v
-      from estoque_movimentos m, cfg
+      from estoque_movimentos_efetivo m, cfg -- 317: custo efetivo
      where m.loja_id = p_loja and m.tipo = 'SAI' and m.created_at >= now() - make_interval(days => cfg.dias)
      group by m.codigo_produto
   ),
@@ -1744,6 +1998,7 @@ CREATE FUNCTION public.estornar_compra(p_compra_id bigint, p_user text DEFAULT N
     SET search_path TO 'public'
     AS $$
 declare c compras_proprio%rowtype; i record; n int := 0; v_cancelada boolean;
+        v_prods bigint[] := '{}'; v_desde date; v_rep jsonb; -- 313
 begin
   select * into c from compras_proprio where id = p_compra_id for update;
   if not found then raise exception 'Compra inexistente' using errcode = '22023'; end if;
@@ -1751,6 +2006,16 @@ begin
   v_cancelada := c.chave_acesso is not null and (exists (select 1 from sefaz_chaves_canceladas where loja_id = c.loja_id and chave = c.chave_acesso)
       or exists (select 1 from notas_fiscais where loja_id = c.loja_id and c_chave_nfe = c.chave_acesso and deleted_at is null
                  and coalesce(full_object->'infoCadastro'->>'cCancelada', 'N') = 'S'));
+  -- 313: data efetiva das entradas (antes do estorno), para refazer o custo dali em diante; trava o custo dos produtos e
+  -- dos pratos da cascata em ordem de código ANTES de estornar (mesma ordem do lancar_compra e de produzir)
+  select min(e.data_ref), array_agg(distinct ci.codigo_produto) filter (where ci.codigo_produto is not null) into v_desde, v_prods
+    from compras_proprio_itens ci join estoque_movimentos_efetivo e on e.id = ci.movimento_id
+   where ci.compra_id = c.id and ci.lancado;
+  v_prods := coalesce(v_prods, '{}');
+  if v_desde is not null then
+    perform _travar_custo_produtos(c.loja_id, (select x.produtos from _cascata_custo(c.loja_id, v_prods,
+      _recuo_pares(c.loja_id, v_prods, v_desde, _primeiro_dia_aberto(c.loja_id))) x));
+  end if;
   for i in select * from compras_proprio_itens where compra_id = c.id and lancado and movimento_id is not null order by linha loop
     perform estornar_movimento(i.movimento_id, p_user, 'Estorno da compra ' || coalesce(c.numero, c.id::text));
     update compras_proprio_itens set lancado = false where id = i.id;
@@ -1767,7 +2032,11 @@ begin
   insert into compras_proprio_eventos (loja_id, compra_id, tipo, detalhe, user_id)
   values (c.loja_id, c.id, 'estornada', jsonb_build_object('estornados', n, 'reaberta', not v_cancelada), p_user);
   perform projetar_itens_compra_na_nota(c.id);
-  return jsonb_build_object('ok', true, 'estornados', n, 'duplicado', false, 'reaberta', not v_cancelada);
+  -- 313: o par entrada/estorno sai da cadeia de custo: refaz desde a data da entrada
+  if n > 0 and v_desde is not null then
+    v_rep := reprocessar_custo(c.loja_id, v_prods, v_desde, 'estorno da compra ' || coalesce(c.chave_acesso, c.numero, c.id::text));
+  end if;
+  return jsonb_build_object('ok', true, 'estornados', n, 'duplicado', false, 'reaberta', not v_cancelada, 'reprocessamento', v_rep);
 end $$;
 
 
@@ -3220,7 +3489,7 @@ begin
   with base as (
     select m.*, pr.codigo as p_codigo, pr.descricao as p_descricao, pr.unidade as p_unidade, pr.descricao_familia as p_familia,
            l.descricao as l_nome, pf.name as u_nome
-      from estoque_movimentos m
+      from estoque_movimentos_efetivo m -- 315: custo e data efetivos (última revisão)
       left join produtos pr on pr.loja_id = m.loja_id and pr.codigo_produto = m.codigo_produto
       left join local_estoques l on l.loja_id = m.loja_id and l.codigo_local_estoque = m.codigo_local_estoque
       left join profiles pf on pf.id::text = m.user_id
@@ -3252,7 +3521,9 @@ begin
     select b.*, (select e.id from estoque_movimentos e where e.reverses_id = b.id limit 1) as estornado_por
       from base b
      order by
-       case when p_ord = 'data' and v_asc then b.id end asc, case when p_ord = 'data' and not v_asc then b.id end desc,
+       -- 315: "data" = data efetiva, depois id (retroativo/revisado aparece no dia em que vale)
+       case when p_ord = 'data' and v_asc then b.data_ref end asc, case when p_ord = 'data' and v_asc then b.id end asc,
+       case when p_ord = 'data' and not v_asc then b.data_ref end desc, case when p_ord = 'data' and not v_asc then b.id end desc,
        case when p_ord = 'produto' and v_asc then b.p_descricao end asc, case when p_ord = 'produto' and not v_asc then b.p_descricao end desc,
        case when p_ord = 'quantidade' and v_asc then b.quantidade end asc, case when p_ord = 'quantidade' and not v_asc then b.quantidade end desc,
        case when p_ord = 'saldo' and v_asc then b.saldo_apos end asc, case when p_ord = 'saldo' and not v_asc then b.saldo_apos end desc,
@@ -3271,7 +3542,8 @@ begin
         'quantidade', quantidade, 'custo', custo_unitario, 'saldo_apos', saldo_apos, 'user_id', user_id, 'user_nome', u_nome,
         'obs', obs, 'codigo_local', codigo_local_estoque, 'local_nome', l_nome, 'codigo_produto', codigo_produto,
         'codigo', p_codigo, 'descricao', p_descricao, 'unidade', p_unidade, 'reverses_id', reverses_id,
-        'estornado_por', estornado_por, 'transferencia_ref', transferencia_ref, 'custo_estimado', custo_estimado)
+        'estornado_por', estornado_por, 'transferencia_ref', transferencia_ref, 'custo_estimado', custo_estimado,
+        'revisado', revisado, 'revisado_em', revisado_em, 'custo_original', custo_original, 'data_ref_original', data_ref_original)
         order by ord) from (select pag.*, row_number() over () as ord from pag) pag), '[]'::jsonb))
   into v_res;
   return v_res;
@@ -3296,6 +3568,7 @@ declare
   v_nitens int; v_tinha_pendente boolean;
   v_idem text := lower(nullif(btrim(coalesce(p_compra->>'chave_idempotencia', '')), ''));
   v_ign int := 0; v_local bigint; -- 185
+  v_data date; v_aviso_data text; v_prods bigint[] := '{}'; v_rep jsonb; -- 313
 begin
   select modo_estoque into v_modo from lojas where id = v_loja;
   if v_modo is distinct from 'proprio' then raise exception 'A loja % não usa estoque próprio', v_loja using errcode = '22023'; end if;
@@ -3386,6 +3659,18 @@ begin
        and dp.loja_id = v_loja and dp.fornecedor_cnpj = v_cnpj and dp.c_prod = i.c_prod;
   end if;
 
+  -- 313: a entrada vale na data da nota (dhSaiEnt, senão emissão), nunca no futuro, nunca antes do início do ledger da
+  -- loja, nunca em mês fechado (aí o 1º dia aberto, com aviso na compra)
+  select de.data, de.aviso into v_data, v_aviso_data
+    from _data_entrada_compra(v_loja, v_comp.id, nullif(p_compra->>'data_entrada', '')::date) de;
+  -- 313: trava o custo dos produtos a lançar e dos pratos feitos com eles, em ordem de código, antes de gravar (mesma
+  -- ordem do reprocessamento e de produzir): nota × OP ao mesmo tempo esperam uma pela outra em vez de travar em cruz
+  v_prods := array(select i.codigo_produto from compras_proprio_itens i
+                     where i.compra_id = v_comp.id and not i.lancado and i.codigo_produto is not null);
+  perform _travar_custo_produtos(v_loja, (select c.produtos from _cascata_custo(v_loja, v_prods,
+    _recuo_pares(v_loja, v_prods, v_data, _primeiro_dia_aberto(v_loja))) c));
+  v_prods := '{}';
+
   -- rateio estável: base = valor líquido de TODOS os itens (não depende da ordem de mapeamento)
   select coalesce(sum(valor_total - desconto), 0), count(*) into v_total_liq, v_n from compras_proprio_itens where compra_id = v_comp.id;
   v_ref := coalesce(v_comp.chave_acesso, 'compra:' || v_comp.id)
@@ -3429,7 +3714,8 @@ begin
     v_custo_unit := round(v_custo_total / v_qtd_base, 6);
     r := registrar_movimento(v_loja, v_local, it.codigo_produto, 'ENT', 'COMPRA', v_ref, v_qtd_base,
                              case when v_custo_unit > 0 then v_custo_unit else null end, p_user,
-                             'Compra ' || coalesce(v_comp.numero, v_comp.id::text), it.linha, null, null, null);
+                             'Compra ' || coalesce(v_comp.numero, v_comp.id::text), it.linha, null, null, v_data); -- 313: data da nota
+    v_prods := v_prods || it.codigo_produto; -- 313
     update compras_proprio_itens set lancado = true, movimento_id = (r->>'id')::bigint, custo_unitario_base = v_custo_unit where id = it.id;
     if v_cnpj is not null and it.c_prod is not null then
       insert into fornecedor_produto_depara (loja_id, fornecedor_cnpj, c_prod, codigo_produto, fator, unidade_compra)
@@ -3453,13 +3739,23 @@ begin
   if v_lanc > 0 then -- 185
     insert into compras_proprio_eventos (loja_id, compra_id, tipo, detalhe, user_id)
     values (v_loja, v_comp.id, 'lancada', jsonb_strip_nulls(jsonb_build_object('lancados', v_lanc, 'ignorados', v_ign, 'pendentes', v_pend,
+            'data_entrada', v_data, 'aviso_data', v_aviso_data, -- 313
             -- avisos de custo/fator aceitos no "Confirmar entrada" (nota sem conferência depois da última mudança)
             'avisos_aceitos', case when jsonb_typeof(p_compra->'avisos_aceitos') = 'array' then p_compra->'avisos_aceitos' end)), p_user);
   end if;
   perform projetar_itens_compra_na_nota(v_comp.id); -- 185
 
+  -- 313: refaz o custo dos produtos da nota (e dos pratos feitos com eles) desde a data da entrada, na mesma transação
+  if v_lanc > 0 then
+    v_rep := reprocessar_custo(v_loja, v_prods, v_data, 'compra ' || coalesce(v_comp.chave_acesso, v_comp.numero, v_comp.id::text));
+  end if;
+
   return jsonb_build_object('ok', true, 'compra_id', v_comp.id, 'status', v_status, 'lancados', v_lanc, 'ja_lancados', v_ja,
-                            'pendentes', v_pend, 'ignorados', v_ign, 'duplicado', (v_lanc = 0 and v_ja > 0 and v_pend = 0), 'itens', v_saida);
+                            'pendentes', v_pend, 'ignorados', v_ign, 'duplicado', (v_lanc = 0 and v_ja > 0 and v_pend = 0), 'itens', v_saida,
+                            'data_entrada', v_data, -- 313
+                            'avisos', coalesce(case when v_aviso_data is not null then jsonb_build_array(v_aviso_data) end, '[]'::jsonb)
+                                      || coalesce(v_rep->'avisos', '[]'::jsonb),
+                            'reprocessamento', v_rep);
 end $$;
 
 
@@ -4277,6 +4573,9 @@ begin
           (select vp.loja_id from vendas_proprio vp where vp.id = (f.row_data ->> f.pai_fk)::bigint)
         when f.regra = 'pai' and f.pai_tabela = 'ordens_producao_proprio' then
           (select op.loja_id from ordens_producao_proprio op where op.id = (f.row_data ->> f.pai_fk)::bigint)
+        -- 318: revisões de custo pela loja do movimento revisado
+        when f.regra = 'pai' and f.pai_tabela = 'estoque_movimentos' then
+          (select em.loja_id from estoque_movimentos em where em.id = (f.row_data ->> f.pai_fk)::bigint)
         else null
       end as loja_id
     from fonte f
@@ -4937,14 +5236,17 @@ begin
     select (regexp_replace(op.ref, '^OP:\d+:', ''))::int as n, op.ref, op.status, op.quantidade, op.custo_total, op.custo_unitario, op.local_consumo, op.local_destino,
            op.user_id, op.created_at,
            (select jsonb_agg(jsonb_build_object('codigo_insumo', it.codigo_insumo, 'codigo', p.codigo, 'descricao', p.descricao, 'unidade', p.unidade,
-                    'quantidade_bruta', it.quantidade, 'custo_unitario', it.custo_unitario, 'custo_total', round(it.quantidade * it.custo_unitario, 6), 'movimento_id', it.movimento_id)
+                    'quantidade_bruta', it.quantidade, 'custo_unitario', coalesce(me.custo_unitario, it.custo_unitario),
+                    'custo_total', round(it.quantidade * coalesce(me.custo_unitario, it.custo_unitario), 6), 'movimento_id', it.movimento_id)
                     order by it.id)
-              from ordens_producao_proprio_itens it left join produtos p on p.loja_id = op.loja_id and p.codigo_produto = it.codigo_insumo where it.ordem_id = op.id) as insumos,
+              from ordens_producao_proprio_itens it left join produtos p on p.loja_id = op.loja_id and p.codigo_produto = it.codigo_insumo
+              left join estoque_movimentos_efetivo me on me.id = it.movimento_id -- 317: custo efetivo do consumo
+             where it.ordem_id = op.id) as insumos,
            (select jsonb_agg(jsonb_build_object('id', m.id, 'tipo', m.tipo, 'codigo_produto', m.codigo_produto, 'codigo', p.codigo, 'descricao', p.descricao,
                     'codigo_local_estoque', m.codigo_local_estoque, 'local', l.descricao, 'quantidade', m.quantidade, 'custo_unitario', m.custo_unitario,
                     'saldo_apos', m.saldo_apos, 'created_at', m.created_at,
-                    'estornado', exists (select 1 from estoque_movimentos r where r.reverses_id = m.id)) order by m.id)
-              from estoque_movimentos m
+                    'estornado', exists (select 1 from estoque_movimentos r where r.reverses_id = m.id)) order by m.data_ref, m.id)
+              from estoque_movimentos_efetivo m -- 317: custo e data efetivos
               left join produtos p on p.loja_id = m.loja_id and p.codigo_produto = m.codigo_produto
               left join local_estoques l on l.loja_id = m.loja_id and l.codigo_local_estoque = m.codigo_local_estoque
              where m.loja_id = op.loja_id and m.origem = 'PRODUCAO' and m.ref = op.ref) as movimentos
@@ -5483,13 +5785,14 @@ declare
   m record; v_prod bigint; v_s numeric := 0; v_c numeric := 0; v_q numeric; v_novo numeric;
   v_prods bigint[] := '{}'; v_cmcs numeric[] := '{}';
 begin
-  -- Saldo por produto × local: soma direta do ledger até a data.
-  -- Custo médio por produto: refeito na ORDEM DA DATA (data_ref, depois id), com as mesmas regras do
-  -- registrar_movimento (174) e da devolução (231). O cmc_apos gravado não serve: movimento retroativo gravado depois
-  -- carrega o custo do momento da gravação (revisão I3).
+  -- Saldo por produto × local: soma direta do ledger até a data (data efetiva).
+  -- Custo médio por produto: refeito na ORDEM DA DATA EFETIVA (data_ref da última revisão, depois id), com as regras da
+  -- cadeia do reprocessar_custo (312/317): movimento + estorno fora do custo médio; sem custo conhecido a entrada vira o
+  -- CMC; E9/E10; devolução (231). Custos efetivos (visão 311). Sem revisão e sem par de estorno = saída de antes.
   for m in
-    select e.codigo_produto, e.tipo, e.origem, e.quantidade, e.custo_unitario, e.custo_estimado
-      from estoque_movimentos e
+    select e.codigo_produto, e.tipo, e.origem, e.quantidade, e.custo_unitario, e.custo_estimado,
+           (e.reverses_id is not null or exists (select 1 from estoque_movimentos x where x.reverses_id = e.id)) as par
+      from estoque_movimentos_efetivo e
      where e.loja_id = p_loja and e.data_ref <= p_data
      order by e.codigo_produto, e.data_ref, e.id
   loop
@@ -5497,11 +5800,15 @@ begin
       if v_prod is not null then v_prods := v_prods || v_prod; v_cmcs := v_cmcs || v_c; end if;
       v_prod := m.codigo_produto; v_s := 0; v_c := 0;
     end if;
+    continue when m.par;                                                -- 317: o par não existe para o custo
     v_q := m.quantidade;
     if m.tipo = 'TRF' then
       null;                                                             -- transferência não muda saldo total nem custo
-    elsif v_q > 0 and not coalesce(m.custo_estimado, false) and coalesce(m.custo_unitario, 0) > 0 then
-      if v_s + v_q = 0 then v_c := m.custo_unitario;
+    -- mesma regra da cadeia (312): entrada de OP entra no custo médio pelo custo dela mesmo estimada (algum insumo
+    -- estimado); as outras entradas só com custo informado (estimada = entrou ao CMC vigente, não muda o custo)
+    elsif v_q > 0 and coalesce(m.custo_unitario, 0) > 0
+          and (not coalesce(m.custo_estimado, false) or (m.tipo = 'PRD' and m.origem = 'PRODUCAO')) then
+      if v_c <= 0 or v_s + v_q = 0 then v_c := m.custo_unitario;         -- 317: sem custo conhecido, reset
       else
         v_novo := round((v_s * v_c + v_q * m.custo_unitario) / (v_s + v_q), 6);
         v_c := case when v_novo <= 0 then m.custo_unitario else v_novo end;
@@ -5517,7 +5824,7 @@ begin
   return query
     select s.codigo_produto, s.codigo_local_estoque, round(s.saldo, 6), coalesce(c.cmc, 0)
       from (select e.codigo_produto, e.codigo_local_estoque, sum(e.quantidade) as saldo
-              from estoque_movimentos e
+              from estoque_movimentos_efetivo e
              where e.loja_id = p_loja and e.data_ref <= p_data
              group by e.codigo_produto, e.codigo_local_estoque) s
       left join unnest(v_prods, v_cmcs) as c(codigo_produto, cmc) on c.codigo_produto = s.codigo_produto;
@@ -5794,6 +6101,7 @@ CREATE FUNCTION public.produzir(p_loja bigint, p_produto bigint, p_quantidade nu
 declare
   v_modo text; v_ficha fichas_tecnicas%rowtype; v_ex ordens_producao_proprio%rowtype; v_ids bigint[]; r record; v_res jsonb;
   v_total numeric := 0; v_custo_un numeric; v_ordem bigint; v_out jsonb; v_itens jsonb := '[]'::jsonb;
+  v_cu numeric; v_lote uuid := gen_random_uuid(); v_algum_est boolean := false; v_m estoque_movimentos%rowtype; -- 314
 begin
   select modo_estoque into v_modo from lojas where id = p_loja;
   if v_modo is distinct from 'proprio' then raise exception 'A loja % não usa estoque próprio', p_loja using errcode = '22023'; end if;
@@ -5821,15 +6129,23 @@ begin
   for r in select * from expandir_receita(p_loja, p_produto, p_quantidade) order by 1 loop
     v_res := registrar_movimento(p_loja, p_local_consumo, r.codigo_insumo, 'PRD', 'PRODUCAO', p_ref, -r.quantidade, null, p_user,
                                  'Produção de ' || _rotulo_produto(p_loja, p_produto), 0, null, null, null);
-    v_total := v_total + r.quantidade * coalesce((v_res ->> 'cmc')::numeric, 0);
+    v_cu := _custo_consumo_sem_cmc(v_res, v_lote); -- 314: insumo sem custo médio usa o último custo conhecido (estimado)
+    if coalesce((v_res ->> 'cmc')::numeric, 0) <= 0 then v_algum_est := true; end if;
+    v_total := v_total + r.quantidade * v_cu;
     insert into ordens_producao_proprio_itens (ordem_id, codigo_insumo, quantidade, custo_unitario, movimento_id)
-    values (v_ordem, r.codigo_insumo, r.quantidade, coalesce((v_res ->> 'cmc')::numeric, 0), (v_res ->> 'id')::bigint);
+    values (v_ordem, r.codigo_insumo, r.quantidade, v_cu, (v_res ->> 'id')::bigint);
     v_itens := v_itens || jsonb_build_array(jsonb_build_object('insumo', r.codigo_insumo, 'quantidade', r.quantidade, 'saldo', (v_res ->> 'saldo')::numeric));
   end loop;
 
   v_custo_un := round(v_total / p_quantidade, 6);
   v_out := registrar_movimento(p_loja, p_local_destino, p_produto, 'PRD', 'PRODUCAO', p_ref, p_quantidade,
                                case when v_custo_un > 0 then v_custo_un else null end, p_user, coalesce(p_obs, 'Produção de lote'), 0, null, null, null);
+  -- 314: algum insumo saiu com custo estimado → a entrada do prato também fica estimada (igual à cadeia do 312)
+  select * into v_m from estoque_movimentos where id = (v_out ->> 'id')::bigint;
+  if v_algum_est and not v_m.custo_estimado then
+    perform _revisar_movimento(v_m.id, v_lote, v_m.data_ref, v_m.custo_unitario, v_m.cmc_apos, v_m.saldo_apos, v_m.saldo_total_apos, true,
+                               'custo estimado: algum insumo da OP saiu com custo estimado');
+  end if;
   update ordens_producao_proprio set custo_total = round(v_total, 6), custo_unitario = v_custo_un where id = v_ordem;
   return jsonb_build_object('ok', true, 'duplicado', false, 'ordem_id', v_ordem, 'custo_total', round(v_total, 6), 'custo_unitario', v_custo_un,
                             'saldo_produto', (v_out ->> 'saldo')::numeric, 'cmc_produto', (v_out ->> 'cmc')::numeric, 'itens', v_itens);
@@ -6334,7 +6650,7 @@ CREATE FUNCTION public.registrar_movimento(p_loja bigint, p_local bigint, p_prod
 declare
   v_modo text; v_delta numeric; v_custos estoque_custos%rowtype; v_saldo_ant numeric; v_saldo_novo numeric;
   v_total_novo numeric; v_cmc_novo numeric; v_custo_mov numeric; v_estimado boolean := false;
-  v_exist estoque_movimentos%rowtype; v_id bigint; v_cons text;
+  v_exist estoque_movimentos%rowtype; v_id bigint; v_cons text; v_chave text;
 begin
   select modo_estoque into v_modo from lojas where id = p_loja;
   if v_modo is distinct from 'proprio' then
@@ -6350,14 +6666,21 @@ begin
     raise exception 'origem e ref são obrigatórios (idempotência)' using errcode = '22023';
   end if;
 
+  v_delta := case p_tipo when 'ENT' then abs(p_quantidade) when 'SAI' then -abs(p_quantidade) else p_quantidade end;
+  v_chave := format('%s/%s linha %s (produto %s, local %s)', p_origem, p_ref, p_linha, p_produto, p_local);
+
+  -- 308: a chave já gravada só é "duplicado" se for o MESMO movimento (tipo e quantidade, na escala da coluna);
+  -- outra quantidade com a mesma chave é conflito e falha alto (antes respondia ok e descartava a diferença).
   select * into v_exist from estoque_movimentos
    where loja_id = p_loja and origem = p_origem and ref = p_ref
      and codigo_produto = p_produto and codigo_local_estoque = p_local and linha = p_linha;
   if found then
+    if v_exist.tipo is distinct from p_tipo or v_exist.quantidade is distinct from round(v_delta, 6) then
+      raise exception 'conflito de idempotência: % já gravado com outra quantidade', v_chave
+        using errcode = 'PF002', detail = format('gravado: %s %s; pedido agora: %s %s', v_exist.tipo, v_exist.quantidade, p_tipo, round(v_delta, 6));
+    end if;
     return jsonb_build_object('ok', true, 'duplicado', true, 'id', v_exist.id, 'saldo', v_exist.saldo_apos, 'cmc', v_exist.cmc_apos);
   end if;
-
-  v_delta := case p_tipo when 'ENT' then abs(p_quantidade) when 'SAI' then -abs(p_quantidade) else p_quantidade end;
 
   -- Trava SEMPRE na mesma ordem: custo do produto, depois saldo do local (evita deadlock).
   insert into estoque_custos (loja_id, codigo_produto) values (p_loja, p_produto) on conflict do nothing;
@@ -6373,7 +6696,9 @@ begin
       v_custo_mov := p_custo;
       -- Regra do Omie: pondera mesmo com saldo negativo; o custo da entrada assume só se o saldo zerar ou o
       -- ponderado der ≤ 0 (com saldo 0 o ponderado já é o custo da entrada).
-      if v_custos.saldo_total + v_delta = 0 then v_cmc_novo := p_custo;
+      -- 317 (decisão do dono, desvio consciente da E9): sem custo conhecido (CMC = 0) a entrada vira o CMC, mesmo com
+      -- saldo negativo (vendido antes da 1ª compra). Igual à cadeia do reprocessar_custo (312).
+      if v_custos.cmc <= 0 or v_custos.saldo_total + v_delta = 0 then v_cmc_novo := p_custo;
       else
         v_cmc_novo := round((v_custos.saldo_total * v_custos.cmc + v_delta * p_custo) / (v_custos.saldo_total + v_delta), 6);
         if v_cmc_novo <= 0 then v_cmc_novo := p_custo; end if;
@@ -6403,6 +6728,11 @@ begin
     select * into v_exist from estoque_movimentos
      where loja_id = p_loja and origem = p_origem and ref = p_ref
        and codigo_produto = p_produto and codigo_local_estoque = p_local and linha = p_linha;
+    -- corrida (duas chamadas ao mesmo tempo): mesma regra do duplicado acima
+    if v_exist.tipo is distinct from p_tipo or v_exist.quantidade is distinct from round(v_delta, 6) then
+      raise exception 'conflito de idempotência: % já gravado com outra quantidade', v_chave
+        using errcode = 'PF002', detail = format('gravado: %s %s; pedido agora: %s %s', v_exist.tipo, v_exist.quantidade, p_tipo, round(v_delta, 6));
+    end if;
     return jsonb_build_object('ok', true, 'duplicado', true, 'id', v_exist.id, 'saldo', v_exist.saldo_apos, 'cmc', v_exist.cmc_apos);
   end;
 
@@ -7276,7 +7606,7 @@ CREATE FUNCTION public.relatorio_movimentacao_valor_mov(p_loja_id bigint, p_ini 
            e.origem = 'INVENTARIO',
            abs(e.quantidade), abs(e.quantidade) * coalesce(e.custo_unitario, 0), abs(e.quantidade) * coalesce(e.custo_unitario, 0),
            e.custo_unitario is null, false
-    from estoque_movimentos e
+    from estoque_movimentos_efetivo e -- 317: custo e data efetivos
     where (select m from modo) = 'proprio'
       and e.loja_id = p_loja_id and e.data_ref between p_ini and p_fim
   )
@@ -7532,6 +7862,174 @@ CREATE FUNCTION public.relatorio_rejeitos_por_tipo(p_loja_id bigint, p_data_ini 
   group by categoria
   order by valor_total desc nulls last
 $$;
+
+
+--
+-- Name: reprocessar_custo(bigint, bigint[], date, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.reprocessar_custo(p_loja bigint, p_produtos bigint[], p_desde date, p_motivo text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    SET enable_seqscan TO 'off'
+    AS $$
+declare
+  v_modo text; v_lote uuid := gen_random_uuid();
+  v_desde date; v_aberto date; v_fech date; v_avisos jsonb := '[]'::jsonb;
+  v_todos bigint[]; v_nivel int[]; v_ciclo boolean; p bigint; v_ord bigint[];
+  v_dp date; v_s numeric; v_scusto numeric; v_c numeric; v_ult numeric; v_loc jsonb; v_custos_par jsonb;
+  m record; v_q numeric; v_op_est boolean; v_recuo date; v_custo numeric; v_est boolean; v_vu numeric; v_w numeric; v_val numeric; v_sl numeric;
+  v_n_rev int := 0; v_rev_prod int; v_cascata jsonb := '[]'::jsonb; v_tem boolean; v_old estoque_custos%rowtype;
+begin
+  select modo_estoque into v_modo from lojas where id = p_loja;
+  if v_modo is distinct from 'proprio' then
+    raise exception 'A loja % não usa estoque próprio', p_loja using errcode = '22023';
+  end if;
+  if p_desde is null then raise exception 'reprocessar_custo: "desde" é obrigatório' using errcode = '22023'; end if;
+  if p_motivo is null or btrim(p_motivo) = '' then raise exception 'reprocessar_custo: motivo é obrigatório' using errcode = '22023'; end if;
+  if coalesce(cardinality(p_produtos), 0) = 0 then
+    return jsonb_build_object('lote', v_lote, 'produtos', 0, 'movimentos_revisados', 0, 'desde_efetivo', p_desde,
+                              'cascata', '[]'::jsonb, 'avisos', '[]'::jsonb);
+  end if;
+
+  -- mês fechado: começa no 1º dia depois do último mês fechado
+  select max(mes) into v_fech from estoque_periodo_fechado where loja_id = p_loja;
+  v_aberto := case when v_fech is null then null else (v_fech + interval '1 month')::date end;
+  v_desde := p_desde;
+  if v_aberto is not null and v_desde < v_aberto then
+    v_avisos := v_avisos || to_jsonb(format('Mês fechado até %s: o custo só foi refeito a partir de %s (pedido: %s).',
+                  to_char(v_fech, 'MM/YYYY'), to_char(v_aberto, 'DD/MM/YYYY'), to_char(p_desde, 'DD/MM/YYYY')));
+    v_desde := v_aberto;
+  end if;
+
+  -- fila com cascata (nível = maior distância a partir dos produtos pedidos) e travas em ordem de código, antes de ler
+  v_recuo := _recuo_pares(p_loja, p_produtos, v_desde, v_aberto);
+  select c.produtos, c.niveis, c.ciclo into v_todos, v_nivel, v_ciclo from _cascata_custo(p_loja, p_produtos, v_recuo) c;
+  if v_ciclo then
+    v_avisos := v_avisos || to_jsonb('A cascata de receitas parou em 20 níveis (receita em ciclo?). Confira as fichas técnicas.'::text);
+  end if;
+  perform _travar_custo_produtos(p_loja, v_todos);
+
+  v_ord := array(select t.p from unnest(v_todos, v_nivel) as t(p, n) order by t.n, t.p);
+  foreach p in array v_ord loop
+    -- recua até o movimento estornado de um par que cruza "desde"
+    select least(v_desde, min(o.data_ref)) into v_dp
+      from estoque_movimentos_efetivo e join estoque_movimentos_efetivo o on o.id = e.reverses_id
+     where e.loja_id = p_loja and e.codigo_produto = p and e.data_ref >= v_desde and o.data_ref < v_desde;
+    v_dp := coalesce(v_dp, v_desde);
+    if v_aberto is not null and v_dp < v_aberto then
+      v_avisos := v_avisos || to_jsonb(format('Produto %s: estorno de movimento de mês fechado ficou na cadeia como movimento comum.', p));
+      v_dp := v_aberto;
+    end if;
+
+    -- estado inicial
+    select coalesce(sum(quantidade), 0), count(*) > 0 into v_s, v_tem
+      from estoque_movimentos_efetivo where loja_id = p_loja and codigo_produto = p and data_ref < v_dp;
+    select coalesce(jsonb_object_agg(x.l::text, x.s), '{}'::jsonb) into v_loc
+      from (select codigo_local_estoque as l, sum(quantidade) as s from estoque_movimentos_efetivo
+             where loja_id = p_loja and codigo_produto = p and data_ref < v_dp group by 1) x;
+    select e.cmc_apos into v_c from estoque_movimentos_efetivo e
+     where e.loja_id = p_loja and e.codigo_produto = p and e.data_ref < v_dp and e.reverses_id is null
+       and not exists (select 1 from estoque_movimentos x where x.reverses_id = e.id)
+     order by e.data_ref desc, e.id desc limit 1;
+    v_c := coalesce(v_c, 0);
+    select e.custo_unitario into v_ult from estoque_movimentos_efetivo e
+     where e.loja_id = p_loja and e.codigo_produto = p and e.data_ref < v_dp and e.quantidade > 0 and e.tipo <> 'TRF'
+       and not e.custo_estimado and coalesce(e.custo_unitario, 0) > 0 and e.reverses_id is null
+       and not exists (select 1 from estoque_movimentos x where x.reverses_id = e.id)
+     order by e.data_ref desc, e.id desc limit 1;
+    v_scusto := v_s; v_custos_par := '{}'::jsonb; v_rev_prod := 0;
+
+    for m in
+      select e.*,
+             exists (select 1 from estoque_movimentos x where x.reverses_id = e.id) as estornado,
+             (e.reverses_id is not null and coalesce(
+                (select r.data_efetiva from estoque_mov_revisao r where r.movimento_id = e.reverses_id order by r.id desc limit 1),
+                (select o.data_ref from estoque_movimentos o where o.id = e.reverses_id)) >= v_dp) as estorno_no_par,
+             ((e.tipo = 'PRD' and e.quantidade < 0) or exists (select 1 from estoque_receita_consumos rc where rc.movimento_id = e.id)) as consumo
+        from estoque_movimentos_efetivo e
+       where e.loja_id = p_loja and e.codigo_produto = p and e.data_ref >= v_dp
+       order by e.data_ref, e.id
+    loop
+      v_tem := true;
+      v_q := m.quantidade; v_est := false;
+      if m.estornado or m.estorno_no_par then
+        -- par movimento/estorno: fora do custo médio
+        if m.estorno_no_par then
+          v_custo := coalesce((v_custos_par ->> m.reverses_id::text)::numeric, v_c);
+          v_est := m.custo_estimado;
+        elsif v_q > 0 and not m.custo_estimado and coalesce(m.custo_original, 0) > 0 then
+          v_custo := m.custo_original;
+        else
+          v_custo := v_c; v_est := case when v_q > 0 then m.custo_estimado else false end;
+        end if;
+      elsif m.tipo = 'TRF' then
+        v_custo := v_c; v_scusto := v_scusto + v_q;
+      elsif v_q > 0 then
+        v_vu := null;
+        if m.tipo = 'PRD' and m.origem = 'PRODUCAO' then
+          select sum(-x.quantidade * coalesce(x.custo_unitario, 0)), coalesce(bool_or(x.custo_estimado), false) into v_val, v_op_est
+            from estoque_movimentos_efetivo x
+           where x.loja_id = p_loja and x.origem = 'PRODUCAO' and x.ref = m.ref and x.tipo = 'PRD' and x.quantidade < 0;
+          if coalesce(v_val, 0) > 0 then v_vu := round(round(v_val, 6) / v_q, 6); v_est := v_op_est; end if;
+        elsif not m.custo_estimado and coalesce(m.custo_original, 0) > 0 then
+          v_vu := m.custo_original;
+        end if;
+        if v_vu is not null and v_vu > 0 then
+          v_custo := v_vu;
+          if v_c <= 0 or v_scusto + v_q = 0 then v_c := v_vu;  -- sem custo conhecido: reset (decisão do dono)
+          else
+            v_w := round((v_scusto * v_c + v_q * v_vu) / (v_scusto + v_q), 6);
+            v_c := case when v_w <= 0 then v_vu else v_w end;
+          end if;
+          v_ult := v_vu;
+        else
+          v_custo := v_c; v_est := true;
+        end if;
+        v_scusto := v_scusto + v_q;
+      elsif m.origem = 'DEVOLUCAO_FORNECEDOR' and coalesce(m.custo_original, 0) > 0 then
+        v_custo := m.custo_original; v_est := m.custo_estimado;
+        if v_scusto + v_q > 0 then
+          v_w := round((v_scusto * v_c + v_q * v_custo) / (v_scusto + v_q), 6);
+          if v_w > 0 then v_c := v_w; end if;
+        end if;
+        v_scusto := v_scusto + v_q;
+      else
+        if v_c > 0 then v_custo := v_c;
+        elsif m.consumo and v_ult is not null and v_ult > 0 then v_custo := v_ult; v_est := true;
+        else v_custo := v_c; v_est := m.consumo;
+        end if;
+        v_scusto := v_scusto + v_q;
+      end if;
+
+      v_s := round(v_s + v_q, 6); v_scusto := round(v_scusto, 6); v_custo := round(v_custo, 6);
+      v_sl := round(coalesce((v_loc ->> m.codigo_local_estoque::text)::numeric, 0) + v_q, 6);
+      v_loc := jsonb_set(v_loc, array[m.codigo_local_estoque::text], to_jsonb(v_sl));
+      if m.estornado then v_custos_par := jsonb_set(v_custos_par, array[m.id::text], to_jsonb(v_custo)); end if;
+
+      if m.custo_unitario is distinct from v_custo or m.cmc_apos is distinct from round(v_c, 6)
+         or m.saldo_apos is distinct from v_sl or m.saldo_total_apos is distinct from v_s or m.custo_estimado is distinct from v_est then
+        perform _revisar_movimento(m.id, v_lote, m.data_ref, v_custo, v_c, v_sl, v_s, v_est, p_motivo);
+        v_rev_prod := v_rev_prod + 1;
+      end if;
+    end loop;
+
+    if v_tem then
+      select * into v_old from estoque_custos where loja_id = p_loja and codigo_produto = p;
+      if v_old.saldo_total is distinct from v_s then
+        v_avisos := v_avisos || to_jsonb(format('Produto %s: saldo total era %s e a soma do ledger é %s (corrigido).', p, v_old.saldo_total, v_s));
+      end if;
+      update estoque_custos set cmc = round(v_c, 6), saldo_total = v_s, ultimo_custo = coalesce(v_ult, ultimo_custo), updated_at = now()
+       where loja_id = p_loja and codigo_produto = p
+         and (cmc is distinct from round(v_c, 6) or saldo_total is distinct from v_s or ultimo_custo is distinct from coalesce(v_ult, ultimo_custo));
+    end if;
+    v_n_rev := v_n_rev + v_rev_prod;
+    if v_rev_prod > 0 and not (p = any(p_produtos)) then v_cascata := v_cascata || to_jsonb(p); end if;
+  end loop;
+
+  return jsonb_build_object('lote', v_lote, 'produtos', cardinality(v_todos), 'movimentos_revisados', v_n_rev,
+                            'desde_efetivo', v_desde, 'cascata', v_cascata, 'avisos', v_avisos);
+end $$;
 
 
 --
@@ -7928,7 +8426,7 @@ with prod as (
 ), cons as (
   -- saídas do período (venda, consumo de produção, ajuste para baixo); transferência entre locais não é consumo;
   -- saída estornada não conta (o estorno aponta para ela em reverses_id)
-  select m.codigo_produto, sum(-m.quantidade) as s from estoque_movimentos m
+  select m.codigo_produto, sum(-m.quantidade) as s from estoque_movimentos_efetivo m -- 317: data efetiva
    where m.loja_id = p_loja and m.data_ref between p_ini and p_fim and m.tipo in ('SAI', 'PRD', 'AJU') and m.quantidade < 0
      and m.reverses_id is null and not exists (select 1 from estoque_movimentos e where e.reverses_id = m.id)
    group by 1
@@ -8294,6 +8792,37 @@ end $$;
 
 
 --
+-- Name: trg_estoque_mov_revisao_imutavel(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.trg_estoque_mov_revisao_imutavel() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+begin
+  raise exception 'estoque_mov_revisao é append-only: grave uma revisão nova' using errcode = '55000';
+end $$;
+
+
+--
+-- Name: trg_estoque_mov_revisao_periodo(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.trg_estoque_mov_revisao_periodo() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare m estoque_movimentos%rowtype; v_atual date;
+begin
+  select * into m from estoque_movimentos where id = new.movimento_id;
+  select coalesce((select r.data_efetiva from estoque_mov_revisao r where r.movimento_id = m.id order by r.id desc limit 1), m.data_ref)
+    into v_atual;
+  perform _exigir_periodo_aberto(m.loja_id, v_atual, 'revisão de custo');
+  perform _exigir_periodo_aberto(m.loja_id, new.data_efetiva, 'revisão de custo');
+  return new;
+end $$;
+
+
+--
 -- Name: trg_estoque_movimentos_historico(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -8541,6 +9070,18 @@ begin
     return new;
   end if;
   return old;
+end $$;
+
+
+--
+-- Name: trg_ledger_sem_truncate(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.trg_ledger_sem_truncate() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+begin
+  raise exception '% é parte do ledger do estoque próprio: TRUNCATE não é permitido (use estorno)', tg_table_name using errcode = '55000';
 end $$;
 
 
@@ -10230,6 +10771,120 @@ ALTER TABLE public.estoque_lotes ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTIT
     NO MAXVALUE
     CACHE 1
 );
+
+
+--
+-- Name: estoque_mov_revisao; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.estoque_mov_revisao (
+    id bigint NOT NULL,
+    movimento_id bigint NOT NULL,
+    lote uuid NOT NULL,
+    data_efetiva date NOT NULL,
+    custo_unitario numeric(18,6),
+    cmc_apos numeric(18,6),
+    saldo_apos numeric(18,6),
+    saldo_total_apos numeric(18,6),
+    custo_estimado boolean NOT NULL,
+    motivo text NOT NULL,
+    criado_em timestamp with time zone DEFAULT now(),
+    CONSTRAINT estoque_mov_revisao_motivo_check CHECK ((btrim(motivo) <> ''::text))
+);
+
+
+--
+-- Name: TABLE estoque_mov_revisao; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.estoque_mov_revisao IS 'Revisões de custo/data do ledger do estoque próprio (insert-only). A última por movimento vale; ver estoque_movimentos_efetivo.';
+
+
+--
+-- Name: estoque_mov_revisao_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.estoque_mov_revisao_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: estoque_mov_revisao_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.estoque_mov_revisao_id_seq OWNED BY public.estoque_mov_revisao.id;
+
+
+--
+-- Name: estoque_movimentos_efetivo; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.estoque_movimentos_efetivo WITH (security_invoker='true') AS
+ SELECT m.id,
+    m.loja_id,
+    m.codigo_local_estoque,
+    m.codigo_produto,
+    m.tipo,
+    m.origem,
+    m.ref,
+    m.linha,
+    m.quantidade,
+        CASE
+            WHEN (r.id IS NULL) THEN m.custo_unitario
+            ELSE r.custo_unitario
+        END AS custo_unitario,
+        CASE
+            WHEN (r.id IS NULL) THEN m.saldo_apos
+            ELSE r.saldo_apos
+        END AS saldo_apos,
+        CASE
+            WHEN (r.id IS NULL) THEN m.saldo_total_apos
+            ELSE r.saldo_total_apos
+        END AS saldo_total_apos,
+        CASE
+            WHEN (r.id IS NULL) THEN m.cmc_apos
+            ELSE r.cmc_apos
+        END AS cmc_apos,
+        CASE
+            WHEN (r.id IS NULL) THEN m.custo_estimado
+            ELSE r.custo_estimado
+        END AS custo_estimado,
+    m.reverses_id,
+    m.transferencia_ref,
+    m.user_id,
+    m.obs,
+    COALESCE(r.data_efetiva, m.data_ref) AS data_ref,
+    m.created_at,
+    (r.id IS NOT NULL) AS revisado,
+    m.custo_unitario AS custo_original,
+    m.data_ref AS data_ref_original,
+    r.criado_em AS revisado_em,
+    r.motivo AS motivo_revisao
+   FROM (public.estoque_movimentos m
+     LEFT JOIN LATERAL ( SELECT x.id,
+            x.data_efetiva,
+            x.custo_unitario,
+            x.cmc_apos,
+            x.saldo_apos,
+            x.saldo_total_apos,
+            x.custo_estimado,
+            x.criado_em,
+            x.motivo
+           FROM public.estoque_mov_revisao x
+          WHERE (x.movimento_id = m.id)
+          ORDER BY x.id DESC
+         LIMIT 1) r ON (true));
+
+
+--
+-- Name: VIEW estoque_movimentos_efetivo; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.estoque_movimentos_efetivo IS 'Ledger do estoque próprio com a última revisão de custo/data aplicada (311). Fonte de custo dos relatórios.';
 
 
 --
@@ -13361,6 +14016,25 @@ ALTER TABLE public.requisicoes_compra_itens ALTER COLUMN id ADD GENERATED ALWAYS
 
 
 --
+-- Name: schema_migrations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.schema_migrations (
+    versao integer NOT NULL,
+    arquivo text NOT NULL,
+    aplicada_em timestamp with time zone DEFAULT now() NOT NULL,
+    por text
+);
+
+
+--
+-- Name: TABLE schema_migrations; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.schema_migrations IS 'Controle de migrations: uma linha por versao aplicada (scripts/aplicar-migration.mjs). Sem acesso por API.';
+
+
+--
 -- Name: sefaz_busca_chave; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -13932,11 +14606,11 @@ CREATE VIEW public.vendas_proprio_cmv WITH (security_invoker='true') AS
             m_1.quantidade,
             m_1.custo_unitario
            FROM (public.vendas_proprio v
-             JOIN public.estoque_movimentos m_1 ON (((m_1.loja_id = v.loja_id) AND (m_1.origem = 'VENDA'::text) AND ((m_1.ref = v.pedido_ref) OR (m_1.ref ~~ (v.pedido_ref || '|%'::text))))))
+             JOIN public.estoque_movimentos_efetivo m_1 ON (((m_1.loja_id = v.loja_id) AND (m_1.origem = 'VENDA'::text) AND ((m_1.ref = v.pedido_ref) OR (m_1.ref ~~ (v.pedido_ref || '|%'::text))))))
         ), est AS (
          SELECT estoque_movimentos.reverses_id,
             sum((estoque_movimentos.quantidade * COALESCE(estoque_movimentos.custo_unitario, (0)::numeric))) AS valor
-           FROM public.estoque_movimentos
+           FROM public.estoque_movimentos_efetivo estoque_movimentos
           WHERE (estoque_movimentos.reverses_id IS NOT NULL)
           GROUP BY estoque_movimentos.reverses_id
         )
@@ -14131,6 +14805,13 @@ ALTER TABLE ONLY public.estoque_correcao_custo ALTER COLUMN id SET DEFAULT nextv
 --
 
 ALTER TABLE ONLY public.estoque_local_saldos ALTER COLUMN id SET DEFAULT nextval('public.estoque_local_saldos_id_seq'::regclass);
+
+
+--
+-- Name: estoque_mov_revisao id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.estoque_mov_revisao ALTER COLUMN id SET DEFAULT nextval('public.estoque_mov_revisao_id_seq'::regclass);
 
 
 --
@@ -14688,6 +15369,14 @@ ALTER TABLE ONLY public.estoque_lote_movimentos
 
 ALTER TABLE ONLY public.estoque_lotes
     ADD CONSTRAINT estoque_lotes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: estoque_mov_revisao estoque_mov_revisao_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.estoque_mov_revisao
+    ADD CONSTRAINT estoque_mov_revisao_pkey PRIMARY KEY (id);
 
 
 --
@@ -15747,6 +16436,14 @@ ALTER TABLE ONLY public.requisicoes_compra
 
 
 --
+-- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schema_migrations
+    ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (versao);
+
+
+--
 -- Name: sefaz_busca_chave sefaz_busca_chave_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -16243,6 +16940,20 @@ CREATE UNIQUE INDEX estoque_lotes_sem_lote_uk ON public.estoque_lotes USING btre
 --
 
 CREATE INDEX estoque_lotes_vencimento ON public.estoque_lotes USING btree (loja_id, validade) WHERE ((saldo > (0)::numeric) AND (validade IS NOT NULL));
+
+
+--
+-- Name: estoque_mov_revisao_lote; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX estoque_mov_revisao_lote ON public.estoque_mov_revisao USING btree (lote);
+
+
+--
+-- Name: estoque_mov_revisao_mov; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX estoque_mov_revisao_mov ON public.estoque_mov_revisao USING btree (movimento_id, id DESC);
 
 
 --
@@ -17317,6 +18028,34 @@ CREATE TRIGGER estoque_custos_projeta_cmc AFTER UPDATE OF cmc ON public.estoque_
 
 
 --
+-- Name: estoque_custos estoque_custos_sem_truncate; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER estoque_custos_sem_truncate BEFORE TRUNCATE ON public.estoque_custos FOR EACH STATEMENT EXECUTE FUNCTION public.trg_ledger_sem_truncate();
+
+
+--
+-- Name: estoque_mov_revisao estoque_mov_revisao_imutavel; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER estoque_mov_revisao_imutavel BEFORE DELETE OR UPDATE ON public.estoque_mov_revisao FOR EACH ROW EXECUTE FUNCTION public.trg_estoque_mov_revisao_imutavel();
+
+
+--
+-- Name: estoque_mov_revisao estoque_mov_revisao_periodo; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER estoque_mov_revisao_periodo BEFORE INSERT ON public.estoque_mov_revisao FOR EACH ROW EXECUTE FUNCTION public.trg_estoque_mov_revisao_periodo();
+
+
+--
+-- Name: estoque_mov_revisao estoque_mov_revisao_sem_truncate; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER estoque_mov_revisao_sem_truncate BEFORE TRUNCATE ON public.estoque_mov_revisao FOR EACH STATEMENT EXECUTE FUNCTION public.trg_ledger_sem_truncate();
+
+
+--
 -- Name: estoque_movimentos estoque_movimentos_historico; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -17352,10 +18091,24 @@ CREATE TRIGGER estoque_movimentos_periodo BEFORE INSERT ON public.estoque_movime
 
 
 --
+-- Name: estoque_movimentos estoque_movimentos_sem_truncate; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER estoque_movimentos_sem_truncate BEFORE TRUNCATE ON public.estoque_movimentos FOR EACH STATEMENT EXECUTE FUNCTION public.trg_ledger_sem_truncate();
+
+
+--
 -- Name: estoque_periodo_eventos estoque_periodo_eventos_imutavel; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER estoque_periodo_eventos_imutavel BEFORE DELETE OR UPDATE ON public.estoque_periodo_eventos FOR EACH ROW EXECUTE FUNCTION public.trg_estoque_periodo_eventos_imutavel();
+
+
+--
+-- Name: estoque_saldos estoque_saldos_sem_truncate; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER estoque_saldos_sem_truncate BEFORE TRUNCATE ON public.estoque_saldos FOR EACH STATEMENT EXECUTE FUNCTION public.trg_ledger_sem_truncate();
 
 
 --
@@ -18372,6 +19125,14 @@ ALTER TABLE ONLY public.estoque_lote_movimentos
 
 ALTER TABLE ONLY public.estoque_lotes
     ADD CONSTRAINT estoque_lotes_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id);
+
+
+--
+-- Name: estoque_mov_revisao estoque_mov_revisao_movimento_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.estoque_mov_revisao
+    ADD CONSTRAINT estoque_mov_revisao_movimento_id_fkey FOREIGN KEY (movimento_id) REFERENCES public.estoque_movimentos(id);
 
 
 --
@@ -20062,6 +20823,21 @@ CREATE POLICY estoque_lotes_select_por_loja ON public.estoque_lotes FOR SELECT U
 
 
 --
+-- Name: estoque_mov_revisao; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.estoque_mov_revisao ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: estoque_mov_revisao estoque_mov_revisao_select_por_loja; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY estoque_mov_revisao_select_por_loja ON public.estoque_mov_revisao FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM public.estoque_movimentos m
+  WHERE ((m.id = estoque_mov_revisao.movimento_id) AND (( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (m.loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas)))))));
+
+
+--
 -- Name: estoque_movimentos; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -21263,6 +22039,12 @@ CREATE POLICY requisicoes_compra_select_por_loja ON public.requisicoes_compra FO
 
 
 --
+-- Name: schema_migrations; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.schema_migrations ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: sefaz_busca_chave; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -21497,12 +22279,36 @@ GRANT USAGE ON SCHEMA public TO service_role;
 
 
 --
+-- Name: FUNCTION _cascata_custo(p_loja bigint, p_produtos bigint[], p_desde date, OUT produtos bigint[], OUT niveis integer[], OUT ciclo boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._cascata_custo(p_loja bigint, p_produtos bigint[], p_desde date, OUT produtos bigint[], OUT niveis integer[], OUT ciclo boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._cascata_custo(p_loja bigint, p_produtos bigint[], p_desde date, OUT produtos bigint[], OUT niveis integer[], OUT ciclo boolean) TO postgres;
+
+
+--
 -- Name: FUNCTION _comprador_valido(p_loja bigint, p_comprador bigint, p_atual bigint); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public._comprador_valido(p_loja bigint, p_comprador bigint, p_atual bigint) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._comprador_valido(p_loja bigint, p_comprador bigint, p_atual bigint) TO postgres;
 GRANT ALL ON FUNCTION public._comprador_valido(p_loja bigint, p_comprador bigint, p_atual bigint) TO service_role;
+
+
+--
+-- Name: FUNCTION _custo_consumo_sem_cmc(p_res jsonb, p_lote uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._custo_consumo_sem_cmc(p_res jsonb, p_lote uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._custo_consumo_sem_cmc(p_res jsonb, p_lote uuid) TO postgres;
+
+
+--
+-- Name: FUNCTION _data_entrada_compra(p_loja bigint, p_compra bigint, p_pedida date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._data_entrada_compra(p_loja bigint, p_compra bigint, p_pedida date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._data_entrada_compra(p_loja bigint, p_compra bigint, p_pedida date) TO postgres;
 
 
 --
@@ -21528,7 +22334,7 @@ GRANT ALL ON FUNCTION public._expandir_receita(p_loja bigint, p_produto bigint, 
 --
 
 GRANT ALL ON TABLE public.estoque_movimentos TO postgres;
-GRANT ALL ON TABLE public.estoque_movimentos TO service_role;
+GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE public.estoque_movimentos TO service_role;
 GRANT SELECT ON TABLE public.estoque_movimentos TO authenticated;
 
 
@@ -21614,6 +22420,14 @@ GRANT ALL ON FUNCTION public._pc_loja_propria(p_loja bigint) TO service_role;
 
 
 --
+-- Name: FUNCTION _primeiro_dia_aberto(p_loja bigint); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._primeiro_dia_aberto(p_loja bigint) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._primeiro_dia_aberto(p_loja bigint) TO postgres;
+
+
+--
 -- Name: FUNCTION _rc_chave_fornecedor(p_id bigint, p_cnpj text, p_nome text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -21629,6 +22443,22 @@ GRANT ALL ON FUNCTION public._rc_chave_fornecedor(p_id bigint, p_cnpj text, p_no
 REVOKE ALL ON FUNCTION public._recalcular_frete_cte(p_compra bigint) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._recalcular_frete_cte(p_compra bigint) TO postgres;
 GRANT ALL ON FUNCTION public._recalcular_frete_cte(p_compra bigint) TO service_role;
+
+
+--
+-- Name: FUNCTION _recuo_pares(p_loja bigint, p_produtos bigint[], p_desde date, p_aberto date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._recuo_pares(p_loja bigint, p_produtos bigint[], p_desde date, p_aberto date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._recuo_pares(p_loja bigint, p_produtos bigint[], p_desde date, p_aberto date) TO postgres;
+
+
+--
+-- Name: FUNCTION _revisar_movimento(p_mov bigint, p_lote uuid, p_data date, p_custo numeric, p_cmc numeric, p_saldo numeric, p_saldo_total numeric, p_estimado boolean, p_motivo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._revisar_movimento(p_mov bigint, p_lote uuid, p_data date, p_custo numeric, p_cmc numeric, p_saldo numeric, p_saldo_total numeric, p_estimado boolean, p_motivo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._revisar_movimento(p_mov bigint, p_lote uuid, p_data date, p_custo numeric, p_cmc numeric, p_saldo numeric, p_saldo_total numeric, p_estimado boolean, p_motivo text) TO postgres;
 
 
 --
@@ -21667,6 +22497,14 @@ REVOKE ALL ON FUNCTION public._sugestao_previsao(p_loja bigint, p_dias integer) 
 GRANT ALL ON FUNCTION public._sugestao_previsao(p_loja bigint, p_dias integer) TO postgres;
 GRANT ALL ON FUNCTION public._sugestao_previsao(p_loja bigint, p_dias integer) TO authenticated;
 GRANT ALL ON FUNCTION public._sugestao_previsao(p_loja bigint, p_dias integer) TO service_role;
+
+
+--
+-- Name: FUNCTION _travar_custo_produtos(p_loja bigint, p_produtos bigint[]); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._travar_custo_produtos(p_loja bigint, p_produtos bigint[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._travar_custo_produtos(p_loja bigint, p_produtos bigint[]) TO postgres;
 
 
 --
@@ -21855,6 +22693,14 @@ GRANT ALL ON FUNCTION public.consumo_por_receita(p_loja bigint, p_produto bigint
 REVOKE ALL ON FUNCTION public.contar_item(p_inventario bigint, p_produto bigint, p_contado numeric, p_user text, p_motivo text, p_em timestamp with time zone) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.contar_item(p_inventario bigint, p_produto bigint, p_contado numeric, p_user text, p_motivo text, p_em timestamp with time zone) TO postgres;
 GRANT ALL ON FUNCTION public.contar_item(p_inventario bigint, p_produto bigint, p_contado numeric, p_user text, p_motivo text, p_em timestamp with time zone) TO service_role;
+
+
+--
+-- Name: FUNCTION corrigir_data_entradas_compra(p_loja bigint, p_desde date, p_motivo text, p_simular boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.corrigir_data_entradas_compra(p_loja bigint, p_desde date, p_motivo text, p_simular boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.corrigir_data_entradas_compra(p_loja bigint, p_desde date, p_motivo text, p_simular boolean) TO postgres;
 
 
 --
@@ -23273,6 +24119,15 @@ GRANT ALL ON FUNCTION public.relatorio_rejeitos_por_tipo(p_loja_id bigint, p_dat
 
 
 --
+-- Name: FUNCTION reprocessar_custo(p_loja bigint, p_produtos bigint[], p_desde date, p_motivo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.reprocessar_custo(p_loja bigint, p_produtos bigint[], p_desde date, p_motivo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.reprocessar_custo(p_loja bigint, p_produtos bigint[], p_desde date, p_motivo text) TO postgres;
+GRANT ALL ON FUNCTION public.reprocessar_custo(p_loja bigint, p_produtos bigint[], p_desde date, p_motivo text) TO service_role;
+
+
+--
 -- Name: FUNCTION rotulo_forma_pgto(p_sigla text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -23484,6 +24339,24 @@ GRANT ALL ON FUNCTION public.trg_estoque_custos_projeta_cmc() TO service_role;
 
 
 --
+-- Name: FUNCTION trg_estoque_mov_revisao_imutavel(); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.trg_estoque_mov_revisao_imutavel() TO postgres;
+GRANT ALL ON FUNCTION public.trg_estoque_mov_revisao_imutavel() TO authenticated;
+GRANT ALL ON FUNCTION public.trg_estoque_mov_revisao_imutavel() TO service_role;
+
+
+--
+-- Name: FUNCTION trg_estoque_mov_revisao_periodo(); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.trg_estoque_mov_revisao_periodo() TO postgres;
+GRANT ALL ON FUNCTION public.trg_estoque_mov_revisao_periodo() TO authenticated;
+GRANT ALL ON FUNCTION public.trg_estoque_mov_revisao_periodo() TO service_role;
+
+
+--
 -- Name: FUNCTION trg_estoque_movimentos_historico(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -23589,6 +24462,15 @@ GRANT ALL ON FUNCTION public.trg_inventario_items_periodo() TO service_role;
 REVOKE ALL ON FUNCTION public.trg_inventarios_periodo() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.trg_inventarios_periodo() TO postgres;
 GRANT ALL ON FUNCTION public.trg_inventarios_periodo() TO service_role;
+
+
+--
+-- Name: FUNCTION trg_ledger_sem_truncate(); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.trg_ledger_sem_truncate() TO postgres;
+GRANT ALL ON FUNCTION public.trg_ledger_sem_truncate() TO authenticated;
+GRANT ALL ON FUNCTION public.trg_ledger_sem_truncate() TO service_role;
 
 
 --
@@ -24243,7 +25125,7 @@ GRANT ALL ON SEQUENCE public.estoque_correcao_custo_id_seq TO service_role;
 --
 
 GRANT ALL ON TABLE public.estoque_custos TO postgres;
-GRANT ALL ON TABLE public.estoque_custos TO service_role;
+GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE public.estoque_custos TO service_role;
 GRANT SELECT ON TABLE public.estoque_custos TO authenticated;
 
 
@@ -24297,7 +25179,7 @@ GRANT SELECT ON TABLE public.estoque_lotes TO authenticated;
 --
 
 GRANT ALL ON TABLE public.estoque_saldos TO postgres;
-GRANT ALL ON TABLE public.estoque_saldos TO service_role;
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,MAINTAIN,UPDATE ON TABLE public.estoque_saldos TO service_role;
 GRANT SELECT ON TABLE public.estoque_saldos TO authenticated;
 
 
@@ -24317,6 +25199,31 @@ GRANT ALL ON TABLE public.estoque_lotes_divergencia TO service_role;
 GRANT ALL ON SEQUENCE public.estoque_lotes_id_seq TO postgres;
 GRANT ALL ON SEQUENCE public.estoque_lotes_id_seq TO authenticated;
 GRANT ALL ON SEQUENCE public.estoque_lotes_id_seq TO service_role;
+
+
+--
+-- Name: TABLE estoque_mov_revisao; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.estoque_mov_revisao TO postgres;
+GRANT SELECT ON TABLE public.estoque_mov_revisao TO authenticated;
+GRANT SELECT ON TABLE public.estoque_mov_revisao TO service_role;
+
+
+--
+-- Name: SEQUENCE estoque_mov_revisao_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON SEQUENCE public.estoque_mov_revisao_id_seq TO postgres;
+
+
+--
+-- Name: TABLE estoque_movimentos_efetivo; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.estoque_movimentos_efetivo TO postgres;
+GRANT SELECT ON TABLE public.estoque_movimentos_efetivo TO authenticated;
+GRANT SELECT ON TABLE public.estoque_movimentos_efetivo TO service_role;
 
 
 --
@@ -26203,6 +27110,14 @@ GRANT ALL ON SEQUENCE public.requisicoes_compra_itens_id_seq TO service_role;
 
 
 --
+-- Name: TABLE schema_migrations; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.schema_migrations TO postgres;
+GRANT ALL ON TABLE public.schema_migrations TO service_role;
+
+
+--
 -- Name: TABLE sefaz_busca_chave; Type: ACL; Schema: public; Owner: -
 --
 
@@ -26613,4 +27528,26 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON T
 -- PostgreSQL database dump complete
 --
 
+--
+-- Desktop (gerado por desktop/scripts/limpar-schema.mjs, migration 318): revisões de custo são só do servidor.
+-- O banco local nunca grava em estoque_mov_revisao; as revisões chegam pelo pull. Sem internet, compra/estorno/OP
+-- lançam o movimento normalmente (custo ao vivo do registrar_movimento) e o servidor refaz a cadeia ao reexecutar a ação.
+--
 
+CREATE OR REPLACE FUNCTION public._revisar_movimento(p_mov bigint, p_lote uuid, p_data date, p_custo numeric, p_cmc numeric, p_saldo numeric, p_saldo_total numeric, p_estimado boolean, p_motivo text) RETURNS bigint
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  return null;
+end $$;
+
+CREATE OR REPLACE FUNCTION public.reprocessar_custo(p_loja bigint, p_produtos bigint[], p_desde date, p_motivo text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  return jsonb_build_object('lote', null, 'produtos', 0, 'movimentos_revisados', 0, 'desde_efetivo', p_desde,
+                            'cascata', '[]'::jsonb, 'local', true,
+                            'avisos', jsonb_build_array('Sem internet: o custo médio desta operação é refeito pelo servidor quando o app sincronizar.'));
+end $$;
