@@ -37,7 +37,7 @@ function json(res, status, dado, extra = {}) {
 }
 
 function criarGateway(o) {
-  const { portas, cofre, remoto, sync, anonBuild, paginaCarga, log = () => {} } = o
+  const { portas, cofre, remoto, sync, anonBuild, paginaCarga, paginaAtualizacao, log = () => {} } = o
   const { jwtSecret } = cofre.segredosBase()
   const anonLocal = auth.tokenAnon(jwtSecret)
   const origemLocal = `http://127.0.0.1:${portas.gateway}`
@@ -260,6 +260,12 @@ function criarGateway(o) {
       // Primeira carga ainda rodando: páginas mostram o progresso em vez de telas vazias.
       const st = sync.status()
       const ehPagina = req.method === 'GET' && (req.headers.accept ?? '').includes('text/html')
+      // Estrutura nova adiada (app atualizado com fila pendente ou sem internet): o Next novo não roda no banco
+      // antigo. Em vez de telas quebrando, aviso até o motor enviar a fila e recriar o banco (sync.js).
+      if (ehPagina && st.estruturaPendente && paginaAtualizacao && cofre.ler('usuario') && !url.pathname.startsWith('/login')) {
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+        return res.end(fs.readFileSync(paginaAtualizacao))
+      }
       if (ehPagina && st.carga && !st.carga.pronta && cofre.ler('usuario') && !url.pathname.startsWith('/login')) {
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
         return res.end(fs.readFileSync(paginaCarga))

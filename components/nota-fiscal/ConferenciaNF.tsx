@@ -144,7 +144,7 @@ export function PainelEntradaProprio({ notaId, itens, status, locais, localAtual
       // aviso de custo/fator sem conferência: o servidor exige "Conferi os avisos" (mesma regra da conferência)
       const r = await confirmarEntradaNF(notaId, local, { aceitarAvisos })
       if ('error' in r) { toast.error('Não foi possível dar entrada', { description: r.error }); return }
-      toast.success(r.status === 'lancada' ? 'Entrada lançada no estoque' : `${r.lancados} ${r.lancados === 1 ? 'item entrou' : 'itens entraram'} no estoque; ${r.pendentes} ainda sem produto`)
+      toast.success(r.status === 'lancada' ? 'Entrada lançada no estoque' : `${r.lancados} ${r.lancados === 1 ? 'item entrou' : 'itens entraram'} no estoque; ${r.pendentes} ainda sem produto`, r.aviso ? { description: r.aviso } : undefined)
       router.refresh()
     })
   }

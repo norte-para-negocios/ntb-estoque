@@ -26,6 +26,7 @@
 -- Teste: scripts/testes-sql/318_offline_mov_revisao.sql (cópia local, BEGIN … ROLLBACK).
 -- Reverter: delete from offline_tabelas where tabela = 'estoque_mov_revisao';
 --           drop trigger outbox_trigger on public.estoque_mov_revisao;
+--           update offline_meta set valor = valor - 'estoque_mov_revisao' where chave = 'triggers_criados';
 --           delete from offline_versoes where tabela = 'estoque_mov_revisao';
 --           reaplicar o offline_compactar da 193.
 

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Norte Estoque</title>
+<style>
+  :root { --bg: #f5f5f7; --texto: #1d1d1f; --suave: #6e6e73; --marca: #0f766e; --linha: #e5e5ea; --erro: #b42318; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #111113; --texto: #f5f5f7; --suave: #a1a1a6; --linha: #2c2c2e; --erro: #f97066; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--texto);
+    font: 15px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; }
+  main { width: min(480px, 100% - 32px); }
+  h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  p { margin: 0 0 10px; color: var(--suave); }
+  .estado { font-size: 13px; color: var(--suave); min-height: 20px; margin-top: 14px; }
+  ul { list-style: none; padding: 0; margin: 14px 0 0; }
+  li { border-top: 1px solid var(--linha); padding: 10px 0; font-size: 13px; }
+  li .erro { color: var(--erro); }
+  button { font: inherit; font-size: 13px; border: 1px solid var(--linha); background: transparent; color: var(--texto);
+    border-radius: 8px; padding: 4px 10px; cursor: pointer; margin-top: 6px; }
+  button.principal { background: var(--marca); border-color: var(--marca); color: #fff; padding: 8px 14px; margin-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Falta terminar a atualização</h1>
+  <p>Conecte à internet e abra o app de novo para terminar a atualização.</p>
+  <p>O Norte Estoque foi atualizado, mas este computador ainda tem operações feitas sem internet. Elas são enviadas primeiro; depois o app prepara os dados novos sozinho.</p>
+  <div class="estado" id="estado">Verificando…</div>
+  <ul id="itens"></ul>
+  <button class="principal" id="agora">Tentar agora</button>
+</main>
+<script>
+  const post = (url, corpo) => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-ntb': '1' }, body: JSON.stringify(corpo ?? {}) })
+  async function atualizar() {
+    try {
+      const s = await (await fetch('/__ntb/status', { cache: 'no-store' })).json()
+      if (!s.estruturaPendente) { location.reload(); return }
+      const partes = []
+      partes.push(s.online === false ? 'Sem internet agora.' : s.online ? 'Conectado ao servidor.' : 'Tentando falar com o servidor…')
+      if (s.naFila) partes.push(s.naFila === 1 ? '1 operação ainda não enviada.' : s.naFila + ' operações ainda não enviadas.')
+      if (s.erro) partes.push(s.erro)
+      document.getElementById('estado').textContent = partes.join(' ')
+      const fila = await (await fetch('/__ntb/fila', { cache: 'no-store' })).json()
+      const ul = document.getElementById('itens')
+      ul.replaceChildren(...fila.filter((i) => i.estado === 'erro' || i.estado === 'verificar').map((i) => {
+        const li = document.createElement('li')
+        const t = document.createElement('div'); t.textContent = i.acao + ' (' + new Date(i.criadoEm).toLocaleString('pt-BR') + ')'
+        const e = document.createElement('div'); e.className = 'erro'; e.textContent = i.erro || 'Não foi aceita pelo servidor.'
+        const b = document.createElement('button'); b.textContent = 'Descartar esta operação'
+        b.onclick = async () => { if (confirm('Descartar esta operação? Ela não será enviada ao servidor.')) { await post('/__ntb/fila/descartar', { intentId: i.intentId }); atualizar() } }
+        li.append(t, e, b)
+        return li
+      }))
+    } catch (e) { /* app ainda subindo */ }
+  }
+  document.getElementById('agora').onclick = async () => { await post('/__ntb/sincronizar'); setTimeout(atualizar, 1500) }
+  setInterval(atualizar, 3000)
+  atualizar()
+</script>
+</body>
+</html>

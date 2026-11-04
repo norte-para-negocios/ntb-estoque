@@ -54,3 +54,12 @@ test('esquema do desktop no repo: tem a tabela de revisões e termina com o no-o
   if (!/^CREATE TABLE public\.estoque_mov_revisao \(/m.test(sql)) return // esquema anterior à 311
   assert.ok(sql.endsWith(REVISAO_SO_DO_SERVIDOR), 'desktop/schema/estoque.sql gerado sem limpar-schema.mjs atual')
 })
+
+test('aviso do reprocessamento local: só quando o banco local devolveu o no-op', async () => {
+  const { avisoReprocessarLocal, AVISO_REPROCESSAR_LOCAL } = await import('./limpar-esquema-puro.ts')
+  assert.equal(avisoReprocessarLocal({ ok: true, reprocessamento: { local: true, avisos: [AVISO_REPROCESSAR_LOCAL] }, avisos: [AVISO_REPROCESSAR_LOCAL] }), AVISO_REPROCESSAR_LOCAL)
+  assert.equal(avisoReprocessarLocal({ ok: true, avisos: [AVISO_REPROCESSAR_LOCAL] }), AVISO_REPROCESSAR_LOCAL)
+  assert.equal(avisoReprocessarLocal({ ok: true, reprocessamento: { lote: 'x', movimentos_revisados: 3, avisos: [] }, avisos: [] }), null, 'servidor: sem aviso')
+  assert.equal(avisoReprocessarLocal({ ok: true, reprocessamento: null }), null)
+  assert.equal(avisoReprocessarLocal(null), null)
+})

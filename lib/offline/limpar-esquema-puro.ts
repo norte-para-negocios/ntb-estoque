@@ -88,3 +88,13 @@ export function limparEsquema(entrada: string): string {
   }
   return sql
 }
+
+/** Aviso a mostrar depois de lançar/estornar no banco local do desktop (reprocessar_custo no-op devolveu `local`).
+ *  No servidor o retorno nunca tem `local`, então fora do desktop offline devolve null. */
+export function avisoReprocessarLocal(retorno: unknown): string | null {
+  if (!retorno || typeof retorno !== 'object') return null
+  const r = retorno as { reprocessamento?: { local?: unknown } | null; avisos?: unknown }
+  if (r.reprocessamento?.local === true) return AVISO_REPROCESSAR_LOCAL
+  if (Array.isArray(r.avisos) && r.avisos.includes(AVISO_REPROCESSAR_LOCAL)) return AVISO_REPROCESSAR_LOCAL
+  return null
+}
