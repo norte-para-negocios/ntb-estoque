@@ -128,7 +128,7 @@ select m.id, m.loja_id, m.codigo_local_estoque, m.codigo_produto, m.tipo, m.orig
 comment on view public.estoque_movimentos_efetivo is
   'Ledger do estoque próprio com a última revisão de custo/data aplicada (311). Fonte de custo dos relatórios.';
 
-revoke all on public.estoque_movimentos_efetivo from anon;
+revoke all on public.estoque_movimentos_efetivo from anon, authenticated, service_role;
 grant select on public.estoque_movimentos_efetivo to authenticated, service_role;
 
 notify pgrst, 'reload schema';

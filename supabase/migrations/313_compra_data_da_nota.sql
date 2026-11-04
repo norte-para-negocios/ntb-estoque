@@ -48,7 +48,14 @@ begin
   end if;
   return query select v, v_aviso;
 end $$;
-revoke all on function public._data_entrada_compra(bigint, bigint, date) from public, anon, authenticated;
+revoke all on function public._data_entrada_compra(bigint, bigint, date) from public, anon, authenticated, service_role;
+
+-- 1º dia depois do último mês fechado da loja (null = nenhum mês fechado)
+create or replace function public._primeiro_dia_aberto(p_loja bigint) returns date
+language sql stable security definer set search_path = public as $$
+  select (max(mes) + interval '1 month')::date from estoque_periodo_fechado where loja_id = p_loja
+$$;
+revoke all on function public._primeiro_dia_aberto(bigint) from public, anon, authenticated, service_role;
 
 CREATE OR REPLACE FUNCTION public.lancar_compra(p_compra jsonb, p_local bigint, p_user text DEFAULT NULL::text)
  RETURNS jsonb
@@ -163,9 +170,11 @@ begin
     from _data_entrada_compra(v_loja, v_comp.id, nullif(p_compra->>'data_entrada', '')::date) de;
   -- 313: trava o custo dos produtos a lançar e dos pratos feitos com eles, em ordem de código, antes de gravar (mesma
   -- ordem do reprocessamento e de produzir): nota × OP ao mesmo tempo esperam uma pela outra em vez de travar em cruz
-  perform _travar_custo_produtos(v_loja, (select c.produtos from _cascata_custo(v_loja,
-    array(select i.codigo_produto from compras_proprio_itens i where i.compra_id = v_comp.id and not i.lancado and i.codigo_produto is not null),
-    v_data) c));
+  v_prods := array(select i.codigo_produto from compras_proprio_itens i
+                     where i.compra_id = v_comp.id and not i.lancado and i.codigo_produto is not null);
+  perform _travar_custo_produtos(v_loja, (select c.produtos from _cascata_custo(v_loja, v_prods,
+    _recuo_pares(v_loja, v_prods, v_data, _primeiro_dia_aberto(v_loja))) c));
+  v_prods := '{}';
 
   -- rateio estável: base = valor líquido de TODOS os itens (não depende da ordem de mapeamento)
   select coalesce(sum(valor_total - desconto), 0), count(*) into v_total_liq, v_n from compras_proprio_itens where compra_id = v_comp.id;
@@ -269,11 +278,17 @@ begin
   v_cancelada := c.chave_acesso is not null and (exists (select 1 from sefaz_chaves_canceladas where loja_id = c.loja_id and chave = c.chave_acesso)
       or exists (select 1 from notas_fiscais where loja_id = c.loja_id and c_chave_nfe = c.chave_acesso and deleted_at is null
                  and coalesce(full_object->'infoCadastro'->>'cCancelada', 'N') = 'S'));
+  -- 313: data efetiva das entradas (antes do estorno), para refazer o custo dali em diante; trava o custo dos produtos e
+  -- dos pratos da cascata em ordem de código ANTES de estornar (mesma ordem do lancar_compra e de produzir)
+  select min(e.data_ref), array_agg(distinct ci.codigo_produto) filter (where ci.codigo_produto is not null) into v_desde, v_prods
+    from compras_proprio_itens ci join estoque_movimentos_efetivo e on e.id = ci.movimento_id
+   where ci.compra_id = c.id and ci.lancado;
+  v_prods := coalesce(v_prods, '{}');
+  if v_desde is not null then
+    perform _travar_custo_produtos(c.loja_id, (select x.produtos from _cascata_custo(c.loja_id, v_prods,
+      _recuo_pares(c.loja_id, v_prods, v_desde, _primeiro_dia_aberto(c.loja_id))) x));
+  end if;
   for i in select * from compras_proprio_itens where compra_id = c.id and lancado and movimento_id is not null order by linha loop
-    -- 313: data efetiva da entrada (antes do estorno), para refazer o custo dali em diante
-    select least(v_desde, e.data_ref) into v_desde from estoque_movimentos_efetivo e where e.id = i.movimento_id;
-    v_desde := coalesce(v_desde, (select e.data_ref from estoque_movimentos_efetivo e where e.id = i.movimento_id));
-    if i.codigo_produto is not null then v_prods := v_prods || i.codigo_produto; end if;
     perform estornar_movimento(i.movimento_id, p_user, 'Estorno da compra ' || coalesce(c.numero, c.id::text));
     update compras_proprio_itens set lancado = false where id = i.id;
     n := n + 1;
