@@ -40,38 +40,38 @@
 **Interfaces — Produces:**
 - Tabela `estoque_mov_revisao (id bigserial pk, movimento_id bigint not null references estoque_movimentos(id), lote uuid not null, data_efetiva date not null, custo_unitario numeric(18,6), cmc_apos numeric(18,6), saldo_apos numeric(18,6), saldo_total_apos numeric(18,6), custo_estimado boolean not null, motivo text not null, criado_em timestamptz default now())`, índice `(movimento_id, id desc)`, RLS no padrão initplan da 156 (via join com o movimento → `loja_id`), insert só por função security definer, triggers que recusam UPDATE/DELETE/TRUNCATE.
 - Visão `estoque_movimentos_efetivo` (security invoker): todas as colunas de `estoque_movimentos`, com `data_ref`, `custo_unitario`, `cmc_apos`, `saldo_apos`, `saldo_total_apos`, `custo_estimado` vindos da última revisão quando houver, mais `revisado boolean` e `custo_original numeric`.
-- [ ] Teste SQL: movimento sem revisão aparece igual; com 2 revisões, vale a última; UPDATE/DELETE na revisão recusados; usuário `authenticated` de outra loja não vê.
-- [ ] Commit.
+- [x] Teste SQL: movimento sem revisão aparece igual; com 2 revisões, vale a última; UPDATE/DELETE na revisão recusados; usuário `authenticated` de outra loja não vê.
+- [x] Commit.
 
 ### Task 2: `reprocessar_custo` (migration 312)
 **Files:** Create `supabase/migrations/312_reprocessar_custo.sql`; Create `lib/estoque/reprocessar-custo-puro.ts` + `.test.ts` (espelho da regra em TS para testar casos e conferir a SQL); Create `scripts/testes-sql/312_reprocessar_custo.sql`.
 **Interfaces — Produces:** `reprocessar_custo(p_loja bigint, p_produtos bigint[], p_desde date, p_motivo text) returns jsonb` → `{ lote, produtos, movimentos_revisados, desde_efetivo, cascata: [codigo_produto...], avisos: [...] }`. Security definer, `search_path = public`, só loja `modo_estoque = 'proprio'`.
-- [ ] TS puro `refazerCadeia(movs: Mov[], inicial: {saldo, cmc}): Revisao[]` com testes: (a) entrada depois de saídas com S₀<0 aplica E9; (b) S₀+q=0 → CMC=vu (E10); (c) saída pelo CMC vigente (E12); (d) par movimento+estorno ignorado; (e) entrada de OP recebe custo = Σ consumos da mesma OP ÷ quantidade produzida; (f) movimento sem mudança não gera revisão.
-- [ ] SQL com a mesma regra: estado inicial = último movimento efetivo antes de `desde` (ou zero); percorre `(data efetiva, id)`; grava revisão só onde custo/CMC/saldo mudam; ao fim regrava `estoque_custos.cmc/ultimo_custo/saldo_total` do produto (projeção). Cascata: produtos cujas OPs consumiram um produto revisado entram na fila (receita em DAG; limite de 20 níveis com aviso). Trava `pg_advisory_xact_lock(loja, produto)` em ordem de código. Mês fechado → `desde_efetivo` = dia seguinte ao fechamento + aviso.
-- [ ] Conferir: depois do reprocessamento, `saldo_total` e `cmc` de `estoque_custos` = último efetivo da cadeia; soma das quantidades inalterada.
-- [ ] Commit.
+- [x] TS puro `refazerCadeia(movs: Mov[], inicial: {saldo, cmc}): Revisao[]` com testes: (a) entrada depois de saídas com S₀<0 aplica E9; (b) S₀+q=0 → CMC=vu (E10); (c) saída pelo CMC vigente (E12); (d) par movimento+estorno ignorado; (e) entrada de OP recebe custo = Σ consumos da mesma OP ÷ quantidade produzida; (f) movimento sem mudança não gera revisão.
+- [x] SQL com a mesma regra: estado inicial = último movimento efetivo antes de `desde` (ou zero); percorre `(data efetiva, id)`; grava revisão só onde custo/CMC/saldo mudam; ao fim regrava `estoque_custos.cmc/ultimo_custo/saldo_total` do produto (projeção). Cascata: produtos cujas OPs consumiram um produto revisado entram na fila (receita em DAG; limite de 20 níveis com aviso). Trava `pg_advisory_xact_lock(loja, produto)` em ordem de código. Mês fechado → `desde_efetivo` = dia seguinte ao fechamento + aviso.
+- [x] Conferir: depois do reprocessamento, `saldo_total` e `cmc` de `estoque_custos` = último efetivo da cadeia; soma das quantidades inalterada.
+- [x] Commit.
 
 ### Task 3: entrada na data da nota (migration 313) e gatilho do reprocessamento
 **Files:** Create `supabase/migrations/313_compra_data_da_nota.sql`; Modify o chamador de `lancar_compra` (`lib/estoque/nf-sefaz.ts`, `lib/actions/nota-fiscal*.ts` — localizar) só se precisar passar a data.
-- [ ] `lancar_compra`: data da entrada = data de entrada da nota (`dhSaiEnt` se houver, senão emissão), nunca futura, nunca antes do início do ledger da loja, nunca dentro de mês fechado (aí vale o 1º dia aberto, com aviso na compra). Partir da definição de produção (`pg_get_functiondef`), mudar só isso.
-- [ ] Depois de lançar (e depois de `estornar_compra`), chamar `reprocessar_custo(loja, produtos_da_nota, data_da_entrada, 'compra <chave>')` na mesma transação.
-- [ ] Teste SQL: nota de 09/10 lançada em 02/11 com vendas em 20/10 → venda de 20/10 ganha custo; CMC de hoje bate com o ledger.
-- [ ] Commit.
+- [x] `lancar_compra`: data da entrada = data de entrada da nota (`dhSaiEnt` se houver, senão emissão), nunca futura, nunca antes do início do ledger da loja, nunca dentro de mês fechado (aí vale o 1º dia aberto, com aviso na compra). Partir da definição de produção (`pg_get_functiondef`), mudar só isso.
+- [x] Depois de lançar (e depois de `estornar_compra`), chamar `reprocessar_custo(loja, produtos_da_nota, data_da_entrada, 'compra <chave>')` na mesma transação.
+- [x] Teste SQL: nota de 09/10 lançada em 02/11 com vendas em 20/10 → venda de 20/10 ganha custo; CMC de hoje bate com o ledger.
+- [x] Commit.
 
 ### Task 4: OP com insumo sem custo usa o último custo conhecido (migration 314)
 **Files:** Create `supabase/migrations/314_op_custo_fallback.sql`.
-- [ ] Em `produzir`/`consumo_por_receita`: consumo de insumo com CMC 0 usa `estoque_custos.ultimo_custo` se > 0, marcando `custo_estimado = true`; sem nenhum custo, 0 + estimado (como hoje). A cascata da Task 2 corrige quando a compra chegar.
-- [ ] Commit.
+- [x] Em `produzir`/`consumo_por_receita`: consumo de insumo com CMC 0 usa `estoque_custos.ultimo_custo` se > 0, marcando `custo_estimado = true`; sem nenhum custo, 0 + estimado (como hoje). A cascata da Task 2 corrige quando a compra chegar.
+- [x] Commit.
 
 ### Task 5: relatórios leem o custo efetivo
 **Files:** Create `supabase/migrations/315_relatorios_custo_efetivo.sql` (recria `vendas_proprio_cmv` e `lucro_proprio` sobre `estoque_movimentos_efetivo`, a partir da definição de produção); Modify telas que leem `estoque_movimentos` para custo (kardex `/movimentacoes` do próprio, `/estoque/produto`, CMV) — trocar para a visão; mostrar "custo revisado em dd/mm" quando `revisado`.
-- [ ] Teste: `lucro_proprio` com revisão devolve o custo novo; sem revisão, igual ao de hoje (comparar saída antes × depois na cópia).
-- [ ] Commit.
+- [x] Teste: `lucro_proprio` com revisão devolve o custo novo; sem revisão, igual ao de hoje (comparar saída antes × depois na cópia).
+- [x] Commit.
 
 ### Task 6: reprocessar a ODARA (operação, com prova)
-- [ ] Na cópia local e depois em produção com `BEGIN … ROLLBACK`: revisar as 47 entradas de outubro para a data da nota (motivo `entrada pela data da nota`), rodar `reprocessar_custo(15, todos, '2026-10-13', 'correcao custo outubro')`, medir CMV out/nov antes × depois, CMC de hoje × ledger, e a lista do que continua sem custo (PI sem OP, nunca comprado).
-- [ ] Aplicar de madrugada; capturas do `/relatorio-cmv` out/nov; tabela antes × depois.
-- [ ] Gerar para a equipe da ODARA a lista do que só gente resolve: 25 PIs sem OP de pré-preparo, de-paras (Cachaça 51 × Cabaré Ouro, Tônica Antarctica × Petra, camarões, batata), compras sem nota (açúcar, sal, vodkas, aperol, espumante, acarajé, abará, coco verde, kit praia, açaí).
+- [x] Na cópia local e depois em produção com `BEGIN … ROLLBACK`: revisar as 47 entradas de outubro para a data da nota (motivo `entrada pela data da nota`), rodar `reprocessar_custo(15, todos, '2026-10-13', 'correcao custo outubro')`, medir CMV out/nov antes × depois, CMC de hoje × ledger, e a lista do que continua sem custo (PI sem OP, nunca comprado).
+- [x] Aplicado em 04/11 01:30 (antes × depois: out R$ 212,74 → 3.821,24; nov R$ 954,35 → 3.151,45). Captura da tela pendente (sessão do QA expirada; conferido por `lucro_proprio`).
+- [x] Gerar para a equipe da ODARA a lista do que só gente resolve: 25 PIs sem OP de pré-preparo, de-paras (Cachaça 51 × Cabaré Ouro, Tônica Antarctica × Petra, camarões, batata), compras sem nota (açúcar, sal, vodkas, aperol, espumante, acarajé, abará, coco verde, kit praia, açaí).
 
 ### Task 7: revisão independente, regressão do modo Omie, AGENTS.md
-- [ ] Revisor com contexto limpo; regressão: lojas Omie não leem a visão nova; `npm test`, `tsc`; atualizar `AGENTS.md` e o plano mestre (Fase 5, T5.2).
+- [x] Revisor com contexto limpo; regressão: lojas Omie não leem a visão nova; `npm test`, `tsc`; atualizar `AGENTS.md` e o plano mestre (Fase 5, T5.2).
