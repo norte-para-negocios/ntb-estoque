@@ -4,7 +4,7 @@
 // vol_bkp = cópia do banco ANTES do reprocessamento; vol = depois de reprocessar_custo(99330, 1..60, '2026-10-13', …).
 // Sai com código 1 se algum movimento divergir.
 import { execSync } from 'node:child_process'
-import { refazerCadeia, valorConsumosDaOP } from '../../lib/estoque/reprocessar-custo-puro.ts'
+import { refazerCadeia, valorConsumosDaOP, consumoEstimadoDaOP } from '../../lib/estoque/reprocessar-custo-puro.ts'
 
 const LOJA = 99330
 const sql = `select coalesce(json_agg(json_build_object('id', e.id, 'data', e.data_ref, 'local', e.codigo_local_estoque, 'produto', e.codigo_produto,
@@ -28,6 +28,7 @@ for (const p of [...porProduto.keys()].sort((a, b) => a - b)) {
   const movs = porProduto.get(p)
   const r = refazerCadeia(movs, { saldo: 0, cmc: 0 }, {
     valorConsumoOP: (ref) => valorConsumosDaOP([...efetivo.values()].filter((x) => x.ref === ref), ref),
+    consumoEstimadoOP: (ref) => consumoEstimadoDaOP([...efetivo.values()].filter((x) => x.ref === ref), ref),
   })
   for (const rv of r.revisoes) Object.assign(efetivo.get(rv.id), { custo: rv.custo, cmc: rv.cmc, saldo: rv.saldo, saldoTotal: rv.saldoTotal, estimado: rv.estimado })
 }

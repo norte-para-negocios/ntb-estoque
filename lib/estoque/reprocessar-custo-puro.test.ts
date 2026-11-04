@@ -173,3 +173,24 @@ test('devolução ao fornecedor tira as unidades ao custo da entrada (231)', () 
   assert.deepEqual(r.revisoes, [])
   assert.equal(r.final.cmc, 2)
 })
+
+test('decisão do dono: sem custo conhecido (C0 = 0) a 1ª entrada com custo vira o CMC, mesmo com S0 < 0', () => {
+  // vendido antes da 1ª compra (S0 = −5, C0 = 0) + compra de 10 a 4,00 → CMC 4,00 (pela E9 daria (0 + 40)/5 = 8)
+  const r = refazerCadeia([
+    mov({ id: 1, data: '2026-10-13', quantidade: -5, custo: 0, cmc: 0, saldo: -5, saldoTotal: -5 }),
+    mov({ id: 2, data: '2026-10-14', quantidade: 10, custo: 4, cmc: 4, saldo: 5, saldoTotal: 5 }),
+  ], { saldo: 0, cmc: 0 })
+  assert.deepEqual(r.revisoes, [])
+  assert.equal(r.final.cmc, 4)
+  // com C0 > 0 continua a E9
+  const e9 = refazerCadeia([mov({ id: 2, data: '2026-10-14', quantidade: 10, custo: 4 })], { saldo: -5, cmc: 2 })
+  assert.equal(e9.final.cmc, 6) // (−5·2 + 10·4)/5 = 6
+})
+
+test('entrada de OP fica estimada quando algum consumo da OP foi estimado', () => {
+  const r = refazerCadeia([mov({ id: 13, data: '2026-10-10', tipo: 'PRD', origem: 'PRODUCAO', ref: 'op1', quantidade: 2, custo: 5, cmc: 5, saldo: 2, saldoTotal: 2 })],
+    { saldo: 0, cmc: 0 }, { valorConsumoOP: () => 10, consumoEstimadoOP: () => true })
+  assert.equal(r.revisoes[0]?.custo, 5)
+  assert.equal(r.revisoes[0]?.estimado, true)
+  assert.equal(r.final.cmc, 5, 'o custo estimado ainda forma o CMC')
+})

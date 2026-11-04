@@ -5,9 +5,12 @@
 -- ~/Projects/omie-rea/regras/estoque-saldo-e-custo.md):
 --   E9  entrada: CMC₁ = (S₀·C₀ + q·vu)/(S₀+q), também com S₀ < 0;  E10 S₀+q = 0 ou resultado ≤ 0 → CMC₁ = vu;
 --   E12 saída sai pelo CMC vigente e não o altera.  CMC por loja × produto, 6 casas.
+--   DESVIO CONSCIENTE DA E9 (decisão do dono, 04/11/2026): sem custo conhecido (CMC anterior = 0), a 1ª entrada com custo
+--   vira o CMC (= vu), mesmo com S₀ < 0; com C₀ > 0 continua E9/E10. registrar_movimento (317) faz igual ao vivo.
 --   Ordem da cadeia = (data efetiva, id). Movimento e seu estorno saem juntos do custo médio (o saldo físico conta os
 --   dois; o estorno vale o custo do movimento estornado). Entrada sem custo = estimada (CMC vigente, não muda o CMC).
---   TRF não muda custo. Entrada de OP = Σ consumos (efetivos) da mesma OP ÷ quantidade produzida. Devolução ao fornecedor
+--   TRF não muda custo. Entrada de OP = Σ consumos (efetivos) da mesma OP ÷ quantidade produzida (estimada se algum
+--   consumo for estimado). Devolução ao fornecedor
 --   sai ao custo da entrada (231). Consumo de insumo com CMC 0 usa o último custo conhecido, estimado (314).
 --
 -- Estado inicial de cada produto = movimentos efetivos antes de "desde" (saldo = soma; CMC = cmc_apos do último que não
@@ -25,6 +28,17 @@
 -- Teste: scripts/testes-sql/312_reprocessar_custo.sql (cópia local, BEGIN … ROLLBACK). Aplicar com -1, depois de 01:00:
 --   node scripts/aplicar-migration.mjs supabase/migrations/312_reprocessar_custo.sql
 -- Conferir: \df reprocessar_custo (1 overload).
+
+-- Menor data de onde o custo dos produtos precisa ser refeito: "desde", recuado até o movimento estornado de um par
+-- (movimento + estorno) que cruza "desde" — o par sai junto da cadeia. Nunca antes do 1º dia aberto (p_aberto).
+create or replace function public._recuo_pares(p_loja bigint, p_produtos bigint[], p_desde date, p_aberto date default null)
+returns date
+language sql stable security definer set search_path = public set enable_seqscan = off as $$
+  select greatest(least(p_desde, min(o.data_ref)), coalesce(p_aberto, '-infinity'::date))
+    from estoque_movimentos_efetivo e join estoque_movimentos_efetivo o on o.id = e.reverses_id
+   where e.loja_id = p_loja and e.codigo_produto = any(p_produtos) and e.data_ref >= p_desde and o.data_ref < p_desde
+$$;
+revoke all on function public._recuo_pares(bigint, bigint[], date, date) from public, anon, authenticated, service_role;
 
 -- Produtos cuja cadeia de custo depende dos pedidos: os pedidos (nível 0) e, em cascata, os produtos feitos por OP
 -- (PRD/PRODUCAO) que consumiram um produto da fila a partir de p_desde. Nível = maior distância; para em 20 (ciclo = true).
@@ -85,7 +99,7 @@ declare
   v_desde date; v_aberto date; v_fech date; v_avisos jsonb := '[]'::jsonb;
   v_todos bigint[]; v_nivel int[]; v_ciclo boolean; p bigint; v_ord bigint[];
   v_dp date; v_s numeric; v_scusto numeric; v_c numeric; v_ult numeric; v_loc jsonb; v_custos_par jsonb;
-  m record; v_q numeric; v_custo numeric; v_est boolean; v_vu numeric; v_w numeric; v_val numeric; v_sl numeric;
+  m record; v_q numeric; v_op_est boolean; v_recuo date; v_custo numeric; v_est boolean; v_vu numeric; v_w numeric; v_val numeric; v_sl numeric;
   v_n_rev int := 0; v_rev_prod int; v_cascata jsonb := '[]'::jsonb; v_tem boolean; v_old estoque_custos%rowtype;
 begin
   select modo_estoque into v_modo from lojas where id = p_loja;
@@ -110,7 +124,8 @@ begin
   end if;
 
   -- fila com cascata (nível = maior distância a partir dos produtos pedidos) e travas em ordem de código, antes de ler
-  select c.produtos, c.niveis, c.ciclo into v_todos, v_nivel, v_ciclo from _cascata_custo(p_loja, p_produtos, v_desde) c;
+  v_recuo := _recuo_pares(p_loja, p_produtos, v_desde, v_aberto);
+  select c.produtos, c.niveis, c.ciclo into v_todos, v_nivel, v_ciclo from _cascata_custo(p_loja, p_produtos, v_recuo) c;
   if v_ciclo then
     v_avisos := v_avisos || to_jsonb('A cascata de receitas parou em 20 níveis (receita em ciclo?). Confira as fichas técnicas.'::text);
   end if;
@@ -174,15 +189,16 @@ begin
       elsif v_q > 0 then
         v_vu := null;
         if m.tipo = 'PRD' and m.origem = 'PRODUCAO' then
-          select sum(-x.quantidade * coalesce(x.custo_unitario, 0)) into v_val from estoque_movimentos_efetivo x
+          select sum(-x.quantidade * coalesce(x.custo_unitario, 0)), coalesce(bool_or(x.custo_estimado), false) into v_val, v_op_est
+            from estoque_movimentos_efetivo x
            where x.loja_id = p_loja and x.origem = 'PRODUCAO' and x.ref = m.ref and x.tipo = 'PRD' and x.quantidade < 0;
-          if coalesce(v_val, 0) > 0 then v_vu := round(round(v_val, 6) / v_q, 6); end if;
+          if coalesce(v_val, 0) > 0 then v_vu := round(round(v_val, 6) / v_q, 6); v_est := v_op_est; end if;
         elsif not m.custo_estimado and coalesce(m.custo_original, 0) > 0 then
           v_vu := m.custo_original;
         end if;
         if v_vu is not null and v_vu > 0 then
           v_custo := v_vu;
-          if v_scusto + v_q = 0 then v_c := v_vu;
+          if v_c <= 0 or v_scusto + v_q = 0 then v_c := v_vu;  -- sem custo conhecido: reset (decisão do dono)
           else
             v_w := round((v_scusto * v_c + v_q * v_vu) / (v_scusto + v_q), 6);
             v_c := case when v_w <= 0 then v_vu else v_w end;

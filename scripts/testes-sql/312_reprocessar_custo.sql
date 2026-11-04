@@ -101,6 +101,9 @@ begin
   assert (select custo_unitario from estoque_movimentos_efetivo where reverses_id = v_fardo) = 60, 'estorno vale o custo da entrada estornada';
   assert (select saldo_total from estoque_custos where loja_id = 99320 and codigo_produto = GELO) = 15, 'saldo = soma do ledger';
   -- estorno feito hoje com "desde" depois da entrada estornada: o reprocessamento recua até ela
+  assert _recuo_pares(99320, array[GELO], (now() at time zone 'America/Sao_Paulo')::date, null) = '2026-10-21',
+    'recuo mínimo calculado antes da cascata/trava = data da entrada estornada';
+  assert _recuo_pares(99320, array[GELO], (now() at time zone 'America/Sao_Paulo')::date, '2026-11-01') = '2026-11-01', 'nunca antes do 1º dia aberto';
   r := reprocessar_custo(99320, array[GELO], (now() at time zone 'America/Sao_Paulo')::date, 'teste recuo');
   assert (r->>'movimentos_revisados')::int = 0, 'recuo até o par não muda nada: ' || r::text;
   assert (select cmc from estoque_custos where loja_id = 99320 and codigo_produto = GELO) = 3.93, 'CMC continua sem o fardo';
