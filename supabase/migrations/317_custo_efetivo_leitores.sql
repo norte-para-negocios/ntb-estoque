@@ -157,7 +157,10 @@ begin
     v_q := m.quantidade;
     if m.tipo = 'TRF' then
       null;                                                             -- transferência não muda saldo total nem custo
-    elsif v_q > 0 and not coalesce(m.custo_estimado, false) and coalesce(m.custo_unitario, 0) > 0 then
+    -- mesma regra da cadeia (312): entrada de OP entra no custo médio pelo custo dela mesmo estimada (algum insumo
+    -- estimado); as outras entradas só com custo informado (estimada = entrou ao CMC vigente, não muda o custo)
+    elsif v_q > 0 and coalesce(m.custo_unitario, 0) > 0
+          and (not coalesce(m.custo_estimado, false) or (m.tipo = 'PRD' and m.origem = 'PRODUCAO')) then
       if v_c <= 0 or v_s + v_q = 0 then v_c := m.custo_unitario;         -- 317: sem custo conhecido, reset
       else
         v_novo := round((v_s * v_c + v_q * m.custo_unitario) / (v_s + v_q), 6);

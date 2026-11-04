@@ -82,5 +82,23 @@ begin
   perform reprocessar_custo(99318, array[8000000031815::bigint], d - 3, 'fardo');
   assert (select cmc from posicao_proprio_em_data(99318, current_date) where codigo_produto = 8000000031815) = 2
      and (select cmc from estoque_custos where loja_id = 99318 and codigo_produto = 8000000031815) = 2, 'par fora do Bloco H e da cadeia';
+
+  -- 5) prato de OP com um insumo sem custo: entrada estimada mas com custo > 0 — Bloco H = estoque_custos
+  insert into produtos (loja_id, codigo_produto, codigo, descricao, unidade, tipo_item) values
+    (99318, 8000000031816, '31816', 'Farinha 317', 'KG', '00'), (99318, 8000000031817, '31817', 'Corante 317', 'KG', '00'),
+    (99318, 8000000031818, '31818', 'Pão 317', 'UN', '04');
+  declare v_f2 bigint; begin
+    insert into fichas_tecnicas (loja_id, codigo_produto, versao, rendimento) values (99318, 8000000031818, 1, 1) returning id into v_f2;
+    insert into ficha_tecnica_itens (ficha_id, loja_id, codigo_insumo, quantidade_liquida, ordem) values
+      (v_f2, 99318, 8000000031816, 1, 1), (v_f2, 99318, 8000000031817, 1, 2);
+  end;
+  perform registrar_movimento(99318, L, 8000000031816, 'ENT', 'COMPRA', 'f1', 10, 2.00);
+  perform produzir(99318, 8000000031818, 1, L, L, 'op-pao', null, null);
+  assert (select custo_estimado and custo_unitario = 2 from estoque_movimentos_efetivo where ref = 'op-pao' and codigo_produto = 8000000031818),
+    'entrada do pão estimada (corante sem custo), a R$ 2';
+  assert (select cmc from estoque_custos where loja_id = 99318 and codigo_produto = 8000000031818) = 2, 'estoque_custos = 2';
+  assert (select cmc from posicao_proprio_em_data(99318, current_date) where codigo_produto = 8000000031818) = 2, 'Bloco H = estoque_custos (2)';
+  r := reprocessar_custo(99318, array[8000000031816::bigint, 8000000031817], current_date - 1, 'confere pão');
+  assert (select cmc from estoque_custos where loja_id = 99318 and codigo_produto = 8000000031818) = 2, 'cadeia também dá 2';
   raise notice '317 LEITORES CUSTO EFETIVO OK';
 end $$;
