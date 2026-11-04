@@ -37,13 +37,13 @@ begin
   assert e.custo_unitario = 4 and not e.custo_estimado and not e.revisado, 'cebola com custo: sem revisão';
   assert (select custo_unitario from ordens_producao_proprio_itens where ordem_id = v_ordem and codigo_insumo = AZ) = 6, 'item da OP com o custo usado';
   select * into e from estoque_movimentos_efetivo where loja_id = 99314 and codigo_produto = MOQ and ref = 'op-314';
-  assert e.custo_unitario = 3.8 and not e.custo_estimado, 'entrada do prato com custo';
+  assert e.custo_unitario = 3.8 and e.custo_estimado, 'entrada do prato com custo, estimada (insumo estimado)';
   assert (select cmc from estoque_custos where loja_id = 99314 and codigo_produto = AZ) = 0, 'saída não muda o CMC do insumo';
   -- repetir a mesma OP não grava nada de novo
   r := produzir(99314, MOQ, 2, L, L, 'op-314', null, null);
   assert (r->>'duplicado')::boolean, 'OP repetida é duplicada';
-  assert (select count(*) from estoque_mov_revisao rv join estoque_movimentos m on m.id = rv.movimento_id where m.loja_id = 99314) = 2,
-    'só as 2 revisões (azeite e sal)';
+  assert (select count(*) from estoque_mov_revisao rv join estoque_movimentos m on m.id = rv.movimento_id where m.loja_id = 99314) = 3,
+    'só as 3 revisões (azeite, sal e a entrada do prato)';
 
   -- 2) consumo_por_receita (venda que baixa pela receita): mesma regra
   r := consumo_por_receita(99314, MOQ, 1, L, 'ped-1', null, 0, 'VENDA');
@@ -58,5 +58,6 @@ begin
   select * into e from estoque_movimentos_efetivo where loja_id = 99314 and codigo_produto = MOQ and ref = 'op-314';
   -- (0,5 × 8 + 0 + 0,2 × 4) = 4,8 por moqueca
   assert e.custo_unitario = 4.8, 'prato recalculado em cascata: ' || e.custo_unitario;
+  assert e.custo_estimado, 'sal continua sem custo: prato segue estimado';
   raise notice '314 OP CUSTO FALLBACK OK';
 end $$;

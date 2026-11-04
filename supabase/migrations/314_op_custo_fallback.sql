@@ -45,7 +45,7 @@ AS $function$
 declare
   v_modo text; v_ficha fichas_tecnicas%rowtype; v_ex ordens_producao_proprio%rowtype; v_ids bigint[]; r record; v_res jsonb;
   v_total numeric := 0; v_custo_un numeric; v_ordem bigint; v_out jsonb; v_itens jsonb := '[]'::jsonb;
-  v_cu numeric; v_lote uuid := gen_random_uuid(); -- 314
+  v_cu numeric; v_lote uuid := gen_random_uuid(); v_algum_est boolean := false; v_m estoque_movimentos%rowtype; -- 314
 begin
   select modo_estoque into v_modo from lojas where id = p_loja;
   if v_modo is distinct from 'proprio' then raise exception 'A loja % não usa estoque próprio', p_loja using errcode = '22023'; end if;
@@ -74,6 +74,7 @@ begin
     v_res := registrar_movimento(p_loja, p_local_consumo, r.codigo_insumo, 'PRD', 'PRODUCAO', p_ref, -r.quantidade, null, p_user,
                                  'Produção de ' || _rotulo_produto(p_loja, p_produto), 0, null, null, null);
     v_cu := _custo_consumo_sem_cmc(v_res, v_lote); -- 314: insumo sem custo médio usa o último custo conhecido (estimado)
+    if coalesce((v_res ->> 'cmc')::numeric, 0) <= 0 then v_algum_est := true; end if;
     v_total := v_total + r.quantidade * v_cu;
     insert into ordens_producao_proprio_itens (ordem_id, codigo_insumo, quantidade, custo_unitario, movimento_id)
     values (v_ordem, r.codigo_insumo, r.quantidade, v_cu, (v_res ->> 'id')::bigint);
@@ -83,6 +84,12 @@ begin
   v_custo_un := round(v_total / p_quantidade, 6);
   v_out := registrar_movimento(p_loja, p_local_destino, p_produto, 'PRD', 'PRODUCAO', p_ref, p_quantidade,
                                case when v_custo_un > 0 then v_custo_un else null end, p_user, coalesce(p_obs, 'Produção de lote'), 0, null, null, null);
+  -- 314: algum insumo saiu com custo estimado → a entrada do prato também fica estimada (igual à cadeia do 312)
+  select * into v_m from estoque_movimentos where id = (v_out ->> 'id')::bigint;
+  if v_algum_est and not v_m.custo_estimado then
+    perform _revisar_movimento(v_m.id, v_lote, v_m.data_ref, v_m.custo_unitario, v_m.cmc_apos, v_m.saldo_apos, v_m.saldo_total_apos, true,
+                               'custo estimado: algum insumo da OP saiu com custo estimado');
+  end if;
   update ordens_producao_proprio set custo_total = round(v_total, 6), custo_unitario = v_custo_un where id = v_ordem;
   return jsonb_build_object('ok', true, 'duplicado', false, 'ordem_id', v_ordem, 'custo_total', round(v_total, 6), 'custo_unitario', v_custo_un,
                             'saldo_produto', (v_out ->> 'saldo')::numeric, 'cmc_produto', (v_out ->> 'cmc')::numeric, 'itens', v_itens);
