@@ -78,7 +78,8 @@ export default async function ProdutoEstoquePage({ params }: { params: Promise<{
     }))
   } else {
     const supabase = await createClient()
-    const { data } = await supabase.from('estoque_movimentos')
+    // 315: custo e data efetivos (última revisão: nota com a data dela, cascata de OP)
+    const { data } = await supabase.from('estoque_movimentos_efetivo')
       .select('id, data_ref, codigo_local_estoque, quantidade, custo_unitario, cmc_apos, saldo_apos, origem, ref, reverses_id')
       .eq('loja_id', lojaId).eq('codigo_produto', cod).order('id', { ascending: false }).limit(1000)
     const rows = (data ?? []) as { id: number; data_ref: string; codigo_local_estoque: number; quantidade: number; custo_unitario: number | null; cmc_apos: number | null; saldo_apos: number; origem: string; ref: string; reverses_id: number | null }[]

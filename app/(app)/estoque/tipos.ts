@@ -17,4 +17,6 @@ export type Movimento = {
   saldoApos: number; cmcApos: number | null; local: string; codigoLocal: number; user: string | null
   obs: string | null; criado: string; estornado: boolean; ehEstorno: boolean; custoEstimado: boolean
   codigoProduto: number; produto?: string
+  /** 311: custo revisado depois do lançamento (nota com a data dela, cascata de OP); data da revisão */
+  revisado?: boolean; revisadoEm?: string | null
 }

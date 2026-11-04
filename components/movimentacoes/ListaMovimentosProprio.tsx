@@ -13,6 +13,7 @@ import { TIPOS_LEDGER } from '@/components/movimentacoes/FiltroTipoLedger'
 import { DetalheKardex } from '@/components/movimentacoes/DetalheKardex'
 import { ROTULO_ORIGEM, type LinhaKardex } from '@/lib/estoque/kardex-tipos'
 import { formatCustoUnit } from '@/lib/num-br'
+import { rotuloCustoRevisado } from '@/lib/estoque/custo-revisado'
 
 // Movimento antigo guarda o id do usuário; se o perfil não existe mais, mostra isso em vez de um código longo.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -113,7 +114,12 @@ export function ListaMovimentosProprio({ linhas, podeEstornar }: { linhas: Linha
     },
     { label: 'Usuário', larguraDesktop: 'w-32', render: (m: LinhaKardex) => <span className="truncate text-[13px] text-text-muted">{nomeUsuario(m)}</span> },
     { label: 'Saldo após', sort: 'saldo', alinhar: 'right' as const, larguraDesktop: 'w-28', render: (m: LinhaKardex) => <span className={`num text-[13px] ${m.saldo_apos < 0 ? 'font-semibold text-err' : 'text-text'}`}>{fmtQtd(m.saldo_apos)}</span> },
-    { label: 'Custo', sort: 'custo', alinhar: 'right' as const, larguraDesktop: 'w-28', render: (m: LinhaKardex) => <span className="num text-[13px] text-text-muted">{formatCustoUnit(m.custo)}</span> },
+    { label: 'Custo', sort: 'custo', alinhar: 'right' as const, larguraDesktop: 'w-28', render: (m: LinhaKardex) => (
+      <span className="num text-[13px] text-text-muted">
+        {formatCustoUnit(m.custo)}
+        {rotuloCustoRevisado(m.revisado, m.revisado_em) && <span className="block text-[11px]">{rotuloCustoRevisado(m.revisado, m.revisado_em)}</span>}
+      </span>
+    ) },
   ]
 
   return (
