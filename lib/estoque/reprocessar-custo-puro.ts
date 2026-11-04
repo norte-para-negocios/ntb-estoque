@@ -44,14 +44,16 @@ export type Resultado = {
 const r6 = (n: number) => Math.round(n * 1e6) / 1e6
 
 // Aritmética decimal exata em micro-unidades (6 casas), igual ao numeric do Postgres: arredonda meio para longe do zero.
-const M = 1_000_000n
+const B0 = BigInt(0)
+const B2 = BigInt(2)
+const M = BigInt(1_000_000)
 const micro = (n: number) => BigInt(Math.round(n * 1e6))
 const deMicro = (n: bigint) => Number(n) / 1e6
 function divArred(n: bigint, d: bigint): bigint {
-  const neg = (n < 0n) !== (d < 0n)
-  const an = n < 0n ? -n : n
-  const ad = d < 0n ? -d : d
-  const q = (2n * an + ad) / (2n * ad)
+  const neg = (n < B0) !== (d < B0)
+  const an = n < B0 ? -n : n
+  const ad = d < B0 ? -d : d
+  const q = (B2 * an + ad) / (B2 * ad)
   return neg ? -q : q
 }
 /** round((s·c + q·v)/(s+q), 6) */
@@ -69,7 +71,7 @@ function ehEntradaDeOP(m: Mov) {
 
 /** Σ (quantidade × custo efetivo) dos consumos (PRD negativos) de uma OP. */
 export function valorConsumosDaOP(consumos: Mov[], ref: string): number {
-  let v = 0n
+  let v = B0
   for (const c of consumos) {
     if (c.ref === ref && c.tipo === 'PRD' && c.origem === 'PRODUCAO' && c.quantidade < 0) v += -micro(c.quantidade) * micro(c.custo ?? 0)
   }
