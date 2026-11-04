@@ -26,13 +26,60 @@
 --   node scripts/aplicar-migration.mjs supabase/migrations/312_reprocessar_custo.sql
 -- Conferir: \df reprocessar_custo (1 overload).
 
+-- Produtos cuja cadeia de custo depende dos pedidos: os pedidos (nível 0) e, em cascata, os produtos feitos por OP
+-- (PRD/PRODUCAO) que consumiram um produto da fila a partir de p_desde. Nível = maior distância; para em 20 (ciclo = true).
+-- Usada por reprocessar_custo e por lancar_compra (313), para travar tudo ANTES de gravar, sempre na mesma ordem.
+create or replace function public._cascata_custo(p_loja bigint, p_produtos bigint[], p_desde date,
+    out produtos bigint[], out niveis int[], out ciclo boolean)
+language plpgsql stable security definer set search_path = public as $$
+declare v_front bigint[]; v_prox bigint[]; v_k int; v_i int; p bigint;
+begin
+  produtos := array(select distinct x from unnest(coalesce(p_produtos, '{}')) x where x is not null order by 1);
+  niveis := array_fill(0, array[cardinality(produtos)]);
+  ciclo := false;
+  v_front := produtos;
+  for v_k in 1..21 loop
+    v_prox := array(
+      select distinct e.codigo_produto
+        from estoque_movimentos_efetivo cns
+        join estoque_movimentos e on e.loja_id = cns.loja_id and e.ref = cns.ref and e.origem = 'PRODUCAO'
+                                 and e.tipo = 'PRD' and e.quantidade > 0
+       where cns.loja_id = p_loja and cns.codigo_produto = any(v_front) and cns.origem = 'PRODUCAO' and cns.tipo = 'PRD'
+         and cns.quantidade < 0 and cns.data_ref >= p_desde and e.codigo_produto <> cns.codigo_produto
+       order by 1);
+    exit when cardinality(v_prox) = 0;
+    if v_k = 21 then ciclo := true; exit; end if;
+    foreach p in array v_prox loop
+      v_i := array_position(produtos, p);
+      if v_i is null then produtos := produtos || p; niveis := niveis || v_k; else niveis[v_i] := v_k; end if;
+    end loop;
+    v_front := v_prox;
+  end loop;
+end $$;
+revoke all on function public._cascata_custo(bigint, bigint[], date) from public, anon, authenticated, service_role;
+
+-- Trava o custo de cada produto (advisory por loja × produto + linha de estoque_custos FOR UPDATE) em ordem de código:
+-- a mesma ordem do _travar_custos de produzir/consumo_por_receita, então nota × OP não se travam em cruz.
+create or replace function public._travar_custo_produtos(p_loja bigint, p_produtos bigint[])
+returns void
+language plpgsql security definer set search_path = public as $$
+declare p bigint;
+begin
+  for p in select distinct x from unnest(coalesce(p_produtos, '{}')) x where x is not null order by 1 loop
+    perform pg_advisory_xact_lock(hashtextextended(format('custo:%s:%s', p_loja, p), 7311));
+    insert into estoque_custos (loja_id, codigo_produto) values (p_loja, p) on conflict do nothing;
+    perform 1 from estoque_custos where loja_id = p_loja and codigo_produto = p for update;
+  end loop;
+end $$;
+revoke all on function public._travar_custo_produtos(bigint, bigint[]) from public, anon, authenticated, service_role;
+
 create or replace function public.reprocessar_custo(p_loja bigint, p_produtos bigint[], p_desde date, p_motivo text)
 returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
   v_modo text; v_lote uuid := gen_random_uuid();
   v_desde date; v_aberto date; v_fech date; v_avisos jsonb := '[]'::jsonb;
-  v_todos bigint[]; v_nivel int[]; v_front bigint[]; v_prox bigint[]; v_i int; v_k int; p bigint; v_ord bigint[];
+  v_todos bigint[]; v_nivel int[]; v_ciclo boolean; p bigint; v_ord bigint[];
   v_dp date; v_s numeric; v_scusto numeric; v_c numeric; v_ult numeric; v_loc jsonb; v_custos_par jsonb;
   m record; v_q numeric; v_custo numeric; v_est boolean; v_vu numeric; v_w numeric; v_val numeric; v_sl numeric;
   v_n_rev int := 0; v_rev_prod int; v_cascata jsonb := '[]'::jsonb; v_tem boolean; v_old estoque_custos%rowtype;
@@ -58,37 +105,12 @@ begin
     v_desde := v_aberto;
   end if;
 
-  -- fila com cascata (nível = maior distância a partir dos produtos pedidos)
-  v_todos := array(select distinct x from unnest(p_produtos) x where x is not null order by 1);
-  v_nivel := array_fill(0, array[cardinality(v_todos)]);
-  v_front := v_todos;
-  for v_k in 1..21 loop
-    v_prox := array(
-      select distinct e.codigo_produto
-        from estoque_movimentos_efetivo cns
-        join estoque_movimentos e on e.loja_id = cns.loja_id and e.ref = cns.ref and e.origem = 'PRODUCAO'
-                                 and e.tipo = 'PRD' and e.quantidade > 0
-       where cns.loja_id = p_loja and cns.codigo_produto = any(v_front) and cns.origem = 'PRODUCAO' and cns.tipo = 'PRD'
-         and cns.quantidade < 0 and cns.data_ref >= v_desde and e.codigo_produto <> cns.codigo_produto
-       order by 1);
-    exit when cardinality(v_prox) = 0;
-    if v_k = 21 then
-      v_avisos := v_avisos || to_jsonb('A cascata de receitas parou em 20 níveis (receita em ciclo?). Confira as fichas técnicas.'::text);
-      exit;
-    end if;
-    foreach p in array v_prox loop
-      v_i := array_position(v_todos, p);
-      if v_i is null then v_todos := v_todos || p; v_nivel := v_nivel || v_k; else v_nivel[v_i] := v_k; end if;
-    end loop;
-    v_front := v_prox;
-  end loop;
-
-  -- travas em ordem de código, antes de ler
-  foreach p in array array(select x from unnest(v_todos) x order by 1) loop
-    perform pg_advisory_xact_lock(hashtextextended(format('custo:%s:%s', p_loja, p), 7311));
-    insert into estoque_custos (loja_id, codigo_produto) values (p_loja, p) on conflict do nothing;
-    perform 1 from estoque_custos where loja_id = p_loja and codigo_produto = p for update;
-  end loop;
+  -- fila com cascata (nível = maior distância a partir dos produtos pedidos) e travas em ordem de código, antes de ler
+  select c.produtos, c.niveis, c.ciclo into v_todos, v_nivel, v_ciclo from _cascata_custo(p_loja, p_produtos, v_desde) c;
+  if v_ciclo then
+    v_avisos := v_avisos || to_jsonb('A cascata de receitas parou em 20 níveis (receita em ciclo?). Confira as fichas técnicas.'::text);
+  end if;
+  perform _travar_custo_produtos(p_loja, v_todos);
 
   v_ord := array(select t.p from unnest(v_todos, v_nivel) as t(p, n) order by t.n, t.p);
   foreach p in array v_ord loop

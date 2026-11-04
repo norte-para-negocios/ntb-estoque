@@ -7,7 +7,8 @@ insert into lojas (id, cnpj, nome, ativo, modo_estoque) values (99313, '00000000
 insert into local_estoques (loja_id, codigo_local_estoque, descricao, padrao) values (99313, 8000000031301, 'Estoque', 'S');
 insert into produtos (loja_id, codigo_produto, codigo, descricao, unidade, tipo_item) values
   (99313, 8000000031311, '31311', 'Coca Zero 313', 'UN', '00'),
-  (99313, 8000000031312, '31312', 'Guaraná 313', 'UN', '00');
+  (99313, 8000000031312, '31312', 'Guaraná 313', 'UN', '00'),
+  (99313, 8000000031300, '31300', 'Drink 313 (código menor que o insumo)', 'UN', '04');
 
 do $$
 declare L bigint := 8000000031301; COCA bigint := 8000000031311; GUA bigint := 8000000031312;
@@ -76,5 +77,17 @@ begin
   r := lancar_compra(jsonb_build_object('loja_id', 99313, 'chave_acesso', CH3, 'numero', '5', 'emissao', '2026-10-11',
          'itens', jsonb_build_array(jsonb_build_object('linha', 1, 'quantidade', 1, 'valor_unitario', 3, 'valor_total', 3, 'codigo_produto', GUA))), L, null);
   assert r->>'data_entrada' = '2026-10-12', 'dSaiEnt (layout antigo) também vale: ' || r::text;
+
+  -- 6) trava antes de gravar: o drink feito com guaraná (OP em 13/10) fica travado pela nota do guaraná, em ordem de
+  --    código (o drink tem código MENOR que o insumo: a mesma ordem do _travar_custos de produzir)
+  perform registrar_movimento(99313, L, GUA, 'PRD', 'PRODUCAO', 'op-drink', -1, null, null, null, 0, null, null, '2026-10-13');
+  perform registrar_movimento(99313, L, 8000000031300, 'PRD', 'PRODUCAO', 'op-drink', 1, null, null, null, 0, null, null, '2026-10-13');
+  r := lancar_compra(jsonb_build_object('loja_id', 99313, 'numero', '6', 'emissao', '2026-10-12',
+         'itens', jsonb_build_array(jsonb_build_object('linha', 1, 'quantidade', 2, 'valor_unitario', 2, 'valor_total', 4, 'codigo_produto', GUA))), L, null);
+  assert (select count(*) from pg_locks where locktype = 'advisory' and pid = pg_backend_pid()
+           and ((classid::bigint << 32) | objid::bigint) = hashtextextended(format('custo:%s:%s', 99313, 8000000031300), 7311)) = 1,
+    'o prato da cascata fica travado pela nota';
+  assert (select custo_unitario from estoque_movimentos_efetivo where loja_id = 99313 and ref = 'op-drink' and quantidade > 0) > 0,
+    'e o custo dele foi refeito';
   raise notice '313 COMPRA DATA DA NOTA OK';
 end $$;

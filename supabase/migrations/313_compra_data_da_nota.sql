@@ -161,6 +161,11 @@ begin
   -- loja, nunca em mês fechado (aí o 1º dia aberto, com aviso na compra)
   select de.data, de.aviso into v_data, v_aviso_data
     from _data_entrada_compra(v_loja, v_comp.id, nullif(p_compra->>'data_entrada', '')::date) de;
+  -- 313: trava o custo dos produtos a lançar e dos pratos feitos com eles, em ordem de código, antes de gravar (mesma
+  -- ordem do reprocessamento e de produzir): nota × OP ao mesmo tempo esperam uma pela outra em vez de travar em cruz
+  perform _travar_custo_produtos(v_loja, (select c.produtos from _cascata_custo(v_loja,
+    array(select i.codigo_produto from compras_proprio_itens i where i.compra_id = v_comp.id and not i.lancado and i.codigo_produto is not null),
+    v_data) c));
 
   -- rateio estável: base = valor líquido de TODOS os itens (não depende da ordem de mapeamento)
   select coalesce(sum(valor_total - desconto), 0), count(*) into v_total_liq, v_n from compras_proprio_itens where compra_id = v_comp.id;

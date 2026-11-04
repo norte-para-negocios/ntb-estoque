@@ -29,8 +29,9 @@
 1. **Nota lançada depois de vendas que já consumiram o produto** → as saídas entre a data da nota e hoje ganham o custo novo; o CMV do mês muda; o saldo e o CMC de hoje continuam iguais à soma do ledger. (Task 2/3)
 2. **Prato feito por OP cujo insumo foi revisado** → o custo da entrada do prato na OP e das vendas dele mudam (cascata), sem laço infinito em receita com sub-receita. (Task 2)
 3. **Entrada estornada (fardo errado)** → o par sai da cadeia e o CMC volta ao que seria sem ela. (Task 2)
-4. **Mês fechado** → nada antes do fechamento muda; reprocessar pedido para antes dele é recusado com mensagem. (Task 2)
+4. **Mês fechado** → nada antes do fechamento muda; reprocessar pedido para antes dele começa no 1º dia aberto, com aviso (decisão de 04/11). (Task 2)
 5. **Duas notas reprocessando o mesmo produto ao mesmo tempo** → sem corrida: trava por loja×produto (`pg_advisory_xact_lock`). (Task 2)
+   Nota × OP ao mesmo tempo: `lancar_compra` trava os produtos da nota e da cascata em ordem de código antes de gravar (`_travar_custo_produtos`, mesma ordem de `produzir`); prova em `scripts/testes-sql/313_concorrencia.sh`.
 
 ---
 
