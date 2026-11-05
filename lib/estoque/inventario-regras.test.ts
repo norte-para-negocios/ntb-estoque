@@ -6,6 +6,8 @@ test('lerQuantidade aceita vírgula, ponto e milhar brasileiro, nunca negativo',
   assert.equal(lerQuantidade('1,5'), 1.5)
   assert.equal(lerQuantidade('2.5'), 2.5)
   assert.equal(lerQuantidade('1.234,5'), 1234.5)
+  assert.equal(lerQuantidade('1.500'), 1500) // decisão 05/11: ponto = milhar
+  assert.equal(lerQuantidade('1,234.5'), null)
   assert.equal(lerQuantidade(' 0 '), 0)
   assert.equal(lerQuantidade(''), null)
   assert.equal(lerQuantidade('abc'), null)

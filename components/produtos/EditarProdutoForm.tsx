@@ -7,7 +7,7 @@ import { Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { editarProduto } from '@/lib/actions/produto'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
-import { parseNumBR } from '@/lib/num-br'
+import { formatNumBR, parseNumBR } from '@/lib/num-br'
 import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 
@@ -44,8 +44,8 @@ export function EditarProdutoForm({
   const [tipo, setTipo] = useState(produto.tipoItem ?? '')
   const [unidade, setUnidade] = useState(produto.unidade ?? '')
   const [ncm, setNcm] = useState(produto.ncm ?? '')
-  const [valor, setValor] = useState(produto.valorUnitario != null ? String(produto.valorUnitario) : '')
-  const [minimo, setMinimo] = useState(produto.estoqueMinimo != null ? String(produto.estoqueMinimo) : '')
+  const [valor, setValor] = useState(produto.valorUnitario != null ? formatNumBR(produto.valorUnitario) : '')
+  const [minimo, setMinimo] = useState(produto.estoqueMinimo != null ? formatNumBR(produto.estoqueMinimo) : '')
   const [pdv, setPdv] = useState(produto.pdv)
   const [inativo, setInativo] = useState(produto.inativo)
   const [pending, startTransition] = useTransition()

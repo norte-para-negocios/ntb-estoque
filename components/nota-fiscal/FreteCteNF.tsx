@@ -1,6 +1,7 @@
 'use client'
 
 // Frete (CT-e) da nota de entrada (loja de estoque próprio, Fase B/R13): XML do CT-e ou valor digitado, só antes da entrada.
+import { parseNumBR } from '@/lib/num-br'
 import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { FileUp, Truck } from 'lucide-react'
@@ -33,7 +34,7 @@ export function FreteCteNF({ notaId, ctes, editavel }: { notaId: number; ctes: C
     start(async () => feito(await importarCteNF(notaId, xml), 'CT-e ligado à nota'))
   }
   function salvarManual() {
-    const v = Number(valor.replace(/\./g, '').replace(',', '.'))
+    const v = parseNumBR(valor) ?? NaN
     start(async () => { const r = await informarFreteNF(notaId, { valor: v, transportadora: transp, numero }); feito(r, 'Frete informado'); if (!('error' in r)) { setManual(false); setValor('') } })
   }
   return (

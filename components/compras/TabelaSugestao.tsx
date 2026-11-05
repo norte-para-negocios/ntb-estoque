@@ -1,5 +1,6 @@
 'use client'
 
+import { parseNumBR } from '@/lib/num-br'
 import { Fragment, useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -36,7 +37,7 @@ export function TabelaSugestao({ linhas, diasAnalise, diasEstimativa, base, pode
   const marcar = podeCriarPedido || podeCriarRequisicao
   const selecionaveis = useMemo(() => linhas.filter((l) => l.acao === 'comprar' && l.sugestao > 0), [linhas])
   const qtdDe = (l: LinhaSugestao) => {
-    const v = Number((qtd[l.codigoProduto] ?? '').replace(',', '.'))
+    const v = parseNumBR(qtd[l.codigoProduto] ?? '') ?? 0
     return qtd[l.codigoProduto] != null && Number.isFinite(v) ? v : l.sugestao
   }
   const escolhidas = selecionaveis.filter((l) => sel[l.codigoProduto] && qtdDe(l) > 0)

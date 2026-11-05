@@ -172,7 +172,7 @@ function useOP(op: OPData) {
     if (Number.isNaN(num)) num = 0
     num += delta
     if (num < 0) num = 0
-    setQuantidade(String(num))
+    setQuantidade(formatNumBR(num))
     startTransition(async () => {
       await setQuantidadeOP(op.id, num)
       toast.success('Quantidade salva')

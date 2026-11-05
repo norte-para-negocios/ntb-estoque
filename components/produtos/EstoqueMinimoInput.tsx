@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from 'react'
 import { setEstoqueMinimo } from '@/lib/actions/produto-minimo'
-import { parseNumBR } from '@/lib/num-br'
+import { formatNumBR, parseNumBR } from '@/lib/num-br'
 import { toast } from 'sonner'
 
 export function EstoqueMinimoInput({
@@ -18,7 +18,7 @@ export function EstoqueMinimoInput({
 }) {
   // Mostra o valor EFETIVO preenchido: override manual tem prioridade; senao o do Omie.
   const efetivo = valorManual != null ? valorManual : valorOmie
-  const inicial = efetivo != null ? String(efetivo) : ''
+  const inicial = efetivo != null ? formatNumBR(efetivo) : ''
   const [valor, setValor] = useState(inicial)
   const salvoRef = useRef(inicial)
   const [pending, startTransition] = useTransition()

@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowDownToLine, ArrowLeftRight, BellRing, SlidersHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
+import { parseNumBR } from '@/lib/num-br'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { btnClass, btnLinhaClass, RotuloAcao, type BtnVariant } from '@/components/ui-kit/Button'
@@ -167,7 +168,8 @@ export function ModalAjuste({ produto, locais, saldos, localInicial, ...g }: { p
   const [perda, setPerda] = useState(false)
   const { pending, enviar } = useEnvio(() => { setOpen(false); setValor(''); setMotivo(''); setPerda(false) })
   const atual = saldos.find((s) => s.codigoLocal === local)?.saldo ?? 0
-  const n = Number(valor.replace(',', '.'))
+  // loja Omie: o servidor do Omie lê o texto como sempre; estoque próprio: ponto = milhar (lib/num-br.ts)
+  const n = g.destino === 'omie' ? Number(valor.replace(',', '.')) : (parseNumBR(valor) ?? NaN)
   const previa = valor !== '' && Number.isFinite(n) ? (modo === 'contagem' ? n - atual : n) : null
 
   const omie = g.destino === 'omie'

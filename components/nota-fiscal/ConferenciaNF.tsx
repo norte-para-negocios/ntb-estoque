@@ -8,7 +8,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { SeletorProduto, campoCompra } from '@/components/compras-proprio/SeletorProduto'
 import { buscarProdutosNF, confirmarEntradaNF, criarProdutoParaNF, definirLoteItemNF, marcarConferidaNF, vincularItemNF } from '@/lib/actions/nota-fiscal-proprio'
-import { formatCustoUnit } from '@/lib/num-br'
+import { formatCustoUnit, parseNumBR } from '@/lib/num-br'
 import type { AlertaItem } from '@/lib/estoque/nf-item-regras'
 import { EditorItemNF } from './EditorItemNF'
 import { PainelEntrada, type PassoEntrada } from './PainelEntrada'
@@ -232,7 +232,7 @@ function LinhaItem({ item, editavel, encerrada, locais, extras }: { item: ItemCo
       setTrocando(false); router.refresh()
     })
   }
-  const fatorNum = Number(fator.replace(',', '.')) || 1
+  const fatorNum = parseNumBR(fator) || 1
 
   return (
     <li className="space-y-2 px-4 py-3">

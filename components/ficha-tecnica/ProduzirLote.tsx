@@ -1,5 +1,6 @@
 'use client'
 
+import { parseNumBR } from '@/lib/num-br'
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { CookingPot, TriangleAlert } from 'lucide-react'
@@ -51,7 +52,7 @@ export function ProduzirLote({
   const mapaCmc = useMemo(() => new Map(cmc), [cmc])
   const nome = useMemo(() => new Map(nomes.map((n) => [n.codigoProduto, n])), [nomes])
   const sel = produtos.find((p) => String(p.codigoProduto) === produto)
-  const q = Number(qtd.replace(',', '.'))
+  const q = parseNumBR(qtd) ?? 0
 
   const previa = useMemo(() => {
     if (!sel || !(q > 0)) return null

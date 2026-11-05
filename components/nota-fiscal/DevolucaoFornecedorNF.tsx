@@ -1,5 +1,6 @@
 'use client'
 
+import { parseNumBR } from '@/lib/num-br'
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -14,11 +15,7 @@ import { PainelNfeSaida } from '@/components/nfe-saida/PainelNfeSaida'
 
 const q = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-const lerNum = (t: string) => {
-  const s = t.trim()
-  if (!s) return 0
-  return Number(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s)
-}
+const lerNum = (t: string) => parseNumBR(t) ?? 0 // ponto = milhar, vírgula = decimal (lib/num-br.ts)
 const th = 'whitespace-nowrap px-2.5 py-2 text-left text-[12px] font-semibold text-text-muted'
 
 // Seção da nota (estoque próprio): devolver itens ao fornecedor. Sai do estoque na hora (ao custo da entrada) e fica

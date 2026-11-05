@@ -1,5 +1,6 @@
 'use client'
 
+import { parseNumBR } from '@/lib/num-br'
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCriarDaCentral } from '@/lib/use-criar-da-central'
@@ -17,7 +18,7 @@ const input = 'w-full rounded-[var(--r-md)] bg-surface-2 px-3 py-2'
 type Destino = { id: number; nome: string; natureza: 'transferencia' | 'remessa' }
 type Local = { codigo: number; descricao: string }
 type Item = { produto: ProdutoBusca; quantidade: string }
-const lerNum = (t: string) => { const s = t.trim(); return s ? Number(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s) : 0 }
+const lerNum = (t: string) => parseNumBR(t) ?? 0 // ponto = milhar, vírgula = decimal (lib/num-br.ts)
 
 export function NovaTransferenciaLoja({ destinos, locais }: { destinos: Destino[]; locais: Local[] }) {
   const router = useRouter()

@@ -11,6 +11,7 @@ import { ajuste, entrada, estornar, modoDaLoja } from '@/lib/estoque/ledger'
 import { transferenciaRapida } from '@/lib/estoque/transferencia-proprio'
 import { entradaComLote } from '@/lib/estoque/lotes'
 import { dataCriacaoBahia, hojeBahiaISO } from '@/lib/data-bahia'
+import { lerNumeroBR, MSG_NUMERO_BR } from '@/lib/num-br'
 
 type Resposta = { ok: true; saldo?: number; negativo?: boolean; aviso?: string } | { error: string }
 
@@ -27,10 +28,12 @@ function ref(prefixo: string): string {
   return `${prefixo}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+/** Texto digitado → número pela regra única (ponto = milhar, vírgula = decimal). Vazio = null; formato quebrado = NaN. */
 function numero(v: unknown): number | null {
-  const n = typeof v === 'number' ? v : Number(String(v ?? '').replace(',', '.'))
-  return Number.isFinite(n) ? n : null
+  const n = lerNumeroBR(v)
+  return n == null || Number.isNaN(n) || Number.isFinite(n) ? n : NaN
 }
+const invalido = (n: number | null) => n != null && Number.isNaN(n)
 
 async function descreverProduto(lojaId: number, codigoProduto: number): Promise<string> {
   const { data, error } = await createServiceClient()
@@ -68,8 +71,10 @@ export async function entradaManual(dados: {
   const validade = dados.validade && /^\d{4}-\d{2}-\d{2}$/.test(dados.validade) ? dados.validade : null
   if (dados.validade && !validade) return { error: 'Validade inválida.' }
   const quantidade = numero(dados.quantidade)
+  if (invalido(quantidade)) return { error: `Quantidade: ${MSG_NUMERO_BR}` }
   if (quantidade == null || quantidade <= 0) return { error: 'Informe uma quantidade maior que zero.' }
   const custo = dados.custo === '' || dados.custo == null ? null : numero(dados.custo)
+  if (invalido(custo)) return { error: `Custo: ${MSG_NUMERO_BR}` }
   if (custo != null && custo < 0) return { error: 'O custo não pode ser negativo.' }
   const dia = dados.data?.trim() || null
   if (dia && !(await ehDesenvolvedor())) return { error: 'Lançar com outra data ainda está em teste.' }
@@ -126,9 +131,10 @@ export async function ajusteManual(dados: {
   if ('error' in ctx) return ctx
   if (!dados.motivo?.trim()) return { error: 'Informe o motivo do ajuste.' }
   let delta = numero(dados.diferenca)
+  if (invalido(delta)) return { error: `Diferença: ${MSG_NUMERO_BR}` }
   if (delta == null && dados.novoSaldo != null && dados.novoSaldo !== '') {
     const novo = numero(dados.novoSaldo)
-    if (novo == null) return { error: 'Saldo contado inválido.' }
+    if (novo == null || invalido(novo)) return { error: `Saldo contado inválido. ${MSG_NUMERO_BR}` }
     // Recalcula contra o saldo real do banco, não contra o que a tela mostrava.
     const { data, error } = await createServiceClient()
       .from('estoque_saldos').select('saldo')
@@ -161,6 +167,7 @@ export async function definirMinimo(dados: {
   const ctx = await contexto('Movimentacoes - Criar')
   if ('error' in ctx) return ctx
   const minimo = dados.minimo === '' || dados.minimo == null ? null : numero(dados.minimo)
+  if (invalido(minimo)) return { error: `Mínimo: ${MSG_NUMERO_BR}` }
   if (minimo != null && minimo < 0) return { error: 'O mínimo não pode ser negativo.' }
   const supabase = createServiceClient()
   const { error } = await supabase.from('estoque_saldos').upsert(
@@ -184,6 +191,7 @@ export async function transferirEntreLocais(dados: {
   const ctx = await contexto('Transferencias - Criar')
   if ('error' in ctx) return ctx
   const quantidade = numero(dados.quantidade)
+  if (invalido(quantidade)) return { error: `Quantidade: ${MSG_NUMERO_BR}` }
   if (quantidade == null || quantidade <= 0) return { error: 'Informe uma quantidade maior que zero.' }
   if (dados.de === dados.para) return { error: 'Escolha locais diferentes.' }
   try {

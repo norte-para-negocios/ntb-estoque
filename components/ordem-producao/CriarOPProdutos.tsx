@@ -11,7 +11,7 @@ import { Spinner } from '@/components/ui-kit/Spinner'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { buscarProdutoPorCodigo, type ProdutoBusca } from '@/lib/actions/produtos-search'
 import { criarOrdensProducao, saldoAtualProdutos } from '@/lib/actions/ordem-producao'
-import { parseNumBR } from '@/lib/num-br'
+import { formatNumBR, parseNumBR } from '@/lib/num-br'
 import { gerarDatasOP, type UnidadeOP } from '@/lib/op-recorrencia'
 import { useEstoqueProprio } from '@/components/estoque-proprio/ModoEstoque'
 
@@ -101,7 +101,7 @@ export function CriarOPProdutos({
         if (i.produto.codigo_produto !== cod) return i
         const parsed = parseNumBR(i.quantidade)
         const atual = parsed != null && !Number.isNaN(parsed) ? parsed : 0
-        return { ...i, quantidade: String(Math.max(0, atual + delta)) }
+        return { ...i, quantidade: formatNumBR(Math.max(0, atual + delta)) }
       })
     )
   }

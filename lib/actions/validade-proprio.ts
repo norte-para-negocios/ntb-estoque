@@ -8,6 +8,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { baixarLote } from '@/lib/estoque/lotes'
+import { lerNumeroBR, MSG_NUMERO_BR } from '@/lib/num-br'
 
 type Resposta = { ok: true; aviso?: string } | { error: string }
 
@@ -31,7 +32,8 @@ export async function baixarLoteVencido(dados: { loteId: number; quantidade: num
   const __d = viaDesktop('validade-proprio#baixarLoteVencido', baixarLoteVencido, [dados]); if (__d) return __d as never
   const ctx = await contexto('Movimentacoes - Criar')
   if ('error' in ctx) return ctx
-  const quantidade = Number(String(dados.quantidade ?? '').replace(',', '.'))
+  const quantidade = lerNumeroBR(dados.quantidade) ?? 0 // ponto = milhar, vírgula = decimal
+  if (Number.isNaN(quantidade)) return { error: `Quantidade: ${MSG_NUMERO_BR}` }
   if (!Number.isFinite(quantidade) || quantidade <= 0) return { error: 'Informe uma quantidade maior que zero.' }
   const motivo = dados.motivo?.trim() ?? ''
   if (motivo.length < 3) return { error: 'Informe o motivo da baixa.' }

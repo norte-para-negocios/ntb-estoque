@@ -23,6 +23,7 @@ import { Spinner } from '@/components/ui-kit/Spinner'
 import { Combobox } from '@/components/ui-kit/Combobox'
 import { Info, Plus } from 'lucide-react'
 import { toast } from 'sonner'
+import { MSG_NUMERO_BR, parseNumBR } from '@/lib/num-br'
 import { criarAjusteManual } from '@/lib/actions/movimentacoes'
 import { useCriarDaCentral } from '@/lib/use-criar-da-central'
 
@@ -55,13 +56,18 @@ export function NovoAjusteManual({ locais, produto: produtoFixo, produtos, propr
   const router = useRouter()
 
   function criar() {
-    const qtd = Number(quantidade.replace(',', '.'))
+    // estoque próprio: regra única de número digitado (ponto = milhar); loja Omie segue como era
+    const qtd = proprio ? (parseNumBR(quantidade) ?? 0) : Number(quantidade.replace(',', '.'))
     if (!produto) {
       toast.error('Escolha o produto')
       return
     }
     if (!local) {
       toast.error('Selecione o local de estoque')
+      return
+    }
+    if (Number.isNaN(qtd)) {
+      toast.error(MSG_NUMERO_BR)
       return
     }
     if (!(qtd > 0)) {

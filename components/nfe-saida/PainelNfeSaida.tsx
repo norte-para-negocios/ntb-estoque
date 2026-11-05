@@ -1,5 +1,6 @@
 'use client'
 
+import { parseNumBR } from '@/lib/num-br'
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -144,7 +145,7 @@ function DialogoEmitir({ origem, origemId, rotulo, tpAmb }: { origem: 'devolucao
   const [esp, setEsp] = useState('')
   const [pesoB, setPesoB] = useState('')
   const [obs, setObs] = useState('')
-  const n = (s: string) => Number(s.replace(',', '.')) || null
+  const n = (s: string) => parseNumBR(s) || null
 
   function abrir() {
     setAberto(true); setErro(null); setFaltas(null)

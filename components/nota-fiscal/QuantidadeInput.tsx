@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from 'react'
 import { Minus, Plus } from 'lucide-react'
 import { setQuantidadeNFItem } from '@/lib/actions/nota-fiscal'
-import { parseNumBR } from '@/lib/num-br'
+import { formatNumBR, MSG_NUMERO_BR, parseNumBR } from '@/lib/num-br'
 import { toast } from 'sonner'
 
 export function QuantidadeInput({
@@ -13,14 +13,14 @@ export function QuantidadeInput({
   itemId: number
   valorInicial: number | null
 }) {
-  const [valor, setValor] = useState<string>(valorInicial != null ? String(valorInicial) : '')
+  const [valor, setValor] = useState<string>(valorInicial != null ? formatNumBR(valorInicial) : '')
   const valorSalvo = useRef(valor)
   const [pending, startTransition] = useTransition()
 
   function salvar(v: string) {
     const num = parseNumBR(v)
     if (num != null && (Number.isNaN(num) || num < 0)) {
-      toast.error('Quantidade inválida')
+      toast.error('Quantidade inválida', { description: MSG_NUMERO_BR })
       return
     }
     const anterior = valorSalvo.current
@@ -39,7 +39,7 @@ export function QuantidadeInput({
   function ajustar(delta: number) {
     const atual = parseNumBR(valor) ?? 0
     const novo = Math.max(0, (Number.isNaN(atual) ? 0 : atual) + delta)
-    const str = String(novo)
+    const str = formatNumBR(novo)
     setValor(str)
     salvar(str)
   }

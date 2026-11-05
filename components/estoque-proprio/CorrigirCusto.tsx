@@ -3,6 +3,7 @@
 // Corrigir o custo de um ajuste no Omie ("nosso Omie" Fase 4): prévia (quantidade, custo atual, custo novo,
 // impacto), confirmação explícita e, se o mês já foi enviado à contabilidade, uma segunda confirmação.
 
+import { parseNumBR } from '@/lib/num-br'
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -28,9 +29,8 @@ export function CorrigirCusto({ movimentoId, tipo, quantidade, custoAtual, dataI
   const [pending, start] = useTransition()
   const router = useRouter()
 
-  // "12,50" e "1.234,50" (vírgula decimal) ou "12.5" (ponto decimal, sem vírgula).
-  const t = txt.trim()
-  const novo = Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t)
+  // ponto = milhar, vírgula = decimal (lib/num-br.ts): "12,50", "1.234,50", "1.500"
+  const novo = parseNumBR(txt) ?? NaN
   const invalido = txt ? validarCustoNovo(novo, custoAtual) : 'Informe o custo novo.'
   const imp = !invalido ? impactoCorrecaoCusto({ tipo, quantidade, custoAtual, custoNovo: novo }) : null
   // Fase F: mês com fechamento formal trava; mês antigo (o aviso de sempre) pede a 2ª confirmação.

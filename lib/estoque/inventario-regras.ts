@@ -1,19 +1,18 @@
 // Regras puras do inventário/reposição do estoque próprio (sem banco, testáveis).
 // @ts-expect-error: o import com extensão .ts é exigido pelo node --test (type stripping); o tsc do Next não o aceita
 import { celulaCsv } from '../seguranca/regras.ts'
+// @ts-expect-error: idem
+import { parseNumBR } from '../num-br.ts'
 
 export type ClasseAbc = 'A' | 'B' | 'C'
 
-/** "1.234,5" / "1,5" / "2.5" -> número; vazio ou inválido -> null. Contagem nunca é negativa. */
+/** "1.234,5" / "1,5" / "1.500" (= 1500) / "2.5" (valor de máquina) -> número; vazio ou inválido -> null. Contagem nunca é negativa. */
 export function lerQuantidade(texto: string | number | null | undefined): number | null {
   if (texto == null) return null
   if (typeof texto === 'number') return Number.isFinite(texto) && texto >= 0 ? texto : null
-  const t = texto.trim()
-  if (!t) return null
-  // Formato brasileiro (vírgula decimal, ponto de milhar) ou ponto decimal simples.
-  const normal = /,/.test(t) ? t.replace(/\./g, '').replace(',', '.') : t
-  const n = Number(normal)
-  return Number.isFinite(n) && n >= 0 ? n : null
+  // Regra única do sistema (lib/num-br.ts, decisão de 05/11/2026): ponto = milhar, vírgula = decimal.
+  const n = parseNumBR(texto)
+  return n != null && Number.isFinite(n) && n >= 0 ? n : null
 }
 
 export type ItemContagem = { contado: number | null }

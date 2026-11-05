@@ -1,13 +1,30 @@
-// Parse de número em pt-BR para os inputs de quantidade/mínimo (cozinha digita "1,5").
-// - vazio -> null (o chamador decide se é válido)
-// - com vírgula: trata como pt-BR (remove pontos de milhar, vírgula vira ponto)
-// - sem vírgula: parse direto (cobre o valor programático "1.5" e inteiros)
-// Retorna NaN em entrada inválida; quem chama checa Number.isNaN.
+// Número DIGITADO em pt-BR (quantidade, custo, preço, mínimo). Regra única do sistema, decidida pelo dono e pelo
+// Ramon em 05/11/2026: ponto é só separador de milhar e vírgula é decimal.
+//   "1.500" = 1500 · "1.234,5" = 1234,5 · "1,5" = 1,5 · "1500" = 1500 · "3," = 3 (ainda digitando)
+// Ponto que não pode ser milhar (casas depois do ponto ≠ 3, ou grupo que começa com 0: "3.400000", "1.5", "0.125") é
+// valor de máquina com ponto decimal e segue como decimal (compatível com o que o banco e o String(numero) devolvem).
+// Formato quebrado ("1,234.5", "1.23,4", "1e3") = NaN: quem chama mostra MSG_NUMERO_BR, nunca vira outro número calado.
+// Vazio = null (o chamador decide se é válido).
+export const MSG_NUMERO_BR = 'Número inválido: use vírgula para decimal (1,5) e ponto só para milhar (1.500).'
+
+const RE_INTEIRO_OU_VIRGULA = /^-?(\d+,?\d*|,\d+)$/
+const RE_MILHAR = /^-?[1-9]\d{0,2}(\.\d{3})+(,\d*)?$/
+const RE_PONTO_DECIMAL = /^-?\d+\.\d+$/
+
 export function parseNumBR(v: string): number | null {
-  const t = v.trim()
+  const t = String(v ?? '').replace(/[\s\u00a0]/g, '')
   if (t === '') return null
-  const norm = t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t
-  return Number(norm)
+  if (RE_MILHAR.test(t)) return Number(t.replace(/\./g, '').replace(',', '.'))
+  if (RE_INTEIRO_OU_VIRGULA.test(t)) return Number(t.replace(',', '.'))
+  if (RE_PONTO_DECIMAL.test(t)) return Number(t)
+  return NaN
+}
+
+/** Para server actions: número passa direto; texto segue `parseNumBR`; vazio/nulo = null; inválido = NaN. */
+export function lerNumeroBR(v: unknown): number | null {
+  if (v == null) return null
+  if (typeof v === 'number') return v
+  return parseNumBR(String(v))
 }
 
 // Number/null (ou string numerica vinda do banco, ex.: "3.400000") -> texto pt-BR

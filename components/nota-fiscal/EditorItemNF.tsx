@@ -3,6 +3,7 @@
 // Editor do item da nota de entrada (estoque próprio, Fase B): o que o cartão de recebimento do Omie deixa ajustar por
 // item — quantidade recebida e unidade, local de estoque, CFOP de entrada, "movimenta estoque", "gera conta a pagar",
 // as 8 marcações "é custo de estoque" e as alíquotas de crédito. A prévia usa a mesma conta do lançamento (R15).
+import { parseNumBR } from '@/lib/num-br'
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronDown, ChevronUp, CircleAlert } from 'lucide-react'
@@ -27,7 +28,7 @@ const ORIGEM_CFOP: Record<string, string> = { produto: 'sugerido: mesmo produto 
 const fmtQtd = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 6 })
 const fmtBRL = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const fmtCusto = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 6 })
-const numBR = (s: string) => Number(s.replace(/\./g, '').replace(',', '.'))
+const numBR = (s: string) => parseNumBR(s) ?? 0 // ponto = milhar, vírgula = decimal (lib/num-br.ts)
 
 export function EditorItemNF({ item, locais, editavel }: { item: ItemConferencia; locais: { codigo: number; descricao: string }[]; editavel: boolean }) {
   const router = useRouter()

@@ -18,6 +18,7 @@ import type { AlertaItem, ConfigInicialItem } from '@/lib/estoque/nf-item-regras
 import { casarItem, montarContexto, type Depara, type ProdutoCad } from '@/lib/estoque/nf-conferencia'
 import { espelharNotaNoFrio } from '@/lib/estoque/nf-frio'
 import { avisoReprocessarLocal } from '@/lib/offline/limpar-esquema-puro'
+import { lerNumeroBR, MSG_NUMERO_BR } from '@/lib/num-br'
 
 // Compras / NF-e de entrada do Estoque próprio. Só vale em loja 'proprio'. Toda entrada passa por lancar_compra (ledger).
 
@@ -37,9 +38,21 @@ function atualizarTelas() {
   revalidatePath('/estoque')
 }
 
+// ponto = milhar, vírgula = decimal (lib/num-br.ts); vazio = 0; formato quebrado = NaN (barrado em lancarCompraManual)
 const numero = (v: unknown): number => {
-  const n = typeof v === 'number' ? v : Number(String(v ?? '').replace(',', '.'))
-  return Number.isFinite(n) ? n : 0
+  const n = lerNumeroBR(v)
+  return n == null ? 0 : Number.isFinite(n) ? n : NaN
+}
+/** Algum número digitado com formato quebrado ("1,234.5")? Sem isso o item sumia calado no filtro "quantidade > 0". */
+function numeroQuebrado(dados: { frete?: unknown; desconto?: unknown; itens?: { quantidade?: unknown; valorUnitario?: unknown; fator?: unknown }[] }): string | null {
+  if (Number.isNaN(numero(dados.frete))) return `Frete: ${MSG_NUMERO_BR}`
+  if (Number.isNaN(numero(dados.desconto))) return `Desconto: ${MSG_NUMERO_BR}`
+  for (const [i, it] of (dados.itens ?? []).entries()) {
+    if (Number.isNaN(numero(it.quantidade))) return `Item ${i + 1}, quantidade: ${MSG_NUMERO_BR}`
+    if (Number.isNaN(numero(it.valorUnitario))) return `Item ${i + 1}, valor: ${MSG_NUMERO_BR}`
+    if (Number.isNaN(numero(it.fator))) return `Item ${i + 1}, fator: ${MSG_NUMERO_BR}`
+  }
+  return null
 }
 
 export type ItemPrevia = ItemNfe & {
@@ -162,6 +175,8 @@ export async function lancarCompraManual(dados: {
   const ctx = await contexto('Compras - Criar')
   if ('error' in ctx) return ctx
   if (!dados.codigoLocal) return { error: 'Escolha o local que recebe a mercadoria.' }
+  const quebrado = numeroQuebrado(dados)
+  if (quebrado) return { error: quebrado }
   const itens = (dados.itens ?? []).filter((i) => i.codigoProduto && numero(i.quantidade) > 0)
   if (!itens.length) return { error: 'Inclua ao menos um item com produto e quantidade.' }
   if (itens.some((i) => numero(i.valorUnitario) < 0)) return { error: 'Valor unitário não pode ser negativo.' }
