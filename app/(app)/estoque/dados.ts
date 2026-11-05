@@ -102,23 +102,25 @@ export async function carregarEstoque(lojaId: number): Promise<VisaoEstoque> {
 type MovRow = {
   id: number; tipo: string; origem: string; ref: string; quantidade: number; custo_unitario: number | null
   saldo_apos: number; cmc_apos: number | null; codigo_local_estoque: number; user_id: string | null; obs: string | null
-  created_at: string; custo_estimado: boolean; reverses_id: number | null; codigo_produto: number
+  created_at: string; data_ref: string | null; custo_estimado: boolean; reverses_id: number | null; codigo_produto: number
   revisado: boolean; revisado_em: string | null
 }
 
 /** Kardex: últimos movimentos (por produto, por local, ou geral). */
 export async function carregarMovimentos(
   lojaId: number,
-  filtro: { codigoProduto?: number; codigoLocal?: number },
+  filtro: { codigoProduto?: number; codigoLocal?: number; ini?: string; fim?: string },
   limite = 100,
 ): Promise<Movimento[]> {
   const supabase = await createClient()
   // 315: custo, saldo e CMC efetivos (última revisão); sem revisão = igual ao ledger
   let q = supabase.from('estoque_movimentos_efetivo')
-    .select('id, tipo, origem, ref, quantidade, custo_unitario, saldo_apos, cmc_apos, codigo_local_estoque, user_id, obs, created_at, custo_estimado, reverses_id, codigo_produto, revisado, revisado_em')
+    .select('id, tipo, origem, ref, quantidade, custo_unitario, saldo_apos, cmc_apos, codigo_local_estoque, user_id, obs, created_at, data_ref, custo_estimado, reverses_id, codigo_produto, revisado, revisado_em')
     .eq('loja_id', lojaId).order('data_ref', { ascending: false }).order('id', { ascending: false }).limit(limite)
   if (filtro.codigoProduto != null) q = q.eq('codigo_produto', filtro.codigoProduto)
   if (filtro.codigoLocal != null) q = q.eq('codigo_local_estoque', filtro.codigoLocal)
+  if (filtro.ini) q = q.gte('data_ref', filtro.ini)
+  if (filtro.fim) q = q.lte('data_ref', filtro.fim)
   const { data } = await q
   const rows = (data ?? []) as MovRow[]
   if (!rows.length) return []
@@ -140,7 +142,7 @@ export async function carregarMovimentos(
     id: Number(r.id), tipo: r.tipo, origem: r.origem, ref: r.ref, quantidade: Number(r.quantidade),
     custo: r.custo_unitario == null ? null : Number(r.custo_unitario), saldoApos: Number(r.saldo_apos),
     cmcApos: r.cmc_apos == null ? null : Number(r.cmc_apos), local: nomeLocal.get(Number(r.codigo_local_estoque)) ?? String(r.codigo_local_estoque),
-    codigoLocal: Number(r.codigo_local_estoque), user: r.user_id, obs: r.obs, criado: r.created_at,
+    codigoLocal: Number(r.codigo_local_estoque), user: r.user_id, obs: r.obs, criado: r.created_at, dataRef: r.data_ref,
     estornado: estornados.has(Number(r.id)), ehEstorno: r.reverses_id != null, custoEstimado: r.custo_estimado,
     codigoProduto: Number(r.codigo_produto), produto: nomeProd.get(Number(r.codigo_produto)),
     revisado: !!r.revisado, revisadoEm: r.revisado_em,

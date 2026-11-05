@@ -14,6 +14,7 @@ import { DetalheKardex } from '@/components/movimentacoes/DetalheKardex'
 import { ROTULO_ORIGEM, type LinhaKardex } from '@/lib/estoque/kardex-tipos'
 import { formatCustoUnit } from '@/lib/num-br'
 import { rotuloCustoRevisado } from '@/lib/estoque/custo-revisado'
+import { dataDoMovimento } from '@/lib/estoque/data-movimento'
 
 // Movimento antigo guarda o id do usuário; se o perfil não existe mais, mostra isso em vez de um código longo.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -26,7 +27,6 @@ function nomeUsuario(m: { user_nome?: string | null; user_id?: string | null }):
 const COLUNAS = ['Data', 'Tipo', 'Produto', 'Quantidade', 'Local', 'Origem', 'Usuário', 'Saldo após', 'Custo']
 
 const fmtQtd = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 4 })
-const fmtQuando = (iso: string) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Bahia', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
 
 export function ListaMovimentosProprio({ linhas, podeEstornar }: { linhas: LinhaKardex[]; podeEstornar: boolean }) {
   const { visiveis, toggle } = useColunasVisiveis('/movimentacoes', COLUNAS)
@@ -61,7 +61,7 @@ export function ListaMovimentosProprio({ linhas, podeEstornar }: { linhas: Linha
   }
 
   const todas = [
-    { label: 'Data', sort: 'data', larguraDesktop: 'w-36', render: (m: LinhaKardex) => <span className="num text-[13px] text-text-muted">{fmtQuando(m.quando)}</span> },
+    { label: 'Data', sort: 'data', larguraDesktop: 'w-36', render: (m: LinhaKardex) => { const d = dataDoMovimento(m.data_ref, m.quando, true); return <span className="num text-[13px] text-text-muted">{d.data}{d.lancado && <span className="block text-[11px]">{d.lancado}</span>}</span> } },
     {
       label: 'Tipo',
       primaria: true,

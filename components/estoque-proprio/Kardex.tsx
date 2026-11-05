@@ -10,9 +10,9 @@ import { estornarMovimento } from '@/lib/actions/estoque-proprio'
 import { ROTULO_TIPO, type Movimento } from '@/app/(app)/estoque/tipos'
 import { formatCustoUnit } from '@/lib/num-br'
 import { rotuloCustoRevisado } from '@/lib/estoque/custo-revisado'
+import { dataDoMovimento } from '@/lib/estoque/data-movimento'
 
 const fmt = (n: number, d = 3) => n.toLocaleString('pt-BR', { maximumFractionDigits: d })
-const quando = (iso: string) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Bahia', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 
 const ORIGEM: Record<string, string> = {
   ENTRADA_MANUAL: 'Entrada manual', AJUSTE_MANUAL: 'Ajuste manual', TRANSFERENCIA: 'Transferência', ESTORNO: 'Estorno', VENDA: 'Venda',
@@ -58,7 +58,7 @@ export function Kardex({ movimentos, unidade, mostrarProduto = false, podeEstorn
             const entra = m.quantidade > 0
             return (
               <tr key={m.id} className={`border-t border-[var(--border)] ${m.estornado ? 'opacity-55' : ''}`}>
-                <td className="whitespace-nowrap px-4 py-2.5 text-text-muted num">{quando(m.criado)}</td>
+                <td className="whitespace-nowrap px-4 py-2.5 text-text-muted num">{(() => { const d = dataDoMovimento(m.dataRef, m.criado); return <>{d.data}{d.lancado && <div className="text-[11px]">{d.lancado}</div>}</> })()}</td>
                 <td className="px-2 py-2.5">
                   <div className="font-medium text-text">{ROTULO_TIPO[m.tipo] ?? m.tipo}{m.estornado && <span className="ml-1.5 text-[11px] font-normal text-text-muted">estornado</span>}{m.ehEstorno && <span className="ml-1.5 text-[11px] font-normal text-text-muted">estorno</span>}</div>
                   <div className="text-[12px] text-text-muted">{ORIGEM[m.origem] ?? m.origem}{m.obs ? ` · ${m.obs}` : ''}</div>
