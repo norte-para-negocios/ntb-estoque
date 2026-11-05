@@ -26,6 +26,9 @@
 --   Falha no estorno SOBE o erro (desfazer não termina deixando conta a pagar órfã).
 -- * Loja Omie: compras_proprio só existe em loja própria; ainda assim o gatilho ignora loja que não é 'proprio'.
 -- * Notas já lançadas antes desta migration NÃO ganham conta (sem carga retroativa: decisão do dono).
+-- * CHAVE POR LOJA lojas.fin_cp_da_nota_ativo (padrão false): só loja com a chave ligada gera E estorna. Até o dono liberar,
+--   só a loja-laboratório 19 (is_test) fica ligada; a ODARA e as lojas reais não geram nada. Ligar depois:
+--   update lojas set fin_cp_da_nota_ativo = true where id = <loja>;
 --
 -- Aplicar (manual, com backup e OK do dono; numa transação):
 --   docker exec -i supabase-db psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres < 340_conta_pagar_da_nota.sql
@@ -33,6 +36,15 @@
 
 begin;
 set lock_timeout = '5s';
+
+alter table public.lojas add column if not exists fin_cp_da_nota_ativo boolean not null default false;
+comment on column public.lojas.fin_cp_da_nota_ativo is 'Fase 4: a nota de entrada gera/estorna conta a pagar (migration 340). Desligado até o dono liberar.';
+update public.lojas set fin_cp_da_nota_ativo = true where id = 19 and is_test and modo_estoque = 'proprio';
+
+create or replace function public.fin_cp_da_nota_ligado(p_loja bigint) returns boolean
+language sql stable set search_path = public as $$
+  select coalesce((select fin_cp_da_nota_ativo and modo_estoque = 'proprio' from lojas where id = p_loja), false)
+$$;
 
 -- ------------------------------------------------------------------------------------------------- plano das parcelas
 create or replace function public.fin_data_duplicata(p text) returns date
@@ -81,6 +93,9 @@ declare
   v_ids bigint[] := '{}'; t fin_titulos_pagar%rowtype; v_emissao date;
 begin
   perform fin_exigir_loja_propria(p_loja);
+  if not fin_cp_da_nota_ligado(p_loja) then
+    return jsonb_build_object('ok', true, 'gerados', 0, 'ja_existiam', 0, 'motivo', 'A conta a pagar pela nota ainda não está ligada nesta loja');
+  end if;
   select * into c from compras_proprio where loja_id = p_loja and nota_fiscal_id = p_nota for update;
   if not found then raise exception 'Esta nota não tem entrada no estoque' using errcode = '22023'; end if;
   if c.status not in ('lancada', 'parcial') then
@@ -154,6 +169,9 @@ language plpgsql security definer set search_path = public as $$
 declare t fin_titulos_pagar%rowtype; v_canc int := 0; v_pagos int := 0; v_nums int[] := '{}'; v_motivo text;
 begin
   perform fin_exigir_loja_propria(p_loja);
+  if not fin_cp_da_nota_ligado(p_loja) then
+    return jsonb_build_object('ok', true, 'cancelados', 0, 'com_pagamento', 0, 'numeros_com_pagamento', '[]'::jsonb, 'desligado', true);
+  end if;
   v_motivo := coalesce(nullif(btrim(coalesce(p_motivo, '')), ''), 'Entrada da nota desfeita');
   for t in select * from fin_titulos_pagar where loja_id = p_loja and origem_tipo = 'nota_entrada' and origem_id = p_nota
              and status <> 'cancelado' order by parcela, id for update loop
@@ -181,7 +199,7 @@ create or replace function public.trg_compra_conta_pagar() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare v_erro text;
 begin
-  if new.nota_fiscal_id is null or not exists (select 1 from lojas where id = new.loja_id and modo_estoque = 'proprio') then
+  if new.nota_fiscal_id is null or not fin_cp_da_nota_ligado(new.loja_id) then
     return null;
   end if;
   if new.status in ('lancada', 'parcial') then
@@ -207,7 +225,7 @@ create trigger compras_proprio_conta_pagar after update of status on public.comp
 -- ---------------------------------------------------------------------------------------------------------------- grants
 do $$ declare f text; begin
   foreach f in array array[
-    'fin_data_duplicata(text)', 'fin_parcelas_da_nota(jsonb,numeric,date,date)',
+    'fin_cp_da_nota_ligado(bigint)', 'fin_data_duplicata(text)', 'fin_parcelas_da_nota(jsonb,numeric,date,date)',
     'fin_titulos_da_nota_gerar(bigint,bigint,text,text)', 'fin_titulos_da_nota_estornar(bigint,bigint,text,text,text)',
     'trg_compra_conta_pagar()'] loop
     execute format('revoke all on function public.%s from public, anon, authenticated', f);

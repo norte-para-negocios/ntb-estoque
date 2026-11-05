@@ -17,6 +17,9 @@ declare
 begin
   assert (select modo_estoque = 'proprio' and is_test from lojas where id = L), 'loja 19 tem de ser a loja-laboratório própria';
   assert length(CH1) = 44, 'chave de teste com 44 dígitos';
+  assert (select fin_cp_da_nota_ativo from lojas where id = L), 'a 340 liga a chave na loja 19';
+  assert not exists (select 1 from lojas where fin_cp_da_nota_ativo and (not is_test or id <> L)), 'nenhuma outra loja ligada (ODARA e reais desligadas)';
+  assert not (select fin_cp_da_nota_ativo from lojas where id = 15), 'ODARA desligada';
 
   -- ========== 1) nota com 3 duplicatas (cobr/dup), confirmada pela tela
   r := gravar_nota_sefaz(L, jsonb_build_object('chave', CH1, 'numero', '000340', 'serie', '1', 'modelo', '55', 'emissao', '2026-11-03',
@@ -147,6 +150,37 @@ begin
   assert not exists (select 1 from fin_titulos_pagar where loja_id = v_omie) and not exists (select 1 from fin_eventos where loja_id = v_omie), 'loja omie intocada';
   begin perform fin_titulos_da_nota_gerar(v_omie, 999999999); raise exception 'gerou em loja omie';
   exception when sqlstate '22023' then null; end;
+end $$;
+
+-- ========== 10) loja própria SEM a chave (loja 19 com a chave desligada aqui dentro): não gera nem estorna nada
+do $$
+declare
+  L constant bigint := 19; LOC constant bigint := 8000000000019; PROD constant bigint := 8000000000258;
+  CH5 constant text := '29261199340000019155001' || lpad('340005', 21, '0');
+  r jsonb; v_nota bigint; v_comp bigint; v_ev int; v_tit int;
+begin
+  update lojas set fin_cp_da_nota_ativo = false where id = L;
+  select count(*) into v_ev from fin_eventos where loja_id = L;
+  select count(*) into v_tit from fin_titulos_pagar where loja_id = L;
+  r := gravar_nota_sefaz(L, jsonb_build_object('chave', CH5, 'numero', '340005', 'emissao', '2026-11-02', 'valor', 90, 'fornecedor_cnpj', '99340000000515',
+         'fornecedor_nome', 'SEM CHAVE 340', 'ambiente', '2', 'etapa', '40', 'full_object', jsonb_build_object('parcelas', jsonb_build_object('parcelasLista',
+         jsonb_build_array(jsonb_build_object('nSequencia', 1, 'dVencimento', '20/11/2026', 'vParcela', 90))))), '[]'::jsonb);
+  v_nota := (r->>'nota_id')::bigint;
+  r := registrar_compra_sefaz(jsonb_build_object('loja_id', L, 'chave_acesso', CH5, 'numero', '340005', 'fornecedor_cnpj', '99340000000515', 'emissao', '2026-11-02',
+         'nota_fiscal_id', v_nota, 'itens', jsonb_build_array(jsonb_build_object('linha', 1, 'quantidade', 1, 'valor_unitario', 90, 'valor_total', 90,
+         'codigo_produto', PROD, 'fator', 1))), LOC);
+  v_comp := (r->>'compra_id')::bigint;
+  r := lancar_compra(jsonb_build_object('loja_id', L, 'id', v_comp, 'itens', '[]'::jsonb), LOC, null);
+  assert r->>'status' = 'lancada', 'entrada segue normal sem a chave: ' || r::text;
+  r := fin_titulos_da_nota_gerar(L, v_nota);
+  assert (r->>'gerados')::int = 0 and r->>'motivo' like '%não está ligada%', '"Gerar agora" também respeita a chave: ' || r::text;
+  -- estorno com a chave desligada: as contas abertas da nota 1 (gerada com a chave ligada) NÃO são tocadas
+  r := fin_titulos_da_nota_estornar(L, (select v::bigint from _t340 where k = 'nota1'));
+  assert (r->>'desligado')::boolean and (r->>'cancelados')::int = 0, 'estorno respeita a chave: ' || r::text;
+  r := estornar_compra(v_comp, null);
+  assert (select count(*) from fin_titulos_pagar where loja_id = L) = v_tit, 'sem a chave: nenhuma conta criada ou mexida';
+  assert (select count(*) from fin_eventos where loja_id = L) = v_ev, 'sem a chave: nenhum evento';
+  update lojas set fin_cp_da_nota_ativo = true where id = L;
 end $$;
 
 -- ========== 9) o servidor (service_role) mexendo direto no status (excluirNotaProprio) dispara o gatilho sem erro de permissão
