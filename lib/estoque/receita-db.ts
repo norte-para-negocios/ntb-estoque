@@ -10,6 +10,9 @@ export type ResultadoProducao = {
   custo_unitario: number
   saldo_produto?: number
   cmc_produto?: number
+  /** 319: dia em que a produção foi gravada e avisos do reprocessamento do custo (data passada). */
+  data_producao?: string
+  avisos?: string[]
 }
 
 export type ResultadoConsumo = {
@@ -73,10 +76,13 @@ export async function desativarFicha(lojaId: number, produto: number): Promise<v
 
 export async function produzirLote(b: {
   lojaId: number; produto: number; quantidade: number; localConsumo: number; localDestino: number; ref: string; user?: string | null; obs?: string | null
+  /** Dia da produção (YYYY-MM-DD). Sem data = hoje; o parâmetro só vai quando vier (banco antigo do desktop não tem p_data). */
+  data?: string | null
 }): Promise<ResultadoProducao> {
   const { data, error } = await createServiceClient().rpc('produzir', {
     p_loja: b.lojaId, p_produto: b.produto, p_quantidade: b.quantidade, p_local_consumo: b.localConsumo, p_local_destino: b.localDestino,
     p_ref: b.ref, p_user: b.user ?? null, p_obs: b.obs ?? null,
+    ...(b.data ? { p_data: b.data } : {}),
   })
   if (error) throw new Error(error.message)
   return data as ResultadoProducao

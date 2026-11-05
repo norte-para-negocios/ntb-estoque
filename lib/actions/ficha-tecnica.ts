@@ -81,20 +81,27 @@ export async function produzirLoteAction(dados: {
   obs?: string
   /** Chave de idempotência da tela (um duplo clique não produz duas vezes). */
   ref?: string
-}): Promise<{ ok: true; custoUnitario: number; custoTotal: number; duplicado: boolean } | Erro> {
+  /** Dia em que o lote foi feito (YYYY-MM-DD). Vazio = hoje. Data passada refaz o custo das vendas desde esse dia. */
+  data?: string
+}): Promise<{ ok: true; custoUnitario: number; custoTotal: number; duplicado: boolean; dataProducao: string | null; avisos: string[] } | Erro> {
   const __d = viaDesktop('ficha-tecnica#produzirLoteAction', produzirLoteAction, [dados]); if (__d) return __d as never
   const ctx = await contexto('Ordem de Producao - Criar')
   if ('error' in ctx) return ctx
   if (!(dados.quantidade > 0)) return { error: 'Informe a quantidade a produzir.' }
+  const dataProd = dados.data?.trim() || null
+  if (dataProd && !/^\d{4}-\d{2}-\d{2}$/.test(dataProd)) return { error: 'Data da produção inválida.' }
   const ref = dados.ref?.trim() || `prod-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
   try {
     const r = await produzirLote({
       lojaId: ctx.lojaId, produto: dados.codigoProduto, quantidade: dados.quantidade,
-      localConsumo: dados.localConsumo, localDestino: dados.localDestino, ref, user: ctx.userId, obs: dados.obs?.trim() || null,
+      localConsumo: dados.localConsumo, localDestino: dados.localDestino, ref, user: ctx.userId, obs: dados.obs?.trim() || null, data: dataProd,
     })
     await registrarAuditoria('criar', 'produção de lote', dados.codigoProduto, `${dados.quantidade} un`)
     atualizar()
-    return { ok: true, custoUnitario: Number(r.custo_unitario), custoTotal: Number(r.custo_total), duplicado: !!r.duplicado }
+    return {
+      ok: true, custoUnitario: Number(r.custo_unitario), custoTotal: Number(r.custo_total), duplicado: !!r.duplicado,
+      dataProducao: r.data_producao ?? null, avisos: Array.isArray(r.avisos) ? r.avisos.map(String) : [],
+    }
   } catch (e) {
     return { error: mensagem(e, 'Falha ao produzir o lote') }
   }
