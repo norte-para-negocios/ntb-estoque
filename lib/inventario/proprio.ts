@@ -27,17 +27,20 @@ function dataBahia(iso: string | null): string | null {
 
 /** Limite de valor (R$) a partir do qual a diferença exige motivo. */
 export async function limiteMotivo(lojaId: number): Promise<number> {
-  const { data } = await createServiceClient().from('estoque_config').select('limite_motivo_inventario').eq('loja_id', lojaId).maybeSingle()
+  const { data, error } = await createServiceClient().from('estoque_config').select('limite_motivo_inventario').eq('loja_id', lojaId).maybeSingle()
+  if (error) throw new Error(`Falha ao ler o limite de motivo: ${error.message}`)
   const v = Number((data as { limite_motivo_inventario?: number } | null)?.limite_motivo_inventario)
   return Number.isFinite(v) && v >= 0 ? v : 50
 }
 
 export async function saldoECusto(lojaId: number, local: number, produto: number): Promise<{ saldo: number; cmc: number }> {
   const sb = createServiceClient()
-  const [{ data: s }, { data: c }] = await Promise.all([
+  const [{ data: s, error: es }, { data: c, error: ec }] = await Promise.all([
     sb.from('estoque_saldos').select('saldo').eq('loja_id', lojaId).eq('codigo_local_estoque', local).eq('codigo_produto', produto).maybeSingle(),
     sb.from('estoque_custos').select('cmc').eq('loja_id', lojaId).eq('codigo_produto', produto).maybeSingle(),
   ])
+  // Sem o saldo real, a diferença da contagem sairia contra zero (ajuste do tamanho da contagem inteira).
+  if (es || ec) throw new Error(`Falha ao ler saldo/custo: ${(es ?? ec)!.message}`)
   return { saldo: Number((s as { saldo?: number } | null)?.saldo ?? 0), cmc: Number((c as { cmc?: number } | null)?.cmc ?? 0) }
 }
 
@@ -70,7 +73,8 @@ export async function lancarItem(p: {
 
   let idMov: number | null = null
   if (delta !== 0) {
-    const { count } = await sb.from('estoque_movimentos').select('id', { count: 'exact', head: true }).eq('loja_id', p.lojaId).eq('origem', 'INVENTARIO').like('ref', `inv:${p.itemId}:%`)
+    const { count, error: eCount } = await sb.from('estoque_movimentos').select('id', { count: 'exact', head: true }).eq('loja_id', p.lojaId).eq('origem', 'INVENTARIO').like('ref', `inv:${p.itemId}:%`)
+    if (eCount) throw new Error(`Falha ao ler os ajustes do item: ${eCount.message}`)
     const ref = `inv:${p.itemId}:r${(count ?? 0) + 1}`
     const r = await ajuste({
       lojaId: p.lojaId, local: p.local, produto: p.produto, origem: 'INVENTARIO', ref, quantidade: delta,

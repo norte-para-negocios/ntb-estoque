@@ -35,8 +35,9 @@ export async function baixarLoteVencido(dados: { loteId: number; quantidade: num
   if (!Number.isFinite(quantidade) || quantidade <= 0) return { error: 'Informe uma quantidade maior que zero.' }
   const motivo = dados.motivo?.trim() ?? ''
   if (motivo.length < 3) return { error: 'Informe o motivo da baixa.' }
-  const { data: lote } = await createServiceClient()
+  const { data: lote, error: erroLote } = await createServiceClient()
     .from('estoque_lotes').select('id, lote, codigo_produto, saldo').eq('id', dados.loteId).eq('loja_id', ctx.lojaId).maybeSingle()
+  if (erroLote) return { error: erroLote.message }
   if (!lote) return { error: 'Lote não encontrado nesta loja.' }
   try {
     const r = await baixarLote({

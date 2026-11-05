@@ -33,12 +33,14 @@ function numero(v: unknown): number | null {
 }
 
 async function descreverProduto(lojaId: number, codigoProduto: number): Promise<string> {
-  const { data } = await createServiceClient()
+  const { data, error } = await createServiceClient()
     .from('produtos')
     .select('codigo, descricao')
     .eq('loja_id', lojaId)
     .eq('codigo_produto', codigoProduto)
     .maybeSingle()
+  // Só o texto da auditoria: sem a leitura, fica o código.
+  if (error) return String(codigoProduto)
   return data ? `${data.descricao} (${data.codigo})` : String(codigoProduto)
 }
 
@@ -128,10 +130,12 @@ export async function ajusteManual(dados: {
     const novo = numero(dados.novoSaldo)
     if (novo == null) return { error: 'Saldo contado inválido.' }
     // Recalcula contra o saldo real do banco, não contra o que a tela mostrava.
-    const { data } = await createServiceClient()
+    const { data, error } = await createServiceClient()
       .from('estoque_saldos').select('saldo')
       .eq('loja_id', ctx.lojaId).eq('codigo_local_estoque', dados.codigoLocal).eq('codigo_produto', dados.codigoProduto)
       .maybeSingle()
+    // Sem o saldo real, a diferença sairia contra zero (ajuste errado no ledger).
+    if (error) return { error: `Não foi possível ler o saldo atual: ${error.message}` }
     delta = novo - Number(data?.saldo ?? 0)
   }
   if (delta == null || delta === 0) return { error: 'Nada a ajustar: a diferença é zero.' }
@@ -204,8 +208,9 @@ export async function estornarMovimento(idMovimento: number): Promise<Resposta> 
   const ctx = await contexto('Movimentacoes - Criar')
   if ('error' in ctx) return ctx
   // Só estorna movimento desta loja.
-  const { data: mov } = await createServiceClient()
+  const { data: mov, error: erroMov } = await createServiceClient()
     .from('estoque_movimentos').select('id, loja_id, codigo_produto').eq('id', idMovimento).maybeSingle()
+  if (erroMov) return { error: erroMov.message }
   if (!mov || mov.loja_id !== ctx.lojaId) return { error: 'Movimento não encontrado.' }
   try {
     const r = await estornar(idMovimento, ctx.userId)

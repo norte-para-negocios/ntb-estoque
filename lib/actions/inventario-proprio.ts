@@ -21,8 +21,9 @@ async function contexto(permissao: string): Promise<{ lojaId: number; userId: st
 }
 
 async function inventarioDaLoja(lojaId: number, id: number): Promise<{ id: number; status: string; local: number } | null> {
-  const { data } = await createServiceClient()
+  const { data, error } = await createServiceClient()
     .from('inventarios_proprio').select('id, status, codigo_local_estoque').eq('id', id).eq('loja_id', lojaId).maybeSingle()
+  if (error) throw new Error(error.message)
   return data ? { id: Number(data.id), status: String(data.status), local: Number(data.codigo_local_estoque) } : null
 }
 
@@ -124,10 +125,11 @@ export async function buscarProdutosParaContagem(termo: string): Promise<Produto
   if ('error' in ctx) return ctx
   const t = termo.trim().replace(/[%,()]/g, ' ')
   if (t.length < 2) return []
-  const { data } = await createServiceClient()
+  const { data, error } = await createServiceClient()
     .from('produtos').select('codigo_produto, codigo, descricao, unidade')
     .eq('loja_id', ctx.lojaId).neq('inativo', true)
     .or(`descricao.ilike.%${t}%,codigo.ilike.%${t}%`).order('descricao').limit(20)
+  if (error) return { error: error.message }
   return (data ?? []).map((p) => ({
     codigoProduto: Number(p.codigo_produto), codigo: p.codigo ?? String(p.codigo_produto), descricao: p.descricao ?? '', unidade: p.unidade ?? 'UN',
   }))

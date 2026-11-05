@@ -8,7 +8,13 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const aqui = dirname(fileURLToPath(import.meta.url))
-const ARQUIVOS = ['venda-proprio.ts', 'sefaz-sync.ts', 'catalogo-sync.ts', 'op-proprio.ts', 'transferencia-proprio.ts']
+const ARQUIVOS = [
+  'venda-proprio.ts', 'sefaz-sync.ts', 'catalogo-sync.ts', 'op-proprio.ts', 'transferencia-proprio.ts',
+  // Fase 3 (05/11/2026): o modo da loja decide o caminho (próprio x Omie) e as telas de estoque próprio gravam no ledger.
+  'ledger.ts', 'lotes.ts', '../actions/estoque-proprio.ts', '../actions/inventario-proprio.ts', '../actions/validade-proprio.ts',
+  // o inventário da loja própria calcula a diferença contra o saldo lido aqui
+  '../inventario/proprio.ts',
+]
 
 /** Desestruturações `{ ... } = await` (ou `[{ ... }, { ... }] = await Promise.all`) que trazem `data` e não trazem `error`. */
 export function leiturasSemErro(fonte: string): { linha: number; texto: string }[] {
@@ -43,5 +49,20 @@ for (const arq of ARQUIVOS) {
   test(`${arq}: nenhuma leitura ignora error`, () => {
     const achados = leiturasSemErro(readFileSync(join(aqui, arq), 'utf8'))
     assert.deepEqual(achados, [], `leituras sem error em ${arq}:\n${achados.map((a) => `  ${a.linha}: ${a.texto}`).join('\n')}`)
+  })
+}
+
+// Em lib/actions/inventario.ts só as funções do estoque próprio entram (o resto é o caminho do Omie).
+function corpoDaFuncao(fonte: string, nome: string): string {
+  const ini = fonte.indexOf(`async function ${nome}(`)
+  assert.ok(ini >= 0, `função ${nome} não encontrada`)
+  const fim = fonte.indexOf('\n}\n', ini)
+  return fonte.slice(ini, fim < 0 ? undefined : fim)
+}
+
+for (const nome of ['enviarItemProprio', 'concluirProprio']) {
+  test(`inventario.ts#${nome}: nenhuma leitura ignora error`, () => {
+    const achados = leiturasSemErro(corpoDaFuncao(readFileSync(join(aqui, '../actions/inventario.ts'), 'utf8'), nome))
+    assert.deepEqual(achados, [], `leituras sem error em ${nome}:\n${achados.map((a) => `  ${a.texto}`).join('\n')}`)
   })
 }

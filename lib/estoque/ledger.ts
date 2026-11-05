@@ -14,7 +14,9 @@ export type ResultadoMovimento = {
 }
 
 export async function modoDaLoja(lojaId: number): Promise<ModoEstoque> {
-  const { data } = await createServiceClient().from('lojas').select('modo_estoque').eq('id', lojaId).maybeSingle()
+  const { data, error } = await createServiceClient().from('lojas').select('modo_estoque').eq('id', lojaId).maybeSingle()
+  // Falha de leitura não pode virar "omie": a loja própria iria pelo caminho errado. Falha alto.
+  if (error) throw new Error(`Não foi possível ler o modo de estoque da loja: ${error.message}`)
   const m = (data as { modo_estoque?: string } | null)?.modo_estoque
   return m === 'proprio' || m === 'nenhum' ? m : 'omie'
 }
