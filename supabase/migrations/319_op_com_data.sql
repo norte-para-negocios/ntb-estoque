@@ -74,6 +74,12 @@ begin
   end if;
 
   select array_agg(e.codigo_insumo) into v_ids from expandir_receita(p_loja, p_produto, p_quantidade) e;
+  -- 319: data passada trava antes a cascata inteira que o reprocessamento vai tocar, em ordem de código (como a 313),
+  -- para não cruzar trava com uma venda ou OP que pegue os mesmos produtos em outra ordem
+  if v_data < v_hoje then
+    perform _travar_custo_produtos(p_loja, (select c.produtos from _cascata_custo(p_loja, coalesce(v_ids, '{}') || p_produto,
+      _recuo_pares(p_loja, coalesce(v_ids, '{}') || p_produto, v_data, _primeiro_dia_aberto(p_loja))) c));
+  end if;
   perform _travar_custos(p_loja, coalesce(v_ids, '{}') || p_produto);
 
   insert into ordens_producao_proprio (loja_id, ref, codigo_produto, ficha_id, quantidade, local_consumo, local_destino, user_id, obs)
@@ -101,10 +107,17 @@ begin
   end if;
   update ordens_producao_proprio set custo_total = round(v_total, 6), custo_unitario = v_custo_un where id = v_ordem;
   -- 319: produção com data passada refaz o custo do prato e dos insumos (e de quem usa o prato) desde aquele dia,
-  -- na mesma transação, como a compra (313). O custo da OP e do prato entregue passam a valer o refeito.
+  -- na mesma transação, como a compra (313). Depois disso o custo da OP, dos itens e do retorno é relido do ledger efetivo.
   if v_data < v_hoje then
     v_rep := reprocessar_custo(p_loja, coalesce(v_ids, '{}') || p_produto, v_data, 'OP ' || p_ref);
+    -- custo da OP = consumos já refeitos; itens, OP e retorno ficam iguais ao que o ledger efetivo diz
+    update ordens_producao_proprio_itens i set custo_unitario = coalesce(e.custo_unitario, 0)
+      from estoque_movimentos_efetivo e where i.ordem_id = v_ordem and e.id = i.movimento_id;
+    select coalesce(sum(i.quantidade * i.custo_unitario), 0) into v_total from ordens_producao_proprio_itens i where i.ordem_id = v_ordem;
     select e.custo_unitario into v_custo_un from estoque_movimentos_efetivo e where e.id = (v_out ->> 'id')::bigint;
+    v_custo_un := coalesce(v_custo_un, round(v_total / p_quantidade, 6));
+    update ordens_producao_proprio set custo_total = round(v_total, 6), custo_unitario = v_custo_un where id = v_ordem;
+    v_out := v_out || jsonb_build_object('cmc', (select cmc from estoque_custos where loja_id = p_loja and codigo_produto = p_produto));
   end if;
   return jsonb_build_object('ok', true, 'duplicado', false, 'ordem_id', v_ordem, 'custo_total', round(v_total, 6), 'custo_unitario', v_custo_un,
                             'saldo_produto', (v_out ->> 'saldo')::numeric, 'cmc_produto', (v_out ->> 'cmc')::numeric, 'itens', v_itens,
@@ -172,6 +185,10 @@ begin
     raise exception 'A loja % não usa estoque próprio', p_loja using errcode = '22023';
   end if;
   v_data := _data_retroativa(p_loja, p_data);
+  if v_data < v_hoje then
+    perform _travar_custo_produtos(p_loja, (select c.produtos from _cascata_custo(p_loja, array[p_produto],
+      _recuo_pares(p_loja, array[p_produto], v_data, _primeiro_dia_aberto(p_loja))) c));
+  end if;
   v_res := registrar_movimento(p_loja, p_local, p_produto, 'ENT', 'ENTRADA_MANUAL', p_ref, p_quantidade,
                                case when coalesce(p_custo, 0) > 0 then p_custo end, p_user, p_obs, 0, null, null, v_data);
   if v_data < v_hoje and not coalesce((v_res ->> 'duplicado')::boolean, false) then

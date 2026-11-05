@@ -31,6 +31,7 @@ begin
     'consumo e entrada gravados em 15/10';
   select * into e from estoque_movimentos_efetivo where id = v_venda;
   assert e.custo_unitario = 2 and e.revisado, 'a venda de 20/10 ganha o custo da OP: ' || row_to_json(e)::text;
+  assert (r->>'custo_total')::numeric = 10 and (r->>'custo_unitario')::numeric = 2, 'retorno coerente: ' || r::text;
   assert (select saldo_total from estoque_custos where loja_id = 99319 and codigo_produto = MOL) = 3, 'saldo do molho 5 - 2';
   assert (select saldo_total from estoque_custos where loja_id = 99319 and codigo_produto = CAM) = 5, 'saldo do camarão 10 - 5';
 
@@ -84,6 +85,13 @@ begin
   -- CMC em 15/10: (10×2 + 10×4)/20 = 3 → consumo da OP a 3, molho a 3, venda de 20/10 a 3
   select * into e from estoque_movimentos_efetivo where id = v_venda;
   assert e.custo_unitario = 3, 'venda refeita pela entrada manual: ' || row_to_json(e)::text;
+  -- 8) OP retroativa depois de uma entrada mais cara já existente: custo da OP gravado = consumos refeitos
+  r := produzir(99319, MOL, 2, L, L, 'op-319-b', null, null, '2026-10-13');
+  assert (r->>'custo_total')::numeric = round(2 * (r->>'custo_unitario')::numeric, 6), 'total = 2 × unitário: ' || r::text;
+  assert (select custo_total from ordens_producao_proprio where loja_id = 99319 and ref = 'op-319-b') = (r->>'custo_total')::numeric,
+    'OP gravada com o custo do retorno';
+  assert (select round(sum(i.quantidade * i.custo_unitario), 6) from ordens_producao_proprio_itens i join ordens_producao_proprio o on o.id = i.ordem_id
+           where o.loja_id = 99319 and o.ref = 'op-319-b') = (r->>'custo_total')::numeric, 'itens somam o total';
   v_ok := false;
   begin
     perform entrada_manual_com_data(99319, L, CAM, 1, 4, 'em-319-fut', null, null, v_hoje + 3);
