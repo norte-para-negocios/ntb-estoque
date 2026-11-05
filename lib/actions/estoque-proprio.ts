@@ -1,5 +1,6 @@
 'use server'
 
+import { ehDesenvolvedor } from '@/lib/recursos-dev'
 import { viaDesktop } from '@/lib/offline/via-desktop'
 
 import { revalidatePath } from 'next/cache'
@@ -69,6 +70,7 @@ export async function entradaManual(dados: {
   const custo = dados.custo === '' || dados.custo == null ? null : numero(dados.custo)
   if (custo != null && custo < 0) return { error: 'O custo não pode ser negativo.' }
   const dia = dados.data?.trim() || null
+  if (dia && !(await ehDesenvolvedor())) return { error: 'Lançar com outra data ainda está em teste.' }
   if (dia && !/^\d{4}-\d{2}-\d{2}$/.test(dia)) return { error: 'Data inválida.' }
   if (dia && (lote || validade)) return { error: 'Entrada com lote ou validade só pode ser lançada na data de hoje.' }
   try {

@@ -9,6 +9,7 @@ import { Combobox } from '@/components/ui-kit/Combobox'
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { fmtBRL, fmtQtd } from '@/components/estoque-proprio/Apresentacao'
 import { produzirLoteAction } from '@/lib/actions/ficha-tecnica'
+import { useCentral } from '@/components/central/central-estado'
 import { previaProducao, type Ficha } from '@/lib/estoque/receita'
 
 type ProdutoProduzivel = { codigoProduto: number; descricao: string; codigo: string; unidade: string; ficha: Ficha }
@@ -38,9 +39,11 @@ export function ProduzirLote({
   const [consumo, setConsumo] = useState<number | ''>(padrao)
   const [destino, setDestino] = useState<number | ''>(padrao)
   const [obs, setObs] = useState('')
+  // Data da produção: recurso novo, só nos logins de desenvolvedor (layout novo) até ser liberado.
+  const novo = useCentral() != null
   const [hoje] = useState(hojeBahia)
   const [dia, setDia] = useState(hoje)
-  const passado = !!dia && dia < hoje
+  const passado = novo && !!dia && dia < hoje
   // Uma chave por "tentativa": clique duplo reenvia a mesma e o banco devolve a mesma ordem.
   const [ref, setRef] = useState(() => `prod-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
 
@@ -140,10 +143,10 @@ export function ProduzirLote({
       )}
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
+        {novo && <div className="flex items-center gap-2">
           <label htmlFor="dia-lote" className="text-[13px] font-medium whitespace-nowrap">Feito em</label>
           <input id="dia-lote" type="date" className={`${campo} w-auto num`} value={dia} max={hoje} onChange={(e) => setDia(e.target.value)} />
-        </div>
+        </div>}
         <input aria-label="Observação" className={`${campo} sm:max-w-[320px]`} value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Observação (opcional)" maxLength={200} />
         <button type="button" onClick={produzir} disabled={pending || !sel || !(q > 0)} className={btnClass('primary')}>
           {pending && <Spinner />}Produzir lote

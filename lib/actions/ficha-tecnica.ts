@@ -1,5 +1,6 @@
 'use server'
 
+import { ehDesenvolvedor } from '@/lib/recursos-dev'
 import { viaDesktop } from '@/lib/offline/via-desktop'
 
 import { revalidatePath } from 'next/cache'
@@ -89,6 +90,7 @@ export async function produzirLoteAction(dados: {
   if ('error' in ctx) return ctx
   if (!(dados.quantidade > 0)) return { error: 'Informe a quantidade a produzir.' }
   const dataProd = dados.data?.trim() || null
+  if (dataProd && !(await ehDesenvolvedor())) return { error: 'Lançar com outra data ainda está em teste.' }
   if (dataProd && !/^\d{4}-\d{2}-\d{2}$/.test(dataProd)) return { error: 'Data da produção inválida.' }
   const ref = dados.ref?.trim() || `prod-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
   try {
