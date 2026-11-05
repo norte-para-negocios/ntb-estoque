@@ -1,12 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { detalheTitulo, extratoConta, listarCategorias, listarContas, listarFornecedores, listarTitulos, type Db } from './consultas.ts'
+import { detalheTitulo, extratoConta, listarCategorias, listarContas, listarFornecedores, listarTitulos, titulosDaNota, type Db } from './consultas.ts'
 
 // Cliente falso: rpc devolve o que o teste mandar; from() é uma cadeia que termina com { data, error } (await) ou range().
 type Resp = { data: unknown; error: { code?: string; message: string } | null }
 function falso(resp: Resp): Db {
   const cadeia: Record<string, unknown> = {}
-  for (const m of ['select', 'eq', 'order']) cadeia[m] = () => cadeia
+  for (const m of ['select', 'eq', 'order', 'limit']) cadeia[m] = () => cadeia
   cadeia.range = () => Promise.resolve(resp)
   cadeia.then = (ok: (r: Resp) => unknown) => Promise.resolve(resp).then(ok)
   return { rpc: () => Promise.resolve(resp), from: () => cadeia } as unknown as Db
@@ -50,4 +50,16 @@ test('detalheTitulo e extratoConta checam o erro', async () => {
   assert.equal((await extratoConta(falso({ data: ex, error: null }), 15, 1, null, null))?.saldoFinal, 2)
   assert.equal(await extratoConta(falso(erro('22023')), 15, 1, null, null), null) // conta de outra loja
   await assert.rejects(extratoConta(falso(erro('57014')), 15, 1, null, null), /extrato/)
+})
+
+test('titulosDaNota: converte os números, traz a falha só quando é a última notícia, e não engole erro', async () => {
+  const tit = [{ id: 1, numero: 7, parcela: 1, total_parcelas: 2, valor: '100.5', valor_quitado: '0', data_vencimento: '2026-11-10', status: 'aberto', motivo_cancelamento: null }]
+  // o cliente falso devolve a mesma resposta para as duas leituras: a 2ª (eventos) vem sem 'tipo' → sem falha
+  const ok = await titulosDaNota(falso({ data: tit, error: null }), 19, 5)
+  assert.equal(ok.titulos[0].valor, 100.5)
+  assert.equal(ok.falha, null)
+  const falha = await titulosDaNota(falso({ data: [{ tipo: 'titulos_falha', detalhe: { erro: 'Nota sem CNPJ' } }], error: null }), 19, 5)
+  assert.equal(falha.falha, 'Nota sem CNPJ')
+  assert.deepEqual(await titulosDaNota(falso(erro('42P01')), 19, 5), { titulos: [], falha: null, semMigration: true })
+  await assert.rejects(titulosDaNota(falso(erro('57014')), 19, 5), /contas a pagar da nota/)
 })

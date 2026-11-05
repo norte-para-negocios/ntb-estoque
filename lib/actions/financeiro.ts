@@ -208,3 +208,22 @@ export async function estornarPagamentoTitulo(pagamentoId: number, motivo: strin
   atualizar()
   return { ok: true }
 }
+
+// ------------------------------------------------------------------------ conta a pagar gerada pela nota (migration 340)
+/** "Gerar agora" na tela da nota (só desenvolvedor): a geração automática roda no gatilho da entrada; isto refaz à mão
+ *  quando ela falhou (ex.: nota sem CNPJ, já corrigida). Idempotente: parcela que já tem conta não é gerada de novo. */
+export async function gerarContasPagarDaNota(notaId: number): Promise<{ ok: true; gerados: number; jaExistiam: number; motivo: string | null } | Erro> {
+  const __d = viaDesktop('financeiro#gerarContasPagarDaNota', gerarContasPagarDaNota, [notaId]); if (__d) return __d as never
+  await exigirDevAcao()
+  const ctx = await contexto(PERM.contasPagar)
+  if ('error' in ctx) return ctx
+  const { data, error } = await createServiceClient().rpc('fin_titulos_da_nota_gerar', {
+    p_loja: ctx.lojaId, p_nota: Number(notaId), p_user: ctx.userId, p_user_nome: ctx.nome,
+  })
+  if (error) return { error: msgErro(error) }
+  const r = data as { gerados: number; ja_existiam: number; motivo?: string | null }
+  if (r.gerados > 0) await registrarAuditoria('criar', 'conta a pagar', null, `${r.gerados} parcela(s) da nota ${notaId}`)
+  atualizar()
+  revalidatePath(`/nota-fiscal/${notaId}`)
+  return { ok: true, gerados: Number(r.gerados) || 0, jaExistiam: Number(r.ja_existiam) || 0, motivo: r.motivo ?? null }
+}

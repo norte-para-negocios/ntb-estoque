@@ -26,7 +26,7 @@ export async function acessoFinanceiro(permissao: string): Promise<{ lojaId: num
 }
 
 // Atalhos com o cliente de serviço (use depois de acessoFinanceiro). Tipos e regras de erro vivem em consultas.ts (testado com cliente falso).
-export type { ContaCorrente, Categoria, Titulo, TotaisTitulos, LinhaExtrato, PagamentoTitulo, DetalheTitulo, FiltrosTitulos } from './consultas'
+export type { ContaCorrente, Categoria, Titulo, TotaisTitulos, LinhaExtrato, PagamentoTitulo, DetalheTitulo, FiltrosTitulos, TituloNota } from './consultas'
 export { semMigration } from './consultas'
 
 export const listarContas = (lojaId: number) => q.listarContas(createServiceClient(), lojaId)
@@ -39,3 +39,5 @@ export const detalheTitulo = (lojaId: number, id: number, hoje: string) => q.det
 export const extratoConta = (lojaId: number, contaId: number, de: string | null, ate: string | null) =>
   q.extratoConta(createServiceClient(), lojaId, contaId, de, ate)
 
+// Contas a pagar geradas pela nota de entrada (migration 340): a tela da nota usa só para desenvolvedor, depois de exigir 'proprio'.
+export const titulosDaNota = (lojaId: number, notaId: number) => q.titulosDaNota(createServiceClient(), lojaId, notaId)

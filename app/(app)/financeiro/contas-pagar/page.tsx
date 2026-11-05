@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { origemDoTitulo } from '@/lib/financeiro/titulos-da-nota-puro'
 import { Receipt } from 'lucide-react'
 import { hojeBahiaISO } from '@/lib/data-bahia'
 import { acessoFinanceiro, listarCategorias, listarContas, listarFornecedores, listarTitulos, PERM, type FiltrosTitulos } from '@/lib/financeiro/dados'
@@ -112,7 +113,8 @@ export default async function ContasPagarPage({ searchParams }: { searchParams: 
                   <td className="px-4 py-2 whitespace-nowrap">{dataBR(t.data_vencimento)}</td>
                   <td className="px-2 py-2">
                     <Link href={`/financeiro/contas-pagar/${t.id}`} className="font-medium text-text hover:underline">{t.fornecedor_nome}</Link>
-                    <p className="text-text-muted">Nº {t.numero}{t.documento ? ` · doc ${t.documento}` : ''}{t.total_parcelas > 1 ? ` · parc. ${t.parcela}/${t.total_parcelas}` : ''}</p>
+                    <p className="text-text-muted">Nº {t.numero}{t.documento ? ` · doc ${t.documento}` : ''}{t.total_parcelas > 1 ? ` · parc. ${t.parcela}/${t.total_parcelas}` : ''}
+                      {t.origem_tipo === 'nota_entrada' && t.origem_id ? <> · <Link href={origemDoTitulo(t.origem_tipo, t.origem_id).href!} className="hover:underline">ver a nota</Link></> : null}</p>
                   </td>
                   <td className="px-2 py-2 text-text-muted">{t.categoria_nome ?? '—'}</td>
                   <td className="px-2 py-2 text-right"><Money value={t.valor} /></td>
