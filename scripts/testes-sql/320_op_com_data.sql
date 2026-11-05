@@ -1,6 +1,6 @@
--- Teste da migration 319 (OP com a data da produção). Tudo dentro de BEGIN … ROLLBACK, loja fictícia 99319:
---   begin; \i supabase/migrations/319_op_com_data.sql \i scripts/testes-sql/319_op_com_data.sql rollback;
--- Espera: NOTICE "319 OP COM DATA OK".
+-- Teste da migration 320 (OP com a data da produção). Tudo dentro de BEGIN … ROLLBACK, loja fictícia 99319:
+--   begin; \i supabase/migrations/320_op_com_data.sql \i scripts/testes-sql/320_op_com_data.sql rollback;
+-- Espera: NOTICE "320 OP COM DATA OK".
 set local lock_timeout = '3s';
 insert into lojas (id, cnpj, nome, ativo, modo_estoque, is_test) values (99319, '00000000099319', 'TESTE 319', true, 'proprio', true);
 insert into local_estoques (loja_id, codigo_local_estoque, descricao, padrao) values (99319, 8000000031901, 'Cozinha', 'S');
@@ -99,5 +99,5 @@ begin
   end;
   assert v_ok, 'entrada no futuro recusada';
 
-  raise notice '319 OP COM DATA OK';
+  raise notice '320 OP COM DATA OK';
 end $$;

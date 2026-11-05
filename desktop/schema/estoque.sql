@@ -142,6 +142,30 @@ end $$;
 
 
 --
+-- Name: _data_retroativa(bigint, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._data_retroativa(p_loja bigint, p_data date) RETURNS date
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_hoje date := (now() at time zone 'America/Sao_Paulo')::date; v date; v_aberto date; v_ini date;
+begin
+  v := coalesce(p_data, v_hoje);
+  if v > v_hoje then raise exception 'A data não pode ser no futuro' using errcode = '22023'; end if;
+  v_aberto := _primeiro_dia_aberto(p_loja);
+  if v_aberto is not null and v < v_aberto then
+    raise exception 'O mês de % já foi fechado. Use uma data a partir de %.', to_char(v, 'MM/YYYY'), to_char(v_aberto, 'DD/MM/YYYY') using errcode = '22023';
+  end if;
+  select min(m.data_ref) into v_ini from estoque_movimentos m where m.loja_id = p_loja;
+  if v_ini is not null and v < v_ini then
+    raise exception 'O estoque desta loja começa em %. Use uma data a partir desse dia.', to_char(v_ini, 'DD/MM/YYYY') using errcode = '22023';
+  end if;
+  return v;
+end $$;
+
+
+--
 -- Name: _exigir_periodo_aberto(bigint, date, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1972,6 +1996,33 @@ CREATE FUNCTION public.dia_do_movimento(p timestamp with time zone) RETURNS date
   select case when (p at time zone 'UTC')::time = '00:00' then (p at time zone 'UTC')::date
               else (p at time zone 'America/Bahia')::date end
 $$;
+
+
+--
+-- Name: entrada_manual_com_data(bigint, bigint, bigint, numeric, numeric, text, text, text, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.entrada_manual_com_data(p_loja bigint, p_local bigint, p_produto bigint, p_quantidade numeric, p_custo numeric, p_ref text, p_user text DEFAULT NULL::text, p_obs text DEFAULT NULL::text, p_data date DEFAULT NULL::date) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_data date; v_res jsonb; v_rep jsonb; v_hoje date := (now() at time zone 'America/Sao_Paulo')::date;
+begin
+  if (select modo_estoque from lojas where id = p_loja) is distinct from 'proprio' then
+    raise exception 'A loja % não usa estoque próprio', p_loja using errcode = '22023';
+  end if;
+  v_data := _data_retroativa(p_loja, p_data);
+  if v_data < v_hoje then
+    perform _travar_custo_produtos(p_loja, (select c.produtos from _cascata_custo(p_loja, array[p_produto],
+      _recuo_pares(p_loja, array[p_produto], v_data, _primeiro_dia_aberto(p_loja))) c));
+  end if;
+  v_res := registrar_movimento(p_loja, p_local, p_produto, 'ENT', 'ENTRADA_MANUAL', p_ref, p_quantidade,
+                               case when coalesce(p_custo, 0) > 0 then p_custo end, p_user, p_obs, 0, null, null, v_data);
+  if v_data < v_hoje and not coalesce((v_res ->> 'duplicado')::boolean, false) then
+    v_rep := reprocessar_custo(p_loja, array[p_produto], v_data, 'entrada manual ' || p_ref);
+  end if;
+  return v_res || jsonb_build_object('data', v_data, 'reprocessamento', v_rep, 'avisos', coalesce(v_rep -> 'avisos', '[]'::jsonb));
+end $$;
 
 
 --
@@ -5134,7 +5185,8 @@ begin
   select * into v_ficha from fichas_tecnicas where loja_id = p_loja and codigo_produto = o.identificacao_n_cod_produto and ativa;
 
   v_res := produzir(p_loja, o.identificacao_n_cod_produto, v_qtd, v_consumo, v_destino, v_ref, p_user,
-                    'OP ' || coalesce(o.identificacao_c_num_op, o.id::text));
+                    'OP ' || coalesce(o.identificacao_c_num_op, o.id::text),
+                    least(coalesce(p_data, v_hoje), v_hoje)); -- 320: o estoque entra na data de conclusão escolhida
 
   update ordens_producao set
     concluida = true, dt_conclusao_real = least(coalesce(p_data, v_hoje), v_hoje), concluida_por = p_user_uuid, concluida_por_nome = p_user,
@@ -6091,10 +6143,10 @@ $$;
 
 
 --
--- Name: produzir(bigint, bigint, numeric, bigint, bigint, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+-- Name: produzir(bigint, bigint, numeric, bigint, bigint, text, text, text, date); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.produzir(p_loja bigint, p_produto bigint, p_quantidade numeric, p_local_consumo bigint, p_local_destino bigint, p_ref text, p_user text DEFAULT NULL::text, p_obs text DEFAULT NULL::text) RETURNS jsonb
+CREATE FUNCTION public.produzir(p_loja bigint, p_produto bigint, p_quantidade numeric, p_local_consumo bigint, p_local_destino bigint, p_ref text, p_user text DEFAULT NULL::text, p_obs text DEFAULT NULL::text, p_data date DEFAULT NULL::date) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -6102,6 +6154,7 @@ declare
   v_modo text; v_ficha fichas_tecnicas%rowtype; v_ex ordens_producao_proprio%rowtype; v_ids bigint[]; r record; v_res jsonb;
   v_total numeric := 0; v_custo_un numeric; v_ordem bigint; v_out jsonb; v_itens jsonb := '[]'::jsonb;
   v_cu numeric; v_lote uuid := gen_random_uuid(); v_algum_est boolean := false; v_m estoque_movimentos%rowtype; -- 314
+  v_hoje date := (now() at time zone 'America/Sao_Paulo')::date; v_data date; v_rep jsonb; -- 320
 begin
   select modo_estoque into v_modo from lojas where id = p_loja;
   if v_modo is distinct from 'proprio' then raise exception 'A loja % não usa estoque próprio', p_loja using errcode = '22023'; end if;
@@ -6113,6 +6166,8 @@ begin
     return jsonb_build_object('ok', true, 'duplicado', true, 'ordem_id', v_ex.id, 'custo_unitario', v_ex.custo_unitario, 'custo_total', v_ex.custo_total);
   end if;
 
+  v_data := _data_retroativa(p_loja, p_data); -- 320: data da produção (null = hoje)
+
   select * into v_ficha from fichas_tecnicas where loja_id = p_loja and codigo_produto = p_produto and ativa;
   if not found then raise exception 'O produto % não tem ficha técnica ativa', p_produto using errcode = '22023'; end if;
   if not exists (select 1 from local_estoques where loja_id = p_loja and codigo_local_estoque = p_local_consumo)
@@ -6121,6 +6176,12 @@ begin
   end if;
 
   select array_agg(e.codigo_insumo) into v_ids from expandir_receita(p_loja, p_produto, p_quantidade) e;
+  -- 320: data passada trava antes a cascata inteira que o reprocessamento vai tocar, em ordem de código (como a 313),
+  -- para não cruzar trava com uma venda ou OP que pegue os mesmos produtos em outra ordem
+  if v_data < v_hoje then
+    perform _travar_custo_produtos(p_loja, (select c.produtos from _cascata_custo(p_loja, coalesce(v_ids, '{}') || p_produto,
+      _recuo_pares(p_loja, coalesce(v_ids, '{}') || p_produto, v_data, _primeiro_dia_aberto(p_loja))) c));
+  end if;
   perform _travar_custos(p_loja, coalesce(v_ids, '{}') || p_produto);
 
   insert into ordens_producao_proprio (loja_id, ref, codigo_produto, ficha_id, quantidade, local_consumo, local_destino, user_id, obs)
@@ -6128,7 +6189,7 @@ begin
 
   for r in select * from expandir_receita(p_loja, p_produto, p_quantidade) order by 1 loop
     v_res := registrar_movimento(p_loja, p_local_consumo, r.codigo_insumo, 'PRD', 'PRODUCAO', p_ref, -r.quantidade, null, p_user,
-                                 'Produção de ' || _rotulo_produto(p_loja, p_produto), 0, null, null, null);
+                                 'Produção de ' || _rotulo_produto(p_loja, p_produto), 0, null, null, v_data); -- 320
     v_cu := _custo_consumo_sem_cmc(v_res, v_lote); -- 314: insumo sem custo médio usa o último custo conhecido (estimado)
     if coalesce((v_res ->> 'cmc')::numeric, 0) <= 0 then v_algum_est := true; end if;
     v_total := v_total + r.quantidade * v_cu;
@@ -6139,7 +6200,7 @@ begin
 
   v_custo_un := round(v_total / p_quantidade, 6);
   v_out := registrar_movimento(p_loja, p_local_destino, p_produto, 'PRD', 'PRODUCAO', p_ref, p_quantidade,
-                               case when v_custo_un > 0 then v_custo_un else null end, p_user, coalesce(p_obs, 'Produção de lote'), 0, null, null, null);
+                               case when v_custo_un > 0 then v_custo_un else null end, p_user, coalesce(p_obs, 'Produção de lote'), 0, null, null, v_data); -- 320
   -- 314: algum insumo saiu com custo estimado → a entrada do prato também fica estimada (igual à cadeia do 312)
   select * into v_m from estoque_movimentos where id = (v_out ->> 'id')::bigint;
   if v_algum_est and not v_m.custo_estimado then
@@ -6147,8 +6208,23 @@ begin
                                'custo estimado: algum insumo da OP saiu com custo estimado');
   end if;
   update ordens_producao_proprio set custo_total = round(v_total, 6), custo_unitario = v_custo_un where id = v_ordem;
+  -- 320: produção com data passada refaz o custo do prato e dos insumos (e de quem usa o prato) desde aquele dia,
+  -- na mesma transação, como a compra (313). Depois disso o custo da OP, dos itens e do retorno é relido do ledger efetivo.
+  if v_data < v_hoje then
+    v_rep := reprocessar_custo(p_loja, coalesce(v_ids, '{}') || p_produto, v_data, 'OP ' || p_ref);
+    -- custo da OP = consumos já refeitos; itens, OP e retorno ficam iguais ao que o ledger efetivo diz
+    update ordens_producao_proprio_itens i set custo_unitario = coalesce(e.custo_unitario, 0)
+      from estoque_movimentos_efetivo e where i.ordem_id = v_ordem and e.id = i.movimento_id;
+    select coalesce(sum(i.quantidade * i.custo_unitario), 0) into v_total from ordens_producao_proprio_itens i where i.ordem_id = v_ordem;
+    select e.custo_unitario into v_custo_un from estoque_movimentos_efetivo e where e.id = (v_out ->> 'id')::bigint;
+    v_custo_un := coalesce(v_custo_un, round(v_total / p_quantidade, 6));
+    update ordens_producao_proprio set custo_total = round(v_total, 6), custo_unitario = v_custo_un where id = v_ordem;
+    v_out := v_out || jsonb_build_object('cmc', (select cmc from estoque_custos where loja_id = p_loja and codigo_produto = p_produto));
+  end if;
   return jsonb_build_object('ok', true, 'duplicado', false, 'ordem_id', v_ordem, 'custo_total', round(v_total, 6), 'custo_unitario', v_custo_un,
-                            'saldo_produto', (v_out ->> 'saldo')::numeric, 'cmc_produto', (v_out ->> 'cmc')::numeric, 'itens', v_itens);
+                            'saldo_produto', (v_out ->> 'saldo')::numeric, 'cmc_produto', (v_out ->> 'cmc')::numeric, 'itens', v_itens,
+                            'data_producao', v_data, 'custo_unitario_refeito', case when v_rep is not null then v_custo_un end, -- 320
+                            'reprocessamento', v_rep, 'avisos', coalesce(v_rep -> 'avisos', '[]'::jsonb));
 end $$;
 
 
@@ -14483,6 +14559,41 @@ ALTER TABLE public.transferencias_loja_itens ALTER COLUMN id ADD GENERATED ALWAY
 
 
 --
+-- Name: venda_integracao_pedidos; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.venda_integracao_pedidos (
+    id bigint NOT NULL,
+    loja_id bigint NOT NULL,
+    pedido_ref text NOT NULL,
+    itens text[] DEFAULT '{}'::text[] NOT NULL,
+    modo text,
+    recebido_em timestamp with time zone DEFAULT now() NOT NULL,
+    concluido_em timestamp with time zone,
+    resultados jsonb
+);
+
+
+--
+-- Name: venda_integracao_pedidos_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.venda_integracao_pedidos_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: venda_integracao_pedidos_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.venda_integracao_pedidos_id_seq OWNED BY public.venda_integracao_pedidos.id;
+
+
+--
 -- Name: venda_op_vinculo; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -14980,6 +15091,13 @@ ALTER TABLE ONLY public.produtos ALTER COLUMN id SET DEFAULT nextval('public.pro
 --
 
 ALTER TABLE ONLY public.transferencias ALTER COLUMN id SET DEFAULT nextval('public.transferencias_id_seq'::regclass);
+
+
+--
+-- Name: venda_integracao_pedidos id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.venda_integracao_pedidos ALTER COLUMN id SET DEFAULT nextval('public.venda_integracao_pedidos_id_seq'::regclass);
 
 
 --
@@ -16652,6 +16770,14 @@ ALTER TABLE ONLY public.ordens_producao
 
 
 --
+-- Name: venda_integracao_pedidos venda_integracao_pedidos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.venda_integracao_pedidos
+    ADD CONSTRAINT venda_integracao_pedidos_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: venda_op_vinculo venda_op_vinculo_loja_id_cod_int_op_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -17916,6 +18042,20 @@ CREATE INDEX transferencias_loja_loja ON public.transferencias_loja USING btree 
 
 
 --
+-- Name: venda_integracao_pedidos_loja_tempo_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX venda_integracao_pedidos_loja_tempo_idx ON public.venda_integracao_pedidos USING btree (loja_id, recebido_em);
+
+
+--
+-- Name: venda_integracao_pedidos_ref_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX venda_integracao_pedidos_ref_idx ON public.venda_integracao_pedidos USING btree (loja_id, pedido_ref);
+
+
+--
 -- Name: venda_op_vinculo_pedido_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -18383,6 +18523,12 @@ CREATE TRIGGER ordens_producao_periodo BEFORE INSERT OR DELETE OR UPDATE ON publ
 
 --
 -- Name: estoque_lotes outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: estoque_mov_revisao outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
 --
 
 
@@ -20374,6 +20520,14 @@ ALTER TABLE ONLY public.transferencias
 
 
 --
+-- Name: venda_integracao_pedidos venda_integracao_pedidos_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.venda_integracao_pedidos
+    ADD CONSTRAINT venda_integracao_pedidos_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id) ON DELETE CASCADE;
+
+
+--
 -- Name: venda_op_vinculo venda_op_vinculo_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -22194,6 +22348,12 @@ CREATE POLICY transferencias_select_por_loja ON public.transferencias FOR SELECT
 
 
 --
+-- Name: venda_integracao_pedidos; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.venda_integracao_pedidos ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: venda_op_vinculo; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -22309,6 +22469,14 @@ GRANT ALL ON FUNCTION public._custo_consumo_sem_cmc(p_res jsonb, p_lote uuid) TO
 
 REVOKE ALL ON FUNCTION public._data_entrada_compra(p_loja bigint, p_compra bigint, p_pedida date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._data_entrada_compra(p_loja bigint, p_compra bigint, p_pedida date) TO postgres;
+
+
+--
+-- Name: FUNCTION _data_retroativa(p_loja bigint, p_data date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._data_retroativa(p_loja bigint, p_data date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._data_retroativa(p_loja bigint, p_data date) TO postgres;
 
 
 --
@@ -22817,6 +22985,15 @@ GRANT ALL ON FUNCTION public.devolucao_fornecedor_registrar(p_loja bigint, p_com
 GRANT ALL ON FUNCTION public.dia_do_movimento(p timestamp with time zone) TO postgres;
 GRANT ALL ON FUNCTION public.dia_do_movimento(p timestamp with time zone) TO authenticated;
 GRANT ALL ON FUNCTION public.dia_do_movimento(p timestamp with time zone) TO service_role;
+
+
+--
+-- Name: FUNCTION entrada_manual_com_data(p_loja bigint, p_local bigint, p_produto bigint, p_quantidade numeric, p_custo numeric, p_ref text, p_user text, p_obs text, p_data date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.entrada_manual_com_data(p_loja bigint, p_local bigint, p_produto bigint, p_quantidade numeric, p_custo numeric, p_ref text, p_user text, p_obs text, p_data date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.entrada_manual_com_data(p_loja bigint, p_local bigint, p_produto bigint, p_quantidade numeric, p_custo numeric, p_ref text, p_user text, p_obs text, p_data date) TO postgres;
+GRANT ALL ON FUNCTION public.entrada_manual_com_data(p_loja bigint, p_local bigint, p_produto bigint, p_quantidade numeric, p_custo numeric, p_ref text, p_user text, p_obs text, p_data date) TO service_role;
 
 
 --
@@ -23762,12 +23939,12 @@ GRANT ALL ON FUNCTION public.produtos_repor(p_loja_id bigint) TO service_role;
 
 
 --
--- Name: FUNCTION produzir(p_loja bigint, p_produto bigint, p_quantidade numeric, p_local_consumo bigint, p_local_destino bigint, p_ref text, p_user text, p_obs text); Type: ACL; Schema: public; Owner: -
+-- Name: FUNCTION produzir(p_loja bigint, p_produto bigint, p_quantidade numeric, p_local_consumo bigint, p_local_destino bigint, p_ref text, p_user text, p_obs text, p_data date); Type: ACL; Schema: public; Owner: -
 --
 
-REVOKE ALL ON FUNCTION public.produzir(p_loja bigint, p_produto bigint, p_quantidade numeric, p_local_consumo bigint, p_local_destino bigint, p_ref text, p_user text, p_obs text) FROM PUBLIC;
-GRANT ALL ON FUNCTION public.produzir(p_loja bigint, p_produto bigint, p_quantidade numeric, p_local_consumo bigint, p_local_destino bigint, p_ref text, p_user text, p_obs text) TO postgres;
-GRANT ALL ON FUNCTION public.produzir(p_loja bigint, p_produto bigint, p_quantidade numeric, p_local_consumo bigint, p_local_destino bigint, p_ref text, p_user text, p_obs text) TO service_role;
+REVOKE ALL ON FUNCTION public.produzir(p_loja bigint, p_produto bigint, p_quantidade numeric, p_local_consumo bigint, p_local_destino bigint, p_ref text, p_user text, p_obs text, p_data date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.produzir(p_loja bigint, p_produto bigint, p_quantidade numeric, p_local_consumo bigint, p_local_destino bigint, p_ref text, p_user text, p_obs text, p_data date) TO postgres;
+GRANT ALL ON FUNCTION public.produzir(p_loja bigint, p_produto bigint, p_quantidade numeric, p_local_consumo bigint, p_local_destino bigint, p_ref text, p_user text, p_obs text, p_data date) TO service_role;
 
 
 --
@@ -27355,6 +27532,23 @@ GRANT SELECT ON TABLE public.transferencias_loja_itens TO authenticated;
 GRANT ALL ON SEQUENCE public.transferencias_loja_itens_id_seq TO postgres;
 GRANT ALL ON SEQUENCE public.transferencias_loja_itens_id_seq TO authenticated;
 GRANT ALL ON SEQUENCE public.transferencias_loja_itens_id_seq TO service_role;
+
+
+--
+-- Name: TABLE venda_integracao_pedidos; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.venda_integracao_pedidos TO postgres;
+GRANT ALL ON TABLE public.venda_integracao_pedidos TO service_role;
+
+
+--
+-- Name: SEQUENCE venda_integracao_pedidos_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON SEQUENCE public.venda_integracao_pedidos_id_seq TO postgres;
+GRANT ALL ON SEQUENCE public.venda_integracao_pedidos_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.venda_integracao_pedidos_id_seq TO service_role;
 
 
 --

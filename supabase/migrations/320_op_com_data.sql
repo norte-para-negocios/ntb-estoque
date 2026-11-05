@@ -1,4 +1,4 @@
--- 319 — OP com a data da produção (Norte ERP, T5.2b, 04/11/2026). Depende da 311–314.
+-- 320 — OP com a data da produção (Norte ERP, T5.2b, 04/11/2026). Depende da 311–314.
 --
 -- Antes: produzir gravava tudo na data de hoje. OP do pré-preparo lançada depois das vendas não corrigia o custo dessas
 -- vendas (o insumo do prato saía a 0 ou estimado). Agora produzir aceita p_data (null = hoje, igual a antes):
@@ -10,13 +10,13 @@
 -- estoque entrava hoje. Agora passa essa mesma data ao produzir. Corpo copiado de pg_get_functiondef em PRODUÇÃO
 -- (04/11/2026); mudou só a chamada do produzir. Nas 537 OPs concluídas da ODARA a data escolhida foi sempre o dia da
 -- conclusão, então nada do que já existe muda.
--- Corpo do produzir copiado da 314 (= produção 04/11/2026); mudou só o que está marcado "319". Assinatura ganha p_data no fim, com
+-- Corpo do produzir copiado da 314 (= produção 04/11/2026); mudou só o que está marcado "320". Assinatura ganha p_data no fim, com
 -- default: a antiga (8 argumentos) é removida para não sobrar dois overloads. Quem chama sem p_data continua igual.
 --
 -- Também: entrada_manual_com_data (entrada manual com a data em que a mercadoria chegou), mesmas regras de data.
 --
--- Teste: scripts/testes-sql/319_op_com_data.sql (BEGIN … ROLLBACK). Aplicar com -1:
---   node scripts/aplicar-migration.mjs supabase/migrations/319_op_com_data.sql
+-- Teste: scripts/testes-sql/320_op_com_data.sql (BEGIN … ROLLBACK). Aplicar com -1:
+--   node scripts/aplicar-migration.mjs supabase/migrations/320_op_com_data.sql
 -- Conferir: \df produzir (1 overload, 9 argumentos).
 
 -- Data de um lançamento retroativo (OP ou entrada manual): null = hoje; nunca no futuro, nunca em mês fechado, nunca
@@ -52,7 +52,7 @@ declare
   v_modo text; v_ficha fichas_tecnicas%rowtype; v_ex ordens_producao_proprio%rowtype; v_ids bigint[]; r record; v_res jsonb;
   v_total numeric := 0; v_custo_un numeric; v_ordem bigint; v_out jsonb; v_itens jsonb := '[]'::jsonb;
   v_cu numeric; v_lote uuid := gen_random_uuid(); v_algum_est boolean := false; v_m estoque_movimentos%rowtype; -- 314
-  v_hoje date := (now() at time zone 'America/Sao_Paulo')::date; v_data date; v_rep jsonb; -- 319
+  v_hoje date := (now() at time zone 'America/Sao_Paulo')::date; v_data date; v_rep jsonb; -- 320
 begin
   select modo_estoque into v_modo from lojas where id = p_loja;
   if v_modo is distinct from 'proprio' then raise exception 'A loja % não usa estoque próprio', p_loja using errcode = '22023'; end if;
@@ -64,7 +64,7 @@ begin
     return jsonb_build_object('ok', true, 'duplicado', true, 'ordem_id', v_ex.id, 'custo_unitario', v_ex.custo_unitario, 'custo_total', v_ex.custo_total);
   end if;
 
-  v_data := _data_retroativa(p_loja, p_data); -- 319: data da produção (null = hoje)
+  v_data := _data_retroativa(p_loja, p_data); -- 320: data da produção (null = hoje)
 
   select * into v_ficha from fichas_tecnicas where loja_id = p_loja and codigo_produto = p_produto and ativa;
   if not found then raise exception 'O produto % não tem ficha técnica ativa', p_produto using errcode = '22023'; end if;
@@ -74,7 +74,7 @@ begin
   end if;
 
   select array_agg(e.codigo_insumo) into v_ids from expandir_receita(p_loja, p_produto, p_quantidade) e;
-  -- 319: data passada trava antes a cascata inteira que o reprocessamento vai tocar, em ordem de código (como a 313),
+  -- 320: data passada trava antes a cascata inteira que o reprocessamento vai tocar, em ordem de código (como a 313),
   -- para não cruzar trava com uma venda ou OP que pegue os mesmos produtos em outra ordem
   if v_data < v_hoje then
     perform _travar_custo_produtos(p_loja, (select c.produtos from _cascata_custo(p_loja, coalesce(v_ids, '{}') || p_produto,
@@ -87,7 +87,7 @@ begin
 
   for r in select * from expandir_receita(p_loja, p_produto, p_quantidade) order by 1 loop
     v_res := registrar_movimento(p_loja, p_local_consumo, r.codigo_insumo, 'PRD', 'PRODUCAO', p_ref, -r.quantidade, null, p_user,
-                                 'Produção de ' || _rotulo_produto(p_loja, p_produto), 0, null, null, v_data); -- 319
+                                 'Produção de ' || _rotulo_produto(p_loja, p_produto), 0, null, null, v_data); -- 320
     v_cu := _custo_consumo_sem_cmc(v_res, v_lote); -- 314: insumo sem custo médio usa o último custo conhecido (estimado)
     if coalesce((v_res ->> 'cmc')::numeric, 0) <= 0 then v_algum_est := true; end if;
     v_total := v_total + r.quantidade * v_cu;
@@ -98,7 +98,7 @@ begin
 
   v_custo_un := round(v_total / p_quantidade, 6);
   v_out := registrar_movimento(p_loja, p_local_destino, p_produto, 'PRD', 'PRODUCAO', p_ref, p_quantidade,
-                               case when v_custo_un > 0 then v_custo_un else null end, p_user, coalesce(p_obs, 'Produção de lote'), 0, null, null, v_data); -- 319
+                               case when v_custo_un > 0 then v_custo_un else null end, p_user, coalesce(p_obs, 'Produção de lote'), 0, null, null, v_data); -- 320
   -- 314: algum insumo saiu com custo estimado → a entrada do prato também fica estimada (igual à cadeia do 312)
   select * into v_m from estoque_movimentos where id = (v_out ->> 'id')::bigint;
   if v_algum_est and not v_m.custo_estimado then
@@ -106,7 +106,7 @@ begin
                                'custo estimado: algum insumo da OP saiu com custo estimado');
   end if;
   update ordens_producao_proprio set custo_total = round(v_total, 6), custo_unitario = v_custo_un where id = v_ordem;
-  -- 319: produção com data passada refaz o custo do prato e dos insumos (e de quem usa o prato) desde aquele dia,
+  -- 320: produção com data passada refaz o custo do prato e dos insumos (e de quem usa o prato) desde aquele dia,
   -- na mesma transação, como a compra (313). Depois disso o custo da OP, dos itens e do retorno é relido do ledger efetivo.
   if v_data < v_hoje then
     v_rep := reprocessar_custo(p_loja, coalesce(v_ids, '{}') || p_produto, v_data, 'OP ' || p_ref);
@@ -121,7 +121,7 @@ begin
   end if;
   return jsonb_build_object('ok', true, 'duplicado', false, 'ordem_id', v_ordem, 'custo_total', round(v_total, 6), 'custo_unitario', v_custo_un,
                             'saldo_produto', (v_out ->> 'saldo')::numeric, 'cmc_produto', (v_out ->> 'cmc')::numeric, 'itens', v_itens,
-                            'data_producao', v_data, 'custo_unitario_refeito', case when v_rep is not null then v_custo_un end, -- 319
+                            'data_producao', v_data, 'custo_unitario_refeito', case when v_rep is not null then v_custo_un end, -- 320
                             'reprocessamento', v_rep, 'avisos', coalesce(v_rep -> 'avisos', '[]'::jsonb));
 end $function$;
 
@@ -150,7 +150,7 @@ begin
 
   v_res := produzir(p_loja, o.identificacao_n_cod_produto, v_qtd, v_consumo, v_destino, v_ref, p_user,
                     'OP ' || coalesce(o.identificacao_c_num_op, o.id::text),
-                    least(coalesce(p_data, v_hoje), v_hoje)); -- 319: o estoque entra na data de conclusão escolhida
+                    least(coalesce(p_data, v_hoje), v_hoje)); -- 320: o estoque entra na data de conclusão escolhida
 
   update ordens_producao set
     concluida = true, dt_conclusao_real = least(coalesce(p_data, v_hoje), v_hoje), concluida_por = p_user_uuid, concluida_por_nome = p_user,
