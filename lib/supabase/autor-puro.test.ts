@@ -20,7 +20,7 @@ test('mandaAutor: escrita de sync (cliente semAutor ou dentro de semAutor()) nun
 })
 
 // Regressão da revisão da Fase G (I1): o que vem do Omie não pode ser gravado em nome de quem clicou "Atualizar".
-const raiz = new URL('../../', import.meta.url).pathname
+const raiz = decodeURIComponent(new URL('../../', import.meta.url).pathname) // pasta com espaço vira %20 sem decodificar
 function arquivos(dir: string, filtro: (f: string) => boolean): string[] {
   return readdirSync(join(raiz, dir)).flatMap((n) => {
     const p = join(dir, n)
