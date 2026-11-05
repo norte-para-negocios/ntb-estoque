@@ -39,7 +39,8 @@ export async function baixarLote(b: { lojaId: number; loteId: number; quantidade
 }
 
 export async function alertaDiasDaLoja(lojaId: number): Promise<number> {
-  const { data } = await createServiceClient().from('estoque_config').select('validade_alerta_dias').eq('loja_id', lojaId).maybeSingle()
+  const { data, error } = await createServiceClient().from('estoque_config').select('validade_alerta_dias').eq('loja_id', lojaId).maybeSingle()
+  if (error) throw new Error(error.message)
   const n = Number((data as { validade_alerta_dias?: number } | null)?.validade_alerta_dias)
   return Number.isFinite(n) && n > 0 ? n : 7
 }

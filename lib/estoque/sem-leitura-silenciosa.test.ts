@@ -8,7 +8,11 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const aqui = dirname(fileURLToPath(import.meta.url))
-const ARQUIVOS = ['venda-proprio.ts', 'sefaz-sync.ts', 'catalogo-sync.ts', 'op-proprio.ts', 'transferencia-proprio.ts']
+const ARQUIVOS = [
+  'venda-proprio.ts', 'sefaz-sync.ts', 'catalogo-sync.ts', 'op-proprio.ts', 'transferencia-proprio.ts',
+  // Fase 3 (05/11/2026): o modo da loja decide o caminho (próprio x Omie) e as telas de estoque próprio gravam no ledger.
+  'ledger.ts', 'lotes.ts', '../actions/estoque-proprio.ts', '../actions/inventario-proprio.ts', '../actions/validade-proprio.ts',
+]
 
 /** Desestruturações `{ ... } = await` (ou `[{ ... }, { ... }] = await Promise.all`) que trazem `data` e não trazem `error`. */
 export function leiturasSemErro(fonte: string): { linha: number; texto: string }[] {
