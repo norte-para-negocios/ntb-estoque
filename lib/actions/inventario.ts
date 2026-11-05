@@ -1057,12 +1057,13 @@ export async function editQuantidadeInventarioItem(itemId: number, quan: number 
 /** Envia UM item em loja de estoque próprio: desfaz o ajuste antigo (se houver) e lança a diferença no ledger. */
 async function enviarItemProprio(lojaId: number, itemId: number, quan: number | null, motivo?: string | null): Promise<EnvioInventarioResult> {
   const supabase = createServiceClient()
-  const { data: item } = await supabase
+  const { data: item, error: erroItem } = await supabase
     .from('inventario_items')
     .select('id, produto_codigo_produto, id_ajuste, motivo, inventario:inventarios(id, codigo_local_estoque, data)')
     .eq('id', itemId)
     .eq('loja_id', lojaId)
     .single<{ id: number; produto_codigo_produto: number; id_ajuste: number | null; motivo: string | null; inventario: { id: number; codigo_local_estoque: number; data: string | null } | null }>()
+  if (erroItem) return { status: 'Erro', descricao_status: erroItem.message, valor: null, id_ajuste: null, error: erroItem.message }
   if (!item?.inventario) return { status: 'Erro', descricao_status: 'Item não encontrado', valor: null, id_ajuste: null, error: 'Item não encontrado' }
   const usuario = await carimboUsuario()
 
@@ -1113,9 +1114,12 @@ export async function informarMotivoInventarioItem(itemId: number, motivo: strin
 /** Concluir (ou reenviar pendentes de) um inventário de estoque próprio: lança o que falta, sem Omie. */
 async function concluirProprio(lojaId: number, inventarioId: number, fechar: boolean) {
   const supabase = createServiceClient()
-  const { data: inv } = await supabase.from('inventarios').select('id, codigo_local_estoque, data').eq('id', inventarioId).eq('loja_id', lojaId).maybeSingle()
+  const { data: inv, error: erroInv } = await supabase.from('inventarios').select('id, codigo_local_estoque, data').eq('id', inventarioId).eq('loja_id', lojaId).maybeSingle()
+  if (erroInv) return { error: erroInv.message }
   if (!inv) return { error: 'Inventário não encontrado' }
-  const { data: itens } = await supabase.from('inventario_items').select('id, produto_codigo_produto, quan, status, id_ajuste, motivo').eq('inventario_id', inventarioId).eq('loja_id', lojaId).order('id')
+  const { data: itens, error: erroItens } = await supabase.from('inventario_items').select('id, produto_codigo_produto, quan, status, id_ajuste, motivo').eq('inventario_id', inventarioId).eq('loja_id', lojaId).order('id')
+  // Lista vazia por erro fecharia o inventário sem lançar nenhum ajuste: falha alto.
+  if (erroItens) return { error: `Falha ao ler os itens do inventário: ${erroItens.message}` }
   const usuario = await carimboUsuario()
   const lista = (itens ?? []) as { id: number; produto_codigo_produto: number; quan: number | null; status: string | null; id_ajuste: number | null; motivo: string | null }[]
 
