@@ -13,9 +13,32 @@
 -- Corpo do produzir copiado da 314 (= produção 04/11/2026); mudou só o que está marcado "319". Assinatura ganha p_data no fim, com
 -- default: a antiga (8 argumentos) é removida para não sobrar dois overloads. Quem chama sem p_data continua igual.
 --
+-- Também: entrada_manual_com_data (entrada manual com a data em que a mercadoria chegou), mesmas regras de data.
+--
 -- Teste: scripts/testes-sql/319_op_com_data.sql (BEGIN … ROLLBACK). Aplicar com -1:
 --   node scripts/aplicar-migration.mjs supabase/migrations/319_op_com_data.sql
 -- Conferir: \df produzir (1 overload, 9 argumentos).
+
+-- Data de um lançamento retroativo (OP ou entrada manual): null = hoje; nunca no futuro, nunca em mês fechado, nunca
+-- antes do 1º movimento da loja. Erro claro em vez de mudar a data em silêncio.
+create or replace function public._data_retroativa(p_loja bigint, p_data date)
+returns date
+language plpgsql stable security definer set search_path = public as $$
+declare v_hoje date := (now() at time zone 'America/Sao_Paulo')::date; v date; v_aberto date; v_ini date;
+begin
+  v := coalesce(p_data, v_hoje);
+  if v > v_hoje then raise exception 'A data não pode ser no futuro' using errcode = '22023'; end if;
+  v_aberto := _primeiro_dia_aberto(p_loja);
+  if v_aberto is not null and v < v_aberto then
+    raise exception 'O mês de % já foi fechado. Use uma data a partir de %.', to_char(v, 'MM/YYYY'), to_char(v_aberto, 'DD/MM/YYYY') using errcode = '22023';
+  end if;
+  select min(m.data_ref) into v_ini from estoque_movimentos m where m.loja_id = p_loja;
+  if v_ini is not null and v < v_ini then
+    raise exception 'O estoque desta loja começa em %. Use uma data a partir desse dia.', to_char(v_ini, 'DD/MM/YYYY') using errcode = '22023';
+  end if;
+  return v;
+end $$;
+revoke all on function public._data_retroativa(bigint, date) from public, anon, authenticated, service_role;
 
 drop function if exists public.produzir(bigint, bigint, numeric, bigint, bigint, text, text, text);
 
@@ -29,7 +52,7 @@ declare
   v_modo text; v_ficha fichas_tecnicas%rowtype; v_ex ordens_producao_proprio%rowtype; v_ids bigint[]; r record; v_res jsonb;
   v_total numeric := 0; v_custo_un numeric; v_ordem bigint; v_out jsonb; v_itens jsonb := '[]'::jsonb;
   v_cu numeric; v_lote uuid := gen_random_uuid(); v_algum_est boolean := false; v_m estoque_movimentos%rowtype; -- 314
-  v_hoje date := (now() at time zone 'America/Sao_Paulo')::date; v_data date; v_aberto date; v_ini date; v_rep jsonb; -- 319
+  v_hoje date := (now() at time zone 'America/Sao_Paulo')::date; v_data date; v_rep jsonb; -- 319
 begin
   select modo_estoque into v_modo from lojas where id = p_loja;
   if v_modo is distinct from 'proprio' then raise exception 'A loja % não usa estoque próprio', p_loja using errcode = '22023'; end if;
@@ -41,17 +64,7 @@ begin
     return jsonb_build_object('ok', true, 'duplicado', true, 'ordem_id', v_ex.id, 'custo_unitario', v_ex.custo_unitario, 'custo_total', v_ex.custo_total);
   end if;
 
-  -- 319: data da produção (null = hoje). Nunca no futuro, nunca em mês fechado, nunca antes do 1º movimento da loja.
-  v_data := coalesce(p_data, v_hoje);
-  if v_data > v_hoje then raise exception 'A data da produção não pode ser no futuro' using errcode = '22023'; end if;
-  v_aberto := _primeiro_dia_aberto(p_loja);
-  if v_aberto is not null and v_data < v_aberto then
-    raise exception 'O mês de % já foi fechado. Use uma data a partir de %.', to_char(v_data, 'MM/YYYY'), to_char(v_aberto, 'DD/MM/YYYY') using errcode = '22023';
-  end if;
-  select min(m.data_ref) into v_ini from estoque_movimentos m where m.loja_id = p_loja;
-  if v_ini is not null and v_data < v_ini then
-    raise exception 'O estoque desta loja começa em %. Use uma data a partir desse dia.', to_char(v_ini, 'DD/MM/YYYY') using errcode = '22023';
-  end if;
+  v_data := _data_retroativa(p_loja, p_data); -- 319: data da produção (null = hoje)
 
   select * into v_ficha from fichas_tecnicas where loja_id = p_loja and codigo_produto = p_produto and ativa;
   if not found then raise exception 'O produto % não tem ficha técnica ativa', p_produto using errcode = '22023'; end if;
@@ -145,5 +158,28 @@ end $function$;
 
 revoke all on function public.produzir(bigint, bigint, numeric, bigint, bigint, text, text, text, date) from public, anon, authenticated;
 grant execute on function public.produzir(bigint, bigint, numeric, bigint, bigint, text, text, text, date) to service_role;
+
+-- Entrada manual com data (mercadoria que chegou sem nota e foi lançada depois). Data passada: grava naquele dia e refaz
+-- o custo do produto (e dos pratos feitos com ele) desde então, como a compra. Sem lote/validade (esses seguem pela
+-- entrada_com_lote, só hoje).
+create or replace function public.entrada_manual_com_data(p_loja bigint, p_local bigint, p_produto bigint, p_quantidade numeric,
+  p_custo numeric, p_ref text, p_user text default null, p_obs text default null, p_data date default null)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_data date; v_res jsonb; v_rep jsonb; v_hoje date := (now() at time zone 'America/Sao_Paulo')::date;
+begin
+  if (select modo_estoque from lojas where id = p_loja) is distinct from 'proprio' then
+    raise exception 'A loja % não usa estoque próprio', p_loja using errcode = '22023';
+  end if;
+  v_data := _data_retroativa(p_loja, p_data);
+  v_res := registrar_movimento(p_loja, p_local, p_produto, 'ENT', 'ENTRADA_MANUAL', p_ref, p_quantidade,
+                               case when coalesce(p_custo, 0) > 0 then p_custo end, p_user, p_obs, 0, null, null, v_data);
+  if v_data < v_hoje and not coalesce((v_res ->> 'duplicado')::boolean, false) then
+    v_rep := reprocessar_custo(p_loja, array[p_produto], v_data, 'entrada manual ' || p_ref);
+  end if;
+  return v_res || jsonb_build_object('data', v_data, 'reprocessamento', v_rep, 'avisos', coalesce(v_rep -> 'avisos', '[]'::jsonb));
+end $$;
+revoke all on function public.entrada_manual_com_data(bigint, bigint, bigint, numeric, numeric, text, text, text, date) from public, anon, authenticated;
+grant execute on function public.entrada_manual_com_data(bigint, bigint, bigint, numeric, numeric, text, text, text, date) to service_role;
 
 notify pgrst, 'reload schema';

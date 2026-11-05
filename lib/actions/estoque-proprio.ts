@@ -55,6 +55,8 @@ export async function entradaManual(dados: {
   /** Lote e validade (opcionais): a entrada vira um lote com vencimento (tela Validade). */
   lote?: string | null
   validade?: string | null
+  /** Dia em que a mercadoria chegou (YYYY-MM-DD). Vazio = hoje. Data passada refaz o custo desde esse dia. */
+  data?: string | null
 }): Promise<Resposta> {
   const __d = viaDesktop('estoque-proprio#entradaManual', entradaManual, [dados]); if (__d) return __d as never
   const ctx = await contexto()
@@ -66,7 +68,26 @@ export async function entradaManual(dados: {
   if (quantidade == null || quantidade <= 0) return { error: 'Informe uma quantidade maior que zero.' }
   const custo = dados.custo === '' || dados.custo == null ? null : numero(dados.custo)
   if (custo != null && custo < 0) return { error: 'O custo não pode ser negativo.' }
+  const dia = dados.data?.trim() || null
+  if (dia && !/^\d{4}-\d{2}-\d{2}$/.test(dia)) return { error: 'Data inválida.' }
+  if (dia && (lote || validade)) return { error: 'Entrada com lote ou validade só pode ser lançada na data de hoje.' }
   try {
+    if (dia) {
+      // 319: grava no dia em que chegou e, se for data passada, refaz o custo do produto desde então
+      const { data: rd, error } = await createServiceClient().rpc('entrada_manual_com_data', {
+        p_loja: ctx.lojaId, p_local: dados.codigoLocal, p_produto: dados.codigoProduto, p_quantidade: quantidade,
+        p_custo: custo, p_ref: ref('em'), p_user: ctx.userId, p_obs: dados.obs?.trim() || null, p_data: dia,
+      })
+      if (error) throw new Error(error.message)
+      const r = rd as { id: number; saldo: number; avisos?: string[] }
+      await registrarAuditoria('criar', 'entrada de estoque', r.id, await descreverProduto(ctx.lojaId, dados.codigoProduto))
+      atualizarTelas()
+      const avisos = [
+        custo == null || custo <= 0 ? 'Entrada sem custo: o custo médio não foi alterado.' : null,
+        ...(Array.isArray(r.avisos) ? r.avisos.map(String) : []),
+      ].filter(Boolean)
+      return { ok: true, saldo: r.saldo, aviso: avisos.length ? avisos.join(' ') : undefined }
+    }
     const r = lote || validade
       ? await entradaComLote({
           lojaId: ctx.lojaId, local: dados.codigoLocal, produto: dados.codigoProduto, origem: 'ENTRADA_MANUAL', ref: ref('em'),

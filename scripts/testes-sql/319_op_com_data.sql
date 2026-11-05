@@ -78,5 +78,18 @@ begin
            where o.id = v_f and m.data_ref = '2026-10-18') = 2, 'OP da tela gravada na data escolhida: ' || r::text;
   assert (select dt_conclusao_real from ordens_producao where id = v_f) = '2026-10-18', 'data de conclusão gravada';
 
+  -- 7) entrada manual com data: camarão a R$ 4 em 12/10 refaz o custo do consumo da OP de 15/10 e da venda de 20/10
+  r := entrada_manual_com_data(99319, L, CAM, 10, 4, 'em-319', null, 'sem nota', '2026-10-12');
+  assert (r->>'data') = '2026-10-12' and r->'reprocessamento' <> 'null'::jsonb, 'entrada com data: ' || r::text;
+  -- CMC em 15/10: (10×2 + 10×4)/20 = 3 → consumo da OP a 3, molho a 3, venda de 20/10 a 3
+  select * into e from estoque_movimentos_efetivo where id = v_venda;
+  assert e.custo_unitario = 3, 'venda refeita pela entrada manual: ' || row_to_json(e)::text;
+  v_ok := false;
+  begin
+    perform entrada_manual_com_data(99319, L, CAM, 1, 4, 'em-319-fut', null, null, v_hoje + 3);
+  exception when sqlstate '22023' then v_ok := true;
+  end;
+  assert v_ok, 'entrada no futuro recusada';
+
   raise notice '319 OP COM DATA OK';
 end $$;
