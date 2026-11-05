@@ -31,3 +31,15 @@ export function prechecarBuscaPorChave(e: {
   if (ult && e.agora - ult < ESPERA_BUSCA_CHAVE_MS) return { error: 'Esta chave já foi consultada há menos de 1 hora.' }
   return { ok: true, chave: ch, cnpj }
 }
+
+/** Sincronização (distribuição + ciência + busca pela chave) de uma loja: o que impede falar com a SEFAZ, decidido antes de
+ *  ler o certificado. O cron já filtra (lojasParaSefaz), mas o botão "Sincronizar" chama direto: loja de teste nunca consulta. */
+export function prechecarSincronizacao(l: LojaBuscaChave | null): { ok: true; cnpj: string } | { motivo: string } {
+  if (!l || l.modo_estoque !== 'proprio') return { motivo: 'A loja não usa estoque próprio.' }
+  if (l.is_test) return { motivo: 'Loja de teste não consulta a SEFAZ.' }
+  if (!l.ativo) return { motivo: 'Loja inativa.' }
+  const cnpj = String(l.cnpj ?? '').replace(/\D/g, '')
+  if (cnpj.length !== 14) return { motivo: 'A loja precisa de um CNPJ válido para consultar as notas na SEFAZ.' }
+  if (!l.certificado_path) return { motivo: 'A loja não tem certificado digital cadastrado.' }
+  return { ok: true, cnpj }
+}

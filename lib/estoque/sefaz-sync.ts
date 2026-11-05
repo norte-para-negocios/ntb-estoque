@@ -9,7 +9,7 @@ import { assinaturaConfere } from './nfe-assinatura'
 import { cabecalhoDoResumo } from './nf-sefaz-mapa'
 import { gravarNotaCompleta } from './nf-sefaz'
 import { espelharNotaNoFrio } from './nf-frio'
-import { ESPERA_BUSCA_CHAVE_MS, prechecarBuscaPorChave } from './sefaz-busca-chave'
+import { ESPERA_BUSCA_CHAVE_MS, prechecarBuscaPorChave, prechecarSincronizacao } from './sefaz-busca-chave'
 
 // Puxa as notas de entrada da SEFAZ (NFeDistribuicaoDFe, Ambiente Nacional) para uma loja de estoque próprio, sozinho, como o Omie faz:
 // resumo (resNFe) → ciência da operação → XML completo (procNFe) → nota no formato do Omie → conferência com o cadastro → entrada no estoque.
@@ -168,13 +168,12 @@ export async function sincronizarSefaz(lojaId: number): Promise<ResultadoSync> {
   const r = vazio(lojaId)
   const sb = createServiceClient()
   const agora = Date.now()
-  const { data: loja, error: eLoja } = await sb.from('lojas').select('id, cnpj, uf, modo_estoque, ativo, certificado_path').eq('id', lojaId).maybeSingle()
+  const { data: loja, error: eLoja } = await sb.from('lojas').select('id, cnpj, uf, modo_estoque, ativo, is_test, certificado_path').eq('id', lojaId).maybeSingle()
   if (eLoja) return { ...r, ok: false, erro: `Falha ao ler a loja: ${eLoja.message}` }
-  if (!loja || loja.modo_estoque !== 'proprio') return { ...r, ok: false, motivo: 'A loja não usa estoque próprio.' }
-  if (!loja.ativo) return { ...r, ok: false, motivo: 'Loja inativa.' }
-  const cnpj = String(loja.cnpj ?? '').replace(/\D/g, '')
-  if (cnpj.length !== 14) return { ...r, ok: false, motivo: 'A loja precisa de um CNPJ válido para consultar as notas na SEFAZ.' }
-  if (!loja.certificado_path) return { ...r, ok: false, motivo: 'A loja não tem certificado digital cadastrado.' }
+  // loja de teste, inativa, sem CNPJ ou sem certificado: nada vai à SEFAZ (o botão "Sincronizar" não passa pelo filtro do cron)
+  const pre = prechecarSincronizacao(loja)
+  if ('motivo' in pre || !loja) return { ...r, ok: false, motivo: 'motivo' in pre ? pre.motivo : 'A loja não usa estoque próprio.' }
+  const { cnpj } = pre
 
   const lidoNsu = await sb.from('sefaz_nsu').select('*').eq('loja_id', lojaId).maybeSingle()
   // Erro na leitura do NSU não pode virar "loja nova" (criaria outra linha / recomeçaria do NSU 0).
