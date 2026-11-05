@@ -59,6 +59,28 @@ export function sugerirFlagsCusto(e: { memoriaProduto: string | null; memoriaFor
   return { flags: flagsDeTexto(FLAGS_PADRAO)!, origem: 'padrao' }
 }
 
+// ---------- Frete pelo modFrete do XML (decisão do dono e do Ramon, 05/11/2026) ----------
+// Frete e outras despesas só entram no custo quando o frete foi pago por nós. Antes, item CST 60 vinha com NNNNNNNN
+// (regra copiada do Omie) e o frete ficava fora até alguém marcar item por item.
+//   1 = por conta do destinatário (FOB): entra.          0 = por conta do remetente (CIF): já está no preço, não soma.
+//   4 = transporte próprio do destinatário: entra (nós pagamos o transporte).
+//   3 = transporte próprio do remetente: igual ao CIF, não soma.
+//   2 = contratado por terceiros: quem paga não está na nota; não soma sozinho (quem pagou marca no item).
+//   9 = sem frete: nada.          ausente/outro código: não há regra, ficam as marcações de antes.
+// Só mexe nas marcações Frete e Outras; o resto (ICMS, ST, IPI…) segue a sugestão de sempre. Marcação manual do item
+// (origem 'manual') é a exceção e não muda. CT-e ligado depois segue a marcação Frete do item (R13).
+export function freteEntraNoCusto(modFrete: string | null | undefined): boolean | null {
+  const m = (modFrete ?? '').trim()
+  if (m === '1' || m === '4') return true
+  if (m === '0' || m === '2' || m === '3' || m === '9') return false
+  return null
+}
+export function aplicarModFrete(flags: FlagsCusto, origem: OrigemFlags, modFrete: string | null | undefined): FlagsCusto {
+  const entra = freteEntraNoCusto(modFrete)
+  if (entra === null || origem === 'manual') return flags
+  return { ...flags, frete: entra, outras: entra }
+}
+
 // ---------- CFOP de entrada (R6) ----------
 
 /** Moda de D1 (sozinha acerta 73,7 %). */
@@ -207,13 +229,15 @@ export function configInicialItem(e: {
   item: { cfop: string | null; valorTotalItem: number; fiscal: { cst: string | null; csosn: string | null } }
   crt: string | null; finalidade: string | null; memoriaProduto: MemoriaItem | null; memoriaFornecedor: MemoriaItem | null
   unidadeProduto: string | null; localNota: number | null; tipoProduto?: string | null
+  /** transp/modFrete do XML: decide Frete e Outras (aplicarModFrete). Ausente = como antes. */
+  modFrete?: string | null
 }): ConfigInicialItem {
   const f = sugerirFlagsCusto({ memoriaProduto: e.memoriaProduto?.flags ?? null, memoriaFornecedor: e.memoriaFornecedor?.flags ?? null, crt: e.crt, cst: e.item.fiscal.cst, csosn: e.item.fiscal.csosn })
   const c = sugerirCfopEntrada({ cfopNota: e.item.cfop, memoriaProduto: e.memoriaProduto?.cfopEntrada ?? null, tipoItem: e.tipoProduto ?? null, cst: e.item.fiscal.cst, csosn: e.item.fiscal.csosn })
   // R7: NF complementar/ajuste e item sem valor nascem fora do estoque (não criam entrada a custo zero).
   const movimenta = !(e.finalidade === '2' || e.finalidade === '3') && e.item.valorTotalItem > 0
   return {
-    flags: f.flags, origemFlags: f.origem, cfopEntrada: c.cfop, origemCfop: c.origem,
+    flags: aplicarModFrete(f.flags, f.origem, e.modFrete), origemFlags: f.origem, cfopEntrada: c.cfop, origemCfop: c.origem,
     movimentaEstoque: movimenta, geraContaPagar: true, unidadeEstoque: e.unidadeProduto,
     codigoLocal: e.memoriaProduto?.codigoLocal ?? e.localNota, aliqCredPis: 0, aliqCredCofins: 0,
   }

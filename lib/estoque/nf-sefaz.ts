@@ -70,6 +70,7 @@ export async function sugestoesDosItens(lojaId: number, nfe: NfeLida, casamentos
       item: { cfop: i.cfop, valorTotalItem: i.valorTotalItem, fiscal: { cst: i.fiscal.cst, csosn: i.fiscal.csosn } }, crt: nfe.crt, finalidade: nfe.finalidade,
       memoriaProduto: cod != null ? memoria.porProduto.get(cod) ?? null : null, memoriaFornecedor: memoria.porCodigoFornecedor.get(i.cProd) ?? null,
       unidadeProduto: cod != null ? unidadeDe(cod) : null, localNota: local, tipoProduto: cod != null ? tipos.get(cod) ?? null : null,
+      modFrete: nfe.transporte?.modFrete ?? null, // 05/11/2026: frete/outras pelo modFrete (aplicarModFrete)
     })
     const manualLocal = opts.locaisManuais?.get(i.linha)
     if (manualLocal) cfg.codigoLocal = manualLocal
