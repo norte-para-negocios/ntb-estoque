@@ -181,7 +181,7 @@ export async function reverterManifestacaoNF(notaId: number) {
   const __d = viaDesktop('nota-fiscal#reverterManifestacaoNF', reverterManifestacaoNF, [notaId]); if (__d) return __d as never
   if ((await modoDaLoja(await getCurrentLojaId())) === 'proprio') {
     const r = await desfazerEntradaNF(notaId)
-    return 'error' in r ? { error: r.error } : { ok: true as const }
+    return 'error' in r ? { error: r.error } : { ok: true as const, aviso: r.aviso }
   }
   const ctx = await carregarNFdaLoja(notaId, 'Notas Fiscais - Reverter')
   if ('error' in ctx) return { error: ctx.error }
@@ -218,7 +218,7 @@ export async function excluirRecebimentoNF(notaId: number) {
   const __d = viaDesktop('nota-fiscal#excluirRecebimentoNF', excluirRecebimentoNF, [notaId]); if (__d) return __d as never
   if ((await modoDaLoja(await getCurrentLojaId())) === 'proprio') {
     const r = await excluirNotaProprio(notaId)
-    return 'error' in r ? { error: r.error } : { ok: true as const, fantasma: false }
+    return 'error' in r ? { error: r.error } : { ok: true as const, fantasma: false, aviso: r.aviso }
   }
   const ctx = await carregarNFdaLoja(notaId, 'Notas Fiscais - Excluir')
   if ('error' in ctx) return { error: ctx.error }

@@ -43,6 +43,8 @@ import { QuantidadeInput } from '@/components/nota-fiscal/QuantidadeInput'
 import { CategoriaContabilSelect } from '@/components/nota-fiscal/CategoriaContabilSelect'
 import { fmtCnpj, resumosDaNota, totaisDaNota, totalDoItem } from '@/lib/nota-fiscal/tela-nota'
 import { BarraConcluirNF } from '@/components/nota-fiscal/BarraConcluirNF'
+import { ContasPagarDaNotaNF } from '@/components/nota-fiscal/ContasPagarDaNotaNF'
+import { titulosDaNota, PERM as PERM_FIN } from '@/lib/financeiro/dados'
 
 export default async function NotaFiscalItensPage({
   params,
@@ -140,6 +142,13 @@ export default async function NotaFiscalItensPage({
   // Fase F [F1]: NF-e de devolução de cada devolução registrada (sem a migration 260 o painel some)
   const nfesDev = devolucoes?.devolucoes.length ? await nfesDasOrigens(lojaId, 'devolucao', devolucoes.devolucoes.map((d) => d.id)) : null
   const podeNfe = !!nfesDev && (await requirePermissao(lojaId, 'Compras - Emitir NF-e'))
+  // Fase 4 (migration 340), só desenvolvedor: contas a pagar geradas por esta nota (uma por duplicata do XML)
+  let contasNota: Awaited<ReturnType<typeof titulosDaNota>> | null = null
+  let erroContasNota: string | null = null
+  if (dev && proprio && conferencia?.compra) {
+    try { contasNota = await titulosDaNota(lojaId, Number(id)) } catch (e) { erroContasNota = e instanceof Error ? e.message : String(e) }
+  }
+  const podeGerarContas = !!contasNota && (await requirePermissao(lojaId, PERM_FIN.contasPagar))
 
   function fmtData(d: string | null) {
     if (!d) return null
@@ -235,6 +244,14 @@ export default async function NotaFiscalItensPage({
         ) },
         comuns.impostos,
         ...(comuns.parcelas ? [comuns.parcelas] : []),
+        ...(contasNota || erroContasNota ? [{ id: 'contas-pagar', titulo: 'Contas a pagar',
+          resumo: erroContasNota ? 'Não foi possível carregar' : contasNota!.titulos.filter((t) => t.status !== 'cancelado').length
+            ? `${contasNota!.titulos.filter((t) => t.status !== 'cancelado').length} conta(s) a pagar desta nota` : 'Nenhuma conta a pagar ativa',
+          conteudo: erroContasNota ? <p className="text-[13px] text-err">{erroContasNota}</p> : (
+            <ContasPagarDaNotaNF notaId={Number(id)} titulos={contasNota!.titulos} falha={contasNota!.falha} statusCompra={conferencia?.compra?.status ?? null}
+              fullObject={nf.full_object} valorTotal={nf.n_valor_nfe != null ? Number(nf.n_valor_nfe) : null} emissao={nf.d_emissao_nfe ?? null}
+              hoje={hojeBahiaISO()} podeGerar={podeGerarContas} semMigration={contasNota!.semMigration} />
+          ) }] : []),
         { id: 'sefaz', titulo: 'SEFAZ', resumo: conferencia?.documento?.cienciaEm ? 'Ciência da operação enviada · manifestação e origem da nota' : 'Manifestação e origem da nota', conteudo: (
           <>
             {conferencia && nf.c_chave_nfe && podeManifestarSefaz && (

@@ -135,6 +135,7 @@ export const ACOES: Readonly<Record<string, Acao>> = Object.freeze({
   'financeiro#cancelarTituloPagar': m21.cancelarTituloPagar as Acao,
   'financeiro#registrarPagamentoTitulo': m21.registrarPagamentoTitulo as Acao,
   'financeiro#estornarPagamentoTitulo': m21.estornarPagamentoTitulo as Acao,
+  'financeiro#gerarContasPagarDaNota': m21.gerarContasPagarDaNota as Acao,
   'fornecedor#criarFornecedor': m22.criarFornecedor as Acao,
   'fornecedor#editarFornecedor': m22.editarFornecedor as Acao,
   'fornecedor#excluirFornecedor': m22.excluirFornecedor as Acao,

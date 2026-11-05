@@ -48,7 +48,12 @@ export function AcoesNF({
     startTransition(async () => {
       const res = await reverterManifestacaoNF(notaId)
       if (res?.error) toast.error(res.error)
-      else { toast.success(modoProprio ? 'Entrada desfeita: o estoque foi estornado e a nota voltou para a conferência.' : 'Conclusão revertida.'); router.refresh() }
+      else {
+        toast.success(modoProprio ? 'Entrada desfeita: o estoque foi estornado e a nota voltou para a conferência.' : 'Conclusão revertida.')
+        // só desenvolvedor recebe (Fase 4): parcela já paga da nota continua no contas a pagar
+        if (res && 'aviso' in res && res.aviso) toast.warning(res.aviso, { duration: 12000 })
+        router.refresh()
+      }
     })
   }
 
@@ -59,6 +64,7 @@ export function AcoesNF({
       if (res?.error) toast.error(res.error)
       else {
         toast.success(res?.fantasma ? 'Nota removida (já não existia mais no Omie).' : modoProprio ? 'Nota excluída.' : 'Recebimento excluído.')
+        if (res && 'aviso' in res && res.aviso) toast.warning(res.aviso, { duration: 12000 })
         router.push('/nota-fiscal')
       }
     })

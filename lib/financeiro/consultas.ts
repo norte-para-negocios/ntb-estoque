@@ -127,3 +127,27 @@ export async function extratoConta(db: Db, lojaId: number, contaId: number, de: 
     itens: (r.itens ?? []).map((i) => ({ ...i, valor: n(i.valor), saldo_apos: n(i.saldo_apos) })),
   }
 }
+
+// ------------------------------------------------------------------- contas a pagar geradas pela nota de entrada (340)
+export type TituloNota = {
+  id: number; numero: number; parcela: number; total_parcelas: number; valor: number; valor_quitado: number
+  data_vencimento: string; status: StatusTitulo; motivo_cancelamento: string | null
+}
+
+/** Contas a pagar de uma nota (origem 'nota_entrada') e o motivo da última falha de geração, se a última notícia for falha. */
+export async function titulosDaNota(db: Db, lojaId: number, notaId: number):
+  Promise<{ titulos: TituloNota[]; falha: string | null; semMigration: boolean }> {
+  const { data, error } = await db.from('fin_titulos_pagar')
+    .select('id, numero, parcela, total_parcelas, valor, valor_quitado, data_vencimento, status, motivo_cancelamento')
+    .eq('loja_id', lojaId).eq('origem_tipo', 'nota_entrada').eq('origem_id', notaId).order('parcela').order('id')
+  if (error) {
+    if (semMigration(error)) return { titulos: [], falha: null, semMigration: true }
+    throw new Error(`Não foi possível carregar as contas a pagar da nota: ${error.message}`)
+  }
+  const { data: ev, error: ee } = await db.from('fin_eventos').select('tipo, detalhe')
+    .eq('loja_id', lojaId).eq('entidade', 'nota_entrada').eq('entidade_id', notaId).order('id', { ascending: false }).limit(1)
+  if (ee && !semMigration(ee)) throw new Error(`Não foi possível carregar o histórico da nota: ${ee.message}`)
+  const ultimo = ((ev ?? []) as { tipo: string; detalhe: { erro?: string } }[])[0]
+  const titulos = ((data ?? []) as TituloNota[]).map((t) => ({ ...t, valor: n(t.valor), valor_quitado: n(t.valor_quitado) }))
+  return { titulos, falha: ultimo?.tipo === 'titulos_falha' ? String(ultimo.detalhe?.erro ?? 'erro desconhecido') : null, semMigration: false }
+}

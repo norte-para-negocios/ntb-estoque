@@ -21,6 +21,9 @@ import { decidirEnvioManifestacao, ehTipoManifestacao, resultadoManifestacao, va
 import { avaliarItemCompra, decidirConferencia, sugerirCfopEntrada, fatorConhecido, flagsParaTexto, validarConfigItem, type AlertaItem, type ConfigItemNF, type ItemCompraGravado } from '@/lib/estoque/nf-item-regras'
 import { decidirConfirmacaoEntrada, resultadoLancamento } from '@/lib/estoque/nf-entrada'
 import { avisoReprocessarLocal } from '@/lib/offline/limpar-esquema-puro'
+import { ehDesenvolvedor } from '@/lib/recursos-dev'
+import { semMigration } from '@/lib/financeiro/consultas'
+import { avisoAoDesfazer } from '@/lib/financeiro/titulos-da-nota-puro'
 
 // Ações da tela de Notas Fiscais em loja de estoque próprio (sem Omie): conferir itens, confirmar a entrada, desfazer e excluir.
 
@@ -40,6 +43,16 @@ async function atualizarSituacao(lojaId: number, notaId: number) {
   revalidatePath(`/nota-fiscal/${notaId}`)
   revalidatePath('/nota-fiscal')
   revalidatePath('/estoque')
+}
+
+/** Fase 4 (migration 340), só desenvolvedor: depois de desfazer/excluir, a conta a pagar já paga da nota NÃO é cancelada
+ *  (decisão humana). Devolve o aviso para a tela; null quando não sobrou nada pago (ou para a equipe). */
+async function avisoContasPagasDaNota(lojaId: number, notaId: number): Promise<string | null> {
+  if (!(await ehDesenvolvedor())) return null
+  const { data, error } = await createServiceClient().from('fin_titulos_pagar').select('id')
+    .eq('loja_id', lojaId).eq('origem_tipo', 'nota_entrada').eq('origem_id', notaId).neq('status', 'cancelado').gt('valor_quitado', 0)
+  if (error) return semMigration(error) ? null : 'Não foi possível conferir as contas a pagar desta nota: confira em Financeiro › Contas a pagar.'
+  return avisoAoDesfazer({ com_pagamento: (data ?? []).length })
 }
 
 async function compraDaNota(lojaId: number, notaId: number) {
@@ -78,7 +91,7 @@ export async function confirmarEntradaNF(notaId: number, codigoLocal?: number | 
 }
 
 /** Desfaz a entrada no estoque (estorno movimento a movimento; o histórico fica). */
-export async function desfazerEntradaNF(notaId: number): Promise<{ ok: true; estornados: number } | { error: string }> {
+export async function desfazerEntradaNF(notaId: number): Promise<{ ok: true; estornados: number; aviso?: string } | { error: string }> {
   const __d = viaDesktop('nota-fiscal-proprio#desfazerEntradaNF', desfazerEntradaNF, [notaId]); if (__d) return __d as never
   const ctx = await contexto('Notas Fiscais - Reverter')
   if ('error' in ctx) return ctx
@@ -90,11 +103,12 @@ export async function desfazerEntradaNF(notaId: number): Promise<{ ok: true; est
   if (error) return { error: error.message }
   await registrarAuditoria('reverter', 'nota fiscal (entrada)', compra.numero ?? notaId, null)
   await atualizarSituacao(ctx.lojaId, notaId)
-  return { ok: true, estornados: Number((data as { estornados: number }).estornados) || 0 }
+  const aviso = await avisoContasPagasDaNota(ctx.lojaId, notaId)
+  return { ok: true, estornados: Number((data as { estornados: number }).estornados) || 0, ...(aviso ? { aviso } : {}) }
 }
 
 /** Tira a nota da lista (soft delete). Se já tinha entrada no estoque, a entrada é desfeita antes. */
-export async function excluirNotaProprio(notaId: number): Promise<{ ok: true } | { error: string }> {
+export async function excluirNotaProprio(notaId: number): Promise<{ ok: true; aviso?: string } | { error: string }> {
   const __d = viaDesktop('nota-fiscal-proprio#excluirNotaProprio', excluirNotaProprio, [notaId]); if (__d) return __d as never
   const ctx = await contexto('Notas Fiscais - Excluir')
   if ('error' in ctx) return ctx
@@ -117,7 +131,8 @@ export async function excluirNotaProprio(notaId: number): Promise<{ ok: true } |
   await registrarAuditoria('excluir', 'nota fiscal', notaId, null)
   void espelharNotaNoFrio(ctx.lojaId, notaId)
   revalidatePath('/nota-fiscal')
-  return { ok: true }
+  const aviso = await avisoContasPagasDaNota(ctx.lojaId, notaId)
+  return aviso ? { ok: true, aviso } : { ok: true }
 }
 
 /** Liga um item da nota a um produto do cadastro (e o sistema aprende o de-para para as próximas notas do fornecedor). */

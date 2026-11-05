@@ -1,3 +1,5 @@
+import Link from 'next/link'
+import { origemDoTitulo } from '@/lib/financeiro/titulos-da-nota-puro'
 import { notFound } from 'next/navigation'
 import { hojeBahiaISO } from '@/lib/data-bahia'
 import { acessoFinanceiro, detalheTitulo, listarCategorias, listarContas, listarFornecedores, PERM } from '@/lib/financeiro/dados'
@@ -46,7 +48,7 @@ export default async function TituloPagarPage({ params }: { params: Promise<{ id
             ['Valor', <Money key="v" value={t.valor} />], ['Já pago (do título)', <Money key="q" value={t.valor_quitado} />],
             ['Falta pagar', <Money key="r" value={t.restante} />], ['Vencimento', dataBR(t.data_vencimento)],
             ['Competência', mesBR(t.data_competencia)], ['Emissão', dataBR(t.data_emissao)], ['Categoria', t.categoria_nome ?? '—'],
-            ['Origem', t.origem_tipo === 'manual' ? 'Lançado à mão' : t.origem_tipo],
+            ['Origem', (() => { const o = origemDoTitulo(t.origem_tipo, t.origem_id, t.documento); return o.href ? <Link key="o" href={o.href} className="hover:underline">{o.rotulo}</Link> : o.rotulo })()],
           ].map(([rot, val]) => (
             <div key={String(rot)}><dt className="text-[12px] text-text-muted">{rot}</dt><dd className="mt-0.5 text-[15px] text-text">{val}</dd></div>
           ))}
