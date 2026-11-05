@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Label } from '@/components/ui/label'
 import { btnClass, btnLinhaClass, RotuloAcao, type BtnVariant } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
+import { useCentral } from '@/components/central/central-estado'
 import { ajusteManual, definirMinimo, entradaManual, transferirEntreLocais } from '@/lib/actions/estoque-proprio'
 import { ajusteOmie, entradaOmie, transferirOmie } from '@/lib/actions/estoque-omie'
 
@@ -105,13 +106,20 @@ export function ModalEntrada({ produto, locais, saldos, localInicial, ...g }: { 
   const [obs, setObs] = useState('')
   const [lote, setLote] = useState('')
   const [validade, setValidade] = useState('')
-  const { pending, enviar } = useEnvio(() => { setOpen(false); setQtd(''); setCusto(''); setObs(''); setLote(''); setValidade('') })
+  const [hoje] = useState(() => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }))
+  const [dia, setDia] = useState(hoje)
+  // Data da entrada: recurso novo, só nos logins de desenvolvedor (layout novo) até ser liberado.
+  const novo = useCentral() != null
+  const passado = novo && !!dia && dia < hoje
+  const { pending, enviar } = useEnvio(() => { setOpen(false); setQtd(''); setCusto(''); setObs(''); setLote(''); setValidade(''); setDia(hoje) })
 
   const omie = g.destino === 'omie'
   function salvar() {
     if (local === '') return toast.error('Escolha o local')
     if (omie) return enviar(() => entradaOmie({ codigoProduto: produto.codigoProduto, codigoLocal: local, quantidade: qtd, obs, custoUnitario: custo }), 'Entrada registrada')
-    enviar(() => entradaManual({ codigoProduto: produto.codigoProduto, codigoLocal: local, quantidade: qtd, custo, obs, lote, validade }), 'Entrada registrada')
+    if (dia > hoje) return toast.error('A data não pode ser no futuro')
+    if (passado && (lote || validade)) return toast.error('Entrada com lote ou validade só na data de hoje')
+    enviar(() => entradaManual({ codigoProduto: produto.codigoProduto, codigoLocal: local, quantidade: qtd, custo, obs, lote, validade, data: passado ? dia : undefined }), 'Entrada registrada')
   }
   return (
     <Moldura open={open} onOpenChange={setOpen} titulo="Entrada de estoque" produto={produto}
@@ -141,6 +149,9 @@ export function ModalEntrada({ produto, locais, saldos, localInicial, ...g }: { 
           <input id="ent-val" type="date" className={campo} value={validade} onChange={(e) => setValidade(e.target.value)} /></div>
       </div>
       <p className="text-[12px] text-text-muted">Com validade, o lote aparece na tela Validade e sai primeiro nas vendas (o que vence antes sai antes).</p>
+      {novo && <div className="space-y-2"><Label htmlFor="ent-dia">Chegou em</Label>
+        <input id="ent-dia" type="date" className={campo} value={dia} max={hoje} onChange={(e) => setDia(e.target.value || hoje)} /></div>}
+      {passado && <p className="text-[12px] text-text-muted">A entrada fica no dia {dia.split('-').reverse().join('/')} e o custo das vendas desde esse dia é refeito.</p>}
       </>)}
       <div className="space-y-2"><Label>Observação (opcional)</Label><input className={campo} value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex.: nota 1234, compra do mercado" /></div>
     </Moldura>

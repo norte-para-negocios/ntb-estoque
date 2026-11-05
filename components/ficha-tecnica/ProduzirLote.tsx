@@ -9,10 +9,15 @@ import { Combobox } from '@/components/ui-kit/Combobox'
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { fmtBRL, fmtQtd } from '@/components/estoque-proprio/Apresentacao'
 import { produzirLoteAction } from '@/lib/actions/ficha-tecnica'
+import { useCentral } from '@/components/central/central-estado'
 import { previaProducao, type Ficha } from '@/lib/estoque/receita'
 
 type ProdutoProduzivel = { codigoProduto: number; descricao: string; codigo: string; unidade: string; ficha: Ficha }
 type Local = { codigoLocal: number; descricao: string; padrao: boolean }
+
+/** Hoje no fuso da Bahia, YYYY-MM-DD (a data do input e a regra do banco usam o mesmo dia). */
+const hojeBahia = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
+const fmtDia = (d: string) => d.split('-').reverse().join('/')
 
 const campo = 'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none max-sm:text-base focus:ring-2 focus:ring-brand/40'
 
@@ -34,6 +39,11 @@ export function ProduzirLote({
   const [consumo, setConsumo] = useState<number | ''>(padrao)
   const [destino, setDestino] = useState<number | ''>(padrao)
   const [obs, setObs] = useState('')
+  // Data da produção: recurso novo, só nos logins de desenvolvedor (layout novo) até ser liberado.
+  const novo = useCentral() != null
+  const [hoje] = useState(hojeBahia)
+  const [dia, setDia] = useState(hoje)
+  const passado = novo && !!dia && dia < hoje
   // Uma chave por "tentativa": clique duplo reenvia a mesma e o banco devolve a mesma ordem.
   const [ref, setRef] = useState(() => `prod-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
 
@@ -56,11 +66,14 @@ export function ProduzirLote({
 
   function produzir() {
     if (!sel || !(q > 0) || consumo === '' || destino === '') { toast.error('Escolha o preparo, a quantidade e os locais'); return }
+    if (!dia || dia > hoje) { toast.error('A data da produção não pode ser no futuro'); return }
     start(async () => {
-      const r = await produzirLoteAction({ codigoProduto: sel.codigoProduto, quantidade: q, localConsumo: consumo, localDestino: destino, obs, ref })
+      const r = await produzirLoteAction({ codigoProduto: sel.codigoProduto, quantidade: q, localConsumo: consumo, localDestino: destino, obs, ref, data: passado ? dia : undefined })
       if ('error' in r) { toast.error('Não foi possível produzir', { description: r.error }); return }
-      toast.success(r.duplicado ? 'Este lote já tinha sido registrado' : 'Lote produzido', { description: `Custo por ${sel.unidade}: ${fmtBRL(r.custoUnitario)}` })
-      setQtd(''); setObs(''); setProduto('')
+      const extra = passado && !r.duplicado ? ` · lançado em ${fmtDia(dia)}, custo das vendas refeito desde esse dia` : ''
+      toast.success(r.duplicado ? 'Este lote já tinha sido registrado' : 'Lote produzido', { description: `Custo por ${sel.unidade}: ${fmtBRL(r.custoUnitario)}${extra}` })
+      for (const a of r.avisos) toast.warning(a)
+      setQtd(''); setObs(''); setProduto(''); setDia(hoje)
       setRef(`prod-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
       router.refresh()
     })
@@ -130,11 +143,18 @@ export function ProduzirLote({
       )}
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
+        {novo && <div className="flex items-center gap-2">
+          <label htmlFor="dia-lote" className="text-[13px] font-medium whitespace-nowrap">Feito em</label>
+          <input id="dia-lote" type="date" className={`${campo} w-auto num`} value={dia} max={hoje} onChange={(e) => setDia(e.target.value)} />
+        </div>}
         <input aria-label="Observação" className={`${campo} sm:max-w-[320px]`} value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Observação (opcional)" maxLength={200} />
         <button type="button" onClick={produzir} disabled={pending || !sel || !(q > 0)} className={btnClass('primary')}>
           {pending && <Spinner />}Produzir lote
         </button>
       </div>
+      {passado && (
+        <p className="mt-2 text-[12px] text-text-muted">O lote entra no estoque em {fmtDia(dia)}. O custo das vendas feitas desde esse dia é refeito com o custo deste lote.</p>
+      )}
     </section>
   )
 }
