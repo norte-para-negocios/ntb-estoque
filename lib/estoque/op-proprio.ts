@@ -2,6 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { revalidatePath } from 'next/cache'
 import { modoDaLoja } from '@/lib/estoque/ledger'
+import { avisosDaProducao } from '@/lib/estoque/avisos-baixa'
 
 // Ordem de Produção do estoque próprio. A OP vive em `ordens_producao` (a mesma tabela que a tela lê) e o consumo/entrega
 // passa pelo ledger (migration 136 + `produzir` da 133). Nenhuma chamada ao Omie. As actions de `lib/actions/ordem-producao.ts`
@@ -85,14 +86,15 @@ async function codOP(lojaId: number, opId: number): Promise<number> {
 
 export async function concluirOPProprio(
   lojaId: number, opId: number, dataISO: string | null | undefined, qtde: number | null | undefined, usuario: string, usuarioId: string | null
-): Promise<Erro | { ok: true; semEtiqueta?: boolean }> {
+): Promise<Erro | { ok: true; semEtiqueta?: boolean; avisos?: string[] }> {
   const supabase = createServiceClient()
   const { data, error } = await supabase.rpc('op_proprio_concluir', {
     p_loja: lojaId, p_op: opId, p_data: dataISO && /^\d{4}-\d{2}-\d{2}$/.test(dataISO) ? dataISO : null,
     p_qtde: qtde && qtde > 0 ? qtde : null, p_user: usuario || null, p_user_uuid: usuarioId,
   })
   if (error) return { error: msg(error, 'Falha ao concluir a OP') }
-  void data
+  // 05/11/2026: insumo com custo 0/estimado e lote vencido consumido não bloqueiam a OP; a tela mostra o aviso
+  const avisos = await avisosDaProducao(lojaId, Number((data as { ordem_id?: number } | null)?.ordem_id) || null)
   let semEtiqueta = false
   try {
     const { count } = await supabase.from('impressao_etiquetas').select('id', { count: 'exact', head: true }).eq('loja_id', lojaId).eq('origem', 'OP').eq('referencia_id', opId)
@@ -100,7 +102,7 @@ export async function concluirOPProprio(
   } catch { /* só um lembrete */ }
   await registrarAuditoria('concluir', 'ordem de produção', await codOP(lojaId, opId), null)
   revalidatePath('/ordem-producao')
-  return { ok: true, semEtiqueta }
+  return { ok: true, semEtiqueta, ...(avisos.length ? { avisos } : {}) }
 }
 
 export async function reverterOPProprio(lojaId: number, opId: number, usuario: string): Promise<Erro | { ok: true }> {

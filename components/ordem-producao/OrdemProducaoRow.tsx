@@ -330,6 +330,8 @@ function useOP(op: OPData) {
         } else {
           toast.success(`Ordem concluída${noOmie}`)
         }
+        // estoque próprio (05/11/2026): insumo com custo 0/estimado e lote vencido consumido saem como aviso
+        for (const a of res.avisos ?? []) toast.warning(a, { duration: 15000 })
         if (res.avisoRestaurar) {
           toast.error('Atenção: ficha técnica pode estar incompleta', {
             description: res.avisoRestaurar,

@@ -715,7 +715,7 @@ export async function finishOP(
   opId: number,
   dataEscolhidaISO?: string | null,
   qtdeProduzida?: number | null,
-): Promise<{ ok: true; insumosPulados?: string[]; avisoRestaurar?: string; semEtiqueta?: boolean } | { error: string }> {
+): Promise<{ ok: true; insumosPulados?: string[]; avisoRestaurar?: string; semEtiqueta?: boolean; avisos?: string[] } | { error: string }> {
   const __d = viaDesktop('ordem-producao#finishOP', finishOP, [opId, dataEscolhidaISO, qtdeProduzida]); if (__d) return __d as never
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao - Concluir'))) return { error: 'Sem permissão' }

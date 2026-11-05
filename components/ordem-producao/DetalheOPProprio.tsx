@@ -125,7 +125,11 @@ export function DetalheOPProprio({
                     <td className="px-3 py-2"><div className="text-text">{i.descricao}</div><div className="num text-[12px] text-text-muted">{i.codigo}</div></td>
                     <td className="px-3 py-2 text-right num font-medium text-text">{fq(i.quantidade_bruta)}</td>
                     <td className="px-3 py-2 text-text-muted">{i.unidade}</td>
-                    <td className="px-3 py-2 text-right num text-text-muted">{fr(i.custo_unitario, 6)}</td>
+                    <td className="px-3 py-2 text-right num text-text-muted">
+                      {fr(i.custo_unitario, 6)}
+                      {/* 05/11/2026: insumo sem custo não bloqueia a OP; fica marcado aqui */}
+                      {!(Number(i.custo_unitario) > 0) && <span className="ml-1.5 rounded-full bg-warn/10 px-1.5 py-0.5 text-[11px] font-medium text-warn">sem custo</span>}
+                    </td>
                     <td className="px-3 py-2 text-right num">{fr(i.custo_total)}</td>
                     <td className="px-3 py-2 text-right num text-text-muted">#{i.movimento_id}</td>
                   </tr>

@@ -9,6 +9,7 @@ import { registrarAuditoria } from '@/lib/auditoria'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { validarFicha, type ItemFicha } from '@/lib/estoque/receita'
 import { desativarFicha as desativarNoBanco, produzirLote, salvarFicha as salvarNoBanco } from '@/lib/estoque/receita-db'
+import { avisosDaProducao } from '@/lib/estoque/avisos-baixa'
 
 type Erro = { error: string }
 
@@ -100,9 +101,11 @@ export async function produzirLoteAction(dados: {
     })
     await registrarAuditoria('criar', 'produção de lote', dados.codigoProduto, `${dados.quantidade} un`)
     atualizar()
+    // 05/11/2026: insumo com custo 0/estimado e lote vencido consumido não bloqueiam; viram aviso na tela
+    const avisosBaixa = r.duplicado ? [] : await avisosDaProducao(ctx.lojaId, Number(r.ordem_id) || null)
     return {
       ok: true, custoUnitario: Number(r.custo_unitario), custoTotal: Number(r.custo_total), duplicado: !!r.duplicado,
-      dataProducao: r.data_producao ?? null, avisos: Array.isArray(r.avisos) ? r.avisos.map(String) : [],
+      dataProducao: r.data_producao ?? null, avisos: [...(Array.isArray(r.avisos) ? r.avisos.map(String) : []), ...avisosBaixa],
     }
   } catch (e) {
     return { error: mensagem(e, 'Falha ao produzir o lote') }

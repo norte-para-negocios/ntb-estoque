@@ -10,6 +10,7 @@ import { registrarAuditoria } from '@/lib/auditoria'
 import { ajuste, entrada, estornar, modoDaLoja } from '@/lib/estoque/ledger'
 import { transferenciaRapida } from '@/lib/estoque/transferencia-proprio'
 import { entradaComLote } from '@/lib/estoque/lotes'
+import { avisosLotesDosMovimentos } from '@/lib/estoque/avisos-baixa'
 import { dataCriacaoBahia, hojeBahiaISO } from '@/lib/data-bahia'
 import { lerNumeroBR, MSG_NUMERO_BR } from '@/lib/num-br'
 
@@ -152,7 +153,9 @@ export async function ajusteManual(dados: {
     })
     await registrarAuditoria('editar', 'ajuste de estoque', r.id, await descreverProduto(ctx.lojaId, dados.codigoProduto))
     atualizarTelas()
-    return { ok: true, saldo: r.saldo, negativo: r.negativo }
+    // 05/11/2026: saída que consumiu lote vencido (FEFO) não bloqueia; avisa
+    const vencidos = delta < 0 ? await avisosLotesDosMovimentos(ctx.lojaId, [r.id]) : []
+    return { ok: true, saldo: r.saldo, negativo: r.negativo, ...(vencidos.length ? { aviso: [...vencidos, ...(r.negativo ? ['Atenção: o saldo ficou negativo.'] : [])].join(' ') } : {}) }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Falha ao registrar o ajuste' }
   }
