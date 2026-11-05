@@ -77,7 +77,9 @@ export async function alterarOPProprio(
 }
 
 async function codOP(lojaId: number, opId: number): Promise<number> {
-  const { data } = await createServiceClient().from('ordens_producao').select('identificacao_n_cod_op').eq('id', opId).eq('loja_id', lojaId).maybeSingle()
+  // Só o número mostrado na auditoria (não decide caminho): se a leitura falhar, fica o id da OP.
+  const { data, error } = await createServiceClient().from('ordens_producao').select('identificacao_n_cod_op').eq('id', opId).eq('loja_id', lojaId).maybeSingle()
+  if (error) return opId
   return Number(data?.identificacao_n_cod_op ?? opId)
 }
 

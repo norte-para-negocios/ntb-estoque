@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { assertCronAuth } from '@/lib/omie/sync-all'
 import { enviarFatoFrio } from '@/lib/estoque/fechamento'
+import { statusDoCron } from '@/lib/cron/resposta-puro'
 
 export const maxDuration = 300
 
@@ -16,5 +17,6 @@ export async function GET(request: Request) {
   const tinhaTrabalho = resumo.some((r) => r.enviadas > 0 || r.pendentes > 0)
   const algumSucesso = resumo.some((r) => r.enviadas > 0 && !r.erro)
   // 502 só quando havia o que enviar e nada saiu (mesmo padrão dos outros crons).
-  return NextResponse.json({ ok: !tinhaTrabalho || algumSucesso, resumo }, { status: tinhaTrabalho && !algumSucesso ? 502 : 200 })
+  const parcial = statusDoCron(resumo.map((r) => ({ loja: r.loja_id, ok: !r.erro, erro: r.erro ?? null })))
+  return NextResponse.json({ ok: !tinhaTrabalho || algumSucesso, resumo }, { status: tinhaTrabalho && !algumSucesso ? 502 : parcial })
 }

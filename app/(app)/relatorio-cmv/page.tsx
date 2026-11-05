@@ -11,7 +11,7 @@ import { PeriodoBar } from '@/components/faturamento/PeriodoBar'
 import { FiltrosFaturamento } from '@/components/faturamento/FiltrosFaturamento'
 import { CartaoResumo } from '@/components/faturamento/CartaoResumo'
 import { carregarCmv } from '@/lib/relatorios/cmv-loader'
-import { agruparCmv, cmvFormulaOmie, custoForaDoNormal, resumoCmv, totaisFormula } from '@/lib/relatorios/cmv-puro'
+import { agruparCmv, cmvFormulaOmie, custoForaDoNormal, estadoTelaCmv, pctDoFaturamento, resumoCmv, totaisFormula } from '@/lib/relatorios/cmv-puro'
 import { AvisoCustoForaDoNormal } from '@/components/relatorios/AvisoCustoForaDoNormal'
 import { DIM_DA_ABA, lerParamsCmv, paramsBaseCmv, textoFonte, type SpCmv } from '@/lib/relatorios/cmv-params'
 
@@ -30,6 +30,7 @@ export default async function CmvPage({ searchParams }: { searchParams: Promise<
   const kardex = d.fonte === 'kardex'
   const aba = p.aba === 'estoque' && !kardex ? 'produtos' : p.aba
   const resumo = resumoCmv(d.linhas)
+  const estado = estadoTelaCmv(d)
   const agrupadas = d.fonte === 'proprio' ? d.linhas : agruparCmv(d.linhas, DIM_DA_ABA[aba])
   const termo = semAcento(p.q.trim())
   const linhas = agrupadas
@@ -73,13 +74,15 @@ export default async function CmvPage({ searchParams }: { searchParams: Promise<
       {resumo.custoSuspeito > 0 && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">{resumo.custoSuspeito.toLocaleString('pt-BR')} produto(s) com custo médio de hoje acima do preço de venda (custo fora do normal no Omie) ficaram com custo zero: <Money value={resumo.faturamentoSuspeito} /> de faturamento sem custo. O CMV estimado fica abaixo do real.</p>}
       {resumo.semCusto > 0 && <p className="text-[13px] text-text-muted">{resumo.semCusto.toLocaleString('pt-BR')} item(ns) vendido(s) sem custo ({d.fonte === 'kardex' ? 'sem saída no kardex, ex.: taxa de serviço' : d.fonte === 'proprio' ? 'sem baixa ou com baixa sem custo' : 'sem custo médio na foto, ex.: taxa de serviço'}): entram com custo zero.</p>}
 
-      {d.linhas.length === 0 ? (
+      {estado === 'erro' ? (
+        <p role="alert" className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-err shadow-[var(--shadow-sm)]">{d.erro}</p>
+      ) : estado === 'vazio' ? (
         <EmptyState icon={Calculator} title="Sem vendas no período" hint="Mude o período ou limpe os filtros." />
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <CartaoResumo titulo="Faturamento" valor={<Money value={resumo.faturamento} />} />
-            <CartaoResumo titulo="CMV (custo das vendas)" valor={<Money value={resumo.cmv} />} sub={resumo.faturamento > 0 ? `${fmtPct(Math.round((resumo.cmv / resumo.faturamento) * 1000) / 10)} do faturamento` : undefined} />
+            <CartaoResumo titulo="CMV (custo das vendas)" valor={<Money value={resumo.cmv} />} sub={resumo.faturamento > 0 ? `${fmtPct(pctDoFaturamento(resumo.cmv, resumo.faturamento))} do faturamento` : undefined} />
             <CartaoResumo titulo="Margem bruta" valor={<Money value={resumo.margem} />} sub={fmtPct(resumo.margemPct)} />
             {kardex
               ? <CartaoResumo titulo="CPV (consumo da produção)" valor={<Money value={resumo.consumo} />} sub="Insumos consumidos nas OPs" />
@@ -137,23 +140,25 @@ export default async function CmvPage({ searchParams }: { searchParams: Promise<
                 </tbody>
               </table>
             ) : (
-              <table className="w-full min-w-[640px] border-collapse text-sm">
+              <table className="w-full min-w-[720px] border-collapse text-sm">
                 <thead><tr className="border-b border-border">
                   <th className={`text-left ${th}`}>{aba === 'familias' ? 'Família' : aba === 'tipos' ? 'Tipo' : 'Produto'}</th>
                   <th className={`text-right ${th}`}>Quantidade</th><th className={`text-right ${th}`}>Faturamento</th><th className={`text-right ${th}`}>CMV</th>
-                  <th className={`text-right ${th}`}>Margem</th><th className={`text-right ${th}`}>Margem %</th>
+                  <th className={`text-right ${th}`}>CMV %</th><th className={`text-right ${th}`}>Margem</th><th className={`text-right ${th}`}>Margem %</th>
                   {kardex && <th className={`hidden text-right md:table-cell ${th}`}>Consumo OP</th>}
                 </tr></thead>
                 <tbody>
                   {linhas.slice(0, LIMITE).map((l) => {
                     const mg = l.faturamento - l.cmv
-                    const pct = l.faturamento > 0 ? Math.round((mg / l.faturamento) * 1000) / 10 : null
+                    const pct = pctDoFaturamento(mg, l.faturamento)
+                    const pctCmv = pctDoFaturamento(l.cmv, l.faturamento)
                     return (
                       <tr key={l.chave} className="border-t border-border/60">
                         <td className="px-3 py-2"><div className="max-w-[280px] truncate text-text" title={l.rotulo}>{l.rotulo}</div>{aba === 'produtos' && d.fonte !== 'proprio' && <div className="text-[12px] text-text-muted">{l.familia}</div>}</td>
                         <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{fmtQtd(l.quant)}</td>
                         <td className="num whitespace-nowrap px-3 py-2 text-right text-text"><Money value={l.faturamento} /></td>
                         <td className="num whitespace-nowrap px-3 py-2 text-right font-medium text-text"><Money value={l.cmv} /></td>
+                        <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{fmtPct(pctCmv)}</td>
                         <td className={`num whitespace-nowrap px-3 py-2 text-right ${mg < 0 ? 'text-err' : 'text-text'}`}><Money value={mg} /></td>
                         <td className={`num whitespace-nowrap px-3 py-2 text-right ${pct != null && pct < 0 ? 'text-err' : 'text-text-muted'}`}>{fmtPct(pct)}</td>
                         {kardex && <td className="num hidden whitespace-nowrap px-3 py-2 text-right text-text-muted md:table-cell"><Money value={l.consumo} /></td>}

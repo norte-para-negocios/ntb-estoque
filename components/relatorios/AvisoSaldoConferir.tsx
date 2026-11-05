@@ -1,12 +1,14 @@
-import type { ResumoSaldoConferir } from '@/lib/relatorios/posicao-estoque-puro'
+import type { OrigemCusto, ResumoSaldoConferir } from '@/lib/relatorios/posicao-estoque-puro'
 
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const qtd = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
 
 // Saldos do Omie que precisam de conferência (migration 296, posicao_saldo_a_conferir). O total NÃO muda (é o saldo do
 // Omie, como o relatório do Omie); o aviso diz quanto do total depende desses saldos para o dono conferir.
-export function AvisoSaldoConferir({ resumo, total, limite = 30 }: { resumo: ResumoSaldoConferir; total: number; limite?: number }) {
+// Loja de estoque próprio (origem 'proprio'): o mesmo aviso sem falar em Omie.
+export function AvisoSaldoConferir({ resumo, total, limite = 30, origem = 'omie' }: { resumo: ResumoSaldoConferir; total: number; limite?: number; origem?: OrigemCusto }) {
   const { acumulados, inativos } = resumo
+  const proprio = origem === 'proprio'
   if (!acumulados.length && !inativos.length) return null
   const pct = total > 0 ? Math.round((resumo.valorAcumulados / total) * 100) : null
   return (
@@ -14,13 +16,13 @@ export function AvisoSaldoConferir({ resumo, total, limite = 30 }: { resumo: Res
       {acumulados.length > 0 && (
         <details className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">
           <summary className="cursor-pointer">
-            {brl(resumo.valorAcumulados)} do total{pct != null ? ` (${pct}%)` : ''} {acumulados.length === 1 ? 'está em 1 produto' : `está em ${acumulados.length} produtos`} com saldo maior do que tudo o que entrou nos últimos 12 meses (notas, produção e ajustes): falta de baixa no Omie (consumo, perda ou produção que não foi lançada). O total soma esses saldos como o Omie; confira com um inventário.
+            {brl(resumo.valorAcumulados)} do total{pct != null ? ` (${pct}%)` : ''} {acumulados.length === 1 ? 'está em 1 produto' : `está em ${acumulados.length} produtos`} com saldo maior do que tudo o que entrou nos últimos 12 meses (notas, produção e ajustes): {proprio ? 'falta de baixa (consumo, perda ou produção que não foi lançada). O total soma esses saldos; confira com um inventário.' : 'falta de baixa no Omie (consumo, perda ou produção que não foi lançada). O total soma esses saldos como o Omie; confira com um inventário.'}
           </summary>
           <div className="mt-2 overflow-x-auto text-text">
             <table className="w-full min-w-[520px] border-collapse text-[12px]">
               <thead>
                 <tr className="text-left text-text-muted">
-                  <th className="px-2 py-1">Produto</th><th className="px-2 py-1 text-right">Saldo no Omie</th>
+                  <th className="px-2 py-1">Produto</th><th className="px-2 py-1 text-right">{proprio ? 'Saldo' : 'Saldo no Omie'}</th>
                   <th className="px-2 py-1 text-right">Entrou em 12 meses</th><th className="px-2 py-1 text-right">Valor no total</th>
                 </tr>
               </thead>
@@ -42,7 +44,9 @@ export function AvisoSaldoConferir({ resumo, total, limite = 30 }: { resumo: Res
       {inativos.length > 0 && (
         <details className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
           <summary className="cursor-pointer">
-            {inativos.length === 1 ? '1 produto inativo ainda tem' : `${inativos.length} produtos inativos ainda têm`} saldo no Omie ({brl(resumo.valorInativos)} no total). Muitos foram criados sozinhos na entrada de nota (sem família, tipo &quot;Outras&quot;): passe o saldo para o produto certo no Omie.
+            {inativos.length === 1 ? '1 produto inativo ainda tem' : `${inativos.length} produtos inativos ainda têm`} {proprio
+              ? <>saldo ({brl(resumo.valorInativos)} no total): passe o saldo para o produto certo ou lance a saída.</>
+              : <>saldo no Omie ({brl(resumo.valorInativos)} no total). Muitos foram criados sozinhos na entrada de nota (sem família, tipo &quot;Outras&quot;): passe o saldo para o produto certo no Omie.</>}
           </summary>
           <div className="mt-2 overflow-x-auto text-text">
             <table className="w-full min-w-[420px] border-collapse text-[12px]">

@@ -163,12 +163,23 @@ export function montarPosicao(foto: LinhaFoto[], produtos: MetaProduto[], locais
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 /** Aviso único das telas/planilhas (Posição, Estoque Valorizado). `ajusteOmie` = valor pelo CMC do Omie − valor usado. */
 export type OrigemCusto = 'omie' | 'proprio'
+// Loja Omie: `n` = linhas (produto × local). Loja de estoque próprio (pedido do cliente 03/11): `n` = produtos e o texto
+// não fala em Omie; frases completas, a ação vem de acaoAvisoSuspeito.
 export function textoAvisoSuspeito(n: number, ajusteOmie: number, origem: OrigemCusto = 'omie'): string | null {
   if (!(n > 0)) return null
-  const fonte = origem === 'proprio' ? 'pelo custo médio do sistema' : 'pelo custo do Omie'
-  const dif = Math.abs(ajusteOmie) < 0.005 ? '' : ` (${fonte} o total daria ${brl(Math.abs(ajusteOmie))} a ${ajusteOmie > 0 ? 'mais' : 'menos'})`
-  const oque = origem === 'proprio' ? 'com custo médio fora do normal' : 'com custo médio errado no Omie'
-  return `${n} ${n === 1 ? 'linha' : 'linhas'} ${oque}: o total usa o custo de referência ${n === 1 ? 'nela' : 'nelas'}${dif}`
+  if (origem === 'proprio') {
+    const base = `${n} ${n === 1 ? 'produto' : 'produtos'} com custo médio fora do normal: o total usa o custo de referência ${n === 1 ? 'nele' : 'neles'}.`
+    return Math.abs(ajusteOmie) < 0.005 ? base : `${base} Com o custo médio, o total daria ${brl(Math.abs(ajusteOmie))} a ${ajusteOmie > 0 ? 'mais' : 'menos'}.`
+  }
+  const dif = Math.abs(ajusteOmie) < 0.005 ? '' : ` (pelo custo do Omie o total daria ${brl(Math.abs(ajusteOmie))} a ${ajusteOmie > 0 ? 'mais' : 'menos'})`
+  return `${n} ${n === 1 ? 'linha' : 'linhas'} com custo médio errado no Omie: o total usa o custo de referência ${n === 1 ? 'nela' : 'nelas'}${dif}`
+}
+
+/** O que fazer com o aviso (vem depois de textoAvisoSuspeito). */
+export function acaoAvisoSuspeito(origem: OrigemCusto = 'omie'): string {
+  return origem === 'proprio'
+    ? 'Toque para ver a lista e corrija o custo ou a unidade na entrada.'
+    : 'Toque para ver a lista e corrija o custo (ou a unidade) desses produtos no Omie.'
 }
 
 // Mesmos limites da migration 295 (posicao_valorizada): só para o texto do motivo; quem decide a suspeita é o banco.
@@ -190,7 +201,7 @@ export function motivoSuspeita(x: { unidade: string | null; tipo: string | null;
     const de = fator === 1000 ? (un === 'ML' ? '1 litro' : '1 quilo') : `${fator.toLocaleString('pt-BR')} ${un.toLowerCase()} (a embalagem)`
     return `Custo por ${un.toLowerCase()} parece ser o de ${de}: usado o custo ÷ ${fator.toLocaleString('pt-BR')}`
   }
-  if (x.cmcOmie >= 1e7) return 'Custo absurdo no Omie: a linha vale 0'
+  if (x.cmcOmie >= 1e7) return 'Custo absurdo (R$ 10 milhões ou mais): a linha vale 0' // sem "no Omie": vale também para a loja própria
   if (foraDaEscalaDaUnidade(x.unidade, x.tipo, x.cmcOmie)) {
     return x.referencia == null ? `Custo fora da escala para ${un.toLowerCase()} e sem custo de referência: a linha vale 0` : `Custo fora da escala para ${un.toLowerCase()}: usado o custo de referência`
   }

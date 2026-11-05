@@ -1,12 +1,26 @@
 // Cliente do canal /api/offline do servidor de produção. Guarda e renova a sessão real do usuário
 // (só neste processo; o Next local nunca vê esse token).
 const zlib = require('zlib')
+const fs = require('fs')
+const path = require('path')
+
+// Hash do esquema embutido neste instalador (gerado por scripts/hash-esquema.mjs). O servidor recusa com 426
+// quando o esquema do servidor já passou deste. Quem cria o remoto pode passar `hashEsquema()`: o hash do banco
+// local que está rodando (estrutura nova adiada = o do banco antigo; null = não manda o header).
+function lerHashEsquema() {
+  try {
+    return fs.readFileSync(path.join(__dirname, '..', 'schema', 'hash.txt'), 'utf8').trim()
+  } catch {
+    return ''
+  }
+}
+const HASH_ESQUEMA = lerHashEsquema()
 
 class ErroRede extends Error {}
 class ErroSessao extends Error {}
 class ErroVersao extends Error {}
 
-function criarRemoto({ base, versao, cofre, log = () => {} }) {
+function criarRemoto({ base, versao, cofre, log = () => {}, hashEsquema = () => HASH_ESQUEMA }) {
   let renovando = null
 
   function sessao() {
@@ -14,7 +28,8 @@ function criarRemoto({ base, versao, cofre, log = () => {} }) {
   }
 
   async function chamar(caminho, { metodo = 'GET', corpo, headers = {}, semAuth = false, timeoutMs = 120_000 } = {}) {
-    const h = { 'x-ntb-versao': versao, accept: 'application/json', 'accept-encoding': 'gzip', ...headers }
+    const esquema = hashEsquema()
+    const h = { 'x-ntb-versao': versao, ...(esquema ? { 'x-ntb-esquema': esquema } : {}), accept: 'application/json', 'accept-encoding': 'gzip', ...headers }
     if (corpo !== undefined) h['content-type'] = 'application/json'
     if (!semAuth) {
       const s = await sessaoValida()

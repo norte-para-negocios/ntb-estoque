@@ -13,6 +13,7 @@ import type { ModoEstoque } from '@/lib/estoque/ledger'
 import { semearLojaProprio } from '@/lib/estoque/proprio-driver'
 import { notificarVendasLoja } from '@/lib/estoque/catalogo-sync'
 import { camposChavesOmie } from '@/lib/seguranca/regras'
+import { TABELAS_QUE_IMPEDEM_EXCLUSAO, mensagemDeExclusao } from '@/lib/loja/exclusao-puro'
 
 /**
  * Force-sync da loja (admin): zera os campos *_status para null, fazendo o proximo
@@ -197,6 +198,20 @@ export async function excluirLoja(lojaId: number) {
 
   const supabase = createServiceClient()
   const { data: alvo } = await supabase.from('lojas').select('nome').eq('id', lojaId).maybeSingle()
+
+  // Fase 1 (B3): a exclusão leva junto, em cascata, todo o histórico da loja. Só segue se não houver movimento, nota, OP,
+  // venda etc.; qualquer falha na conferência também recusa (nunca assume "vazio").
+  const contagens = await Promise.all(
+    TABELAS_QUE_IMPEDEM_EXCLUSAO.map(async (t) => {
+      let q = supabase.from(t.tabela).select('*', { count: 'exact', head: true })
+      q = t.colunas.length === 1 ? q.eq(t.colunas[0], lojaId) : q.or(t.colunas.map((c) => `${c}.eq.${lojaId}`).join(','))
+      const { count, error: e } = await q
+      return { rotulo: t.rotulo, total: e ? null : (count ?? 0) }
+    })
+  )
+  const recusa = mensagemDeExclusao(contagens)
+  if (recusa) return { error: recusa }
+
   const { error } = await supabase.from('lojas').delete().eq('id', lojaId)
 
   if (error) return { error: error.message }

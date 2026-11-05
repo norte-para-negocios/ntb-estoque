@@ -82,8 +82,9 @@ async function ajustesProprio(lojaId: number, ini: string, fim: string): Promise
   const avisos: string[] = []
   type R = { id: number; created_at: string; codigo_produto: number; codigo_local_estoque: number; quantidade: number; custo_unitario: number | null; cmc_apos: number | null; user_id: string | null; obs: string | null; origem: string }
   const rows = await buscarTodasLinhas<R>((from, to) =>
-    supabase.from('estoque_movimentos').select('id, created_at, codigo_produto, codigo_local_estoque, quantidade, custo_unitario, cmc_apos, user_id, obs, origem')
-      .eq('loja_id', lojaId).eq('tipo', 'AJU').gte('data_ref', ini).lte('data_ref', fim).order('id').range(from, to),
+    // custo e data efetivos (visão da 311), na ordem em que valem
+    supabase.from('estoque_movimentos_efetivo').select('id, created_at, codigo_produto, codigo_local_estoque, quantidade, custo_unitario, cmc_apos, user_id, obs, origem')
+      .eq('loja_id', lojaId).eq('tipo', 'AJU').gte('data_ref', ini).lte('data_ref', fim).order('data_ref').order('id').range(from, to),
     undefined, (e) => avisos.push(`Não foi possível ler os ajustes: ${e.message}`))
   const nomes = await nomesDeUsuarios(rows.map((r) => r.user_id))
   return {

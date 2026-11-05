@@ -15,6 +15,8 @@ import { PainelEntrada, type PassoEntrada } from './PainelEntrada'
 
 export type ItemConferencia = {
   id: number; linha: number; descricao: string; cProd: string | null; unidade: string | null; quantidade: number; valorLiquido: number
+  /** CFOP que o fornecedor pôs na nota (ex.: 5910); o de entrada é `config.cfopEntrada`. */
+  cfopNota?: string | null
   lancado: boolean; fator: number; custoUnitarioBase: number | null; matchOrigem: 'depara' | 'ean' | 'descricao' | 'manual' | null; score: number | null
   produto: { codigoProduto: number; codigo: string; descricao: string; unidade: string } | null
   sugestao: { codigoProduto: number; codigo: string; descricao: string; unidade: string } | null
@@ -144,7 +146,7 @@ export function PainelEntradaProprio({ notaId, itens, status, locais, localAtual
       // aviso de custo/fator sem conferência: o servidor exige "Conferi os avisos" (mesma regra da conferência)
       const r = await confirmarEntradaNF(notaId, local, { aceitarAvisos })
       if ('error' in r) { toast.error('Não foi possível dar entrada', { description: r.error }); return }
-      toast.success(r.status === 'lancada' ? 'Entrada lançada no estoque' : `${r.lancados} ${r.lancados === 1 ? 'item entrou' : 'itens entraram'} no estoque; ${r.pendentes} ainda sem produto`)
+      toast.success(r.status === 'lancada' ? 'Entrada lançada no estoque' : `${r.lancados} ${r.lancados === 1 ? 'item entrou' : 'itens entraram'} no estoque; ${r.pendentes} ainda sem produto`, r.aviso ? { description: r.aviso } : undefined)
       router.refresh()
     })
   }

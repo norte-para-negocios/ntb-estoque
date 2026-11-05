@@ -20,6 +20,7 @@ import { enviarManifestacao } from '@/lib/estoque/sefaz-rede'
 import { decidirEnvioManifestacao, ehTipoManifestacao, resultadoManifestacao, validarJustificativa, type EstadoManifestacao, type TipoManifestacao } from '@/lib/estoque/sefaz-manifestacao'
 import { avaliarItemCompra, decidirConferencia, sugerirCfopEntrada, fatorConhecido, flagsParaTexto, validarConfigItem, type AlertaItem, type ConfigItemNF, type ItemCompraGravado } from '@/lib/estoque/nf-item-regras'
 import { decidirConfirmacaoEntrada, resultadoLancamento } from '@/lib/estoque/nf-entrada'
+import { avisoReprocessarLocal } from '@/lib/offline/limpar-esquema-puro'
 
 // Ações da tela de Notas Fiscais em loja de estoque próprio (sem Omie): conferir itens, confirmar a entrada, desfazer e excluir.
 
@@ -50,7 +51,7 @@ async function compraDaNota(lojaId: number, notaId: number) {
  *  Refaz no servidor os avisos de cada item (fator, custo, valor zero): com aviso, só entra com "Conferi os avisos" agora
  *  ou com a nota conferida depois da última mudança (mesma regra do marcarConferidaNF). Compra com a entrada desfeita
  *  (reaberta) entra de novo por aqui. */
-export async function confirmarEntradaNF(notaId: number, codigoLocal?: number | null, opts?: { aceitarAvisos?: boolean }): Promise<{ ok: true; lancados: number; pendentes: number; status: string } | { error: string }> {
+export async function confirmarEntradaNF(notaId: number, codigoLocal?: number | null, opts?: { aceitarAvisos?: boolean }): Promise<{ ok: true; lancados: number; pendentes: number; status: string; aviso?: string } | { error: string }> {
   const __d = viaDesktop('nota-fiscal-proprio#confirmarEntradaNF', confirmarEntradaNF, [notaId, codigoLocal, opts]); if (__d) return __d as never
   const ctx = await contexto('Notas Fiscais - Manifestar')
   if ('error' in ctx) return ctx
@@ -71,7 +72,9 @@ export async function confirmarEntradaNF(notaId: number, codigoLocal?: number | 
   if ('error' in r) { await atualizarSituacao(ctx.lojaId, notaId); return r }
   await registrarAuditoria('concluir', 'nota fiscal (entrada)', compra.numero ?? notaId, dec.aceitos.length ? `avisos aceitos: ${dec.aceitos.map((a) => `item ${a.linha} ${a.tipo}`).join(', ')}` : null)
   await atualizarSituacao(ctx.lojaId, notaId)
-  return { ok: true, lancados: r.lancados, pendentes: r.pendentes, status: r.status }
+  // desktop sem internet: o custo médio só é refeito quando o servidor reexecutar a ação
+  const aviso = avisoReprocessarLocal(data)
+  return { ok: true, lancados: r.lancados, pendentes: r.pendentes, status: r.status, ...(aviso ? { aviso } : {}) }
 }
 
 /** Desfaz a entrada no estoque (estorno movimento a movimento; o histórico fica). */

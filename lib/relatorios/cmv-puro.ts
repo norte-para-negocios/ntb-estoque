@@ -185,6 +185,17 @@ export function agruparCmv(linhas: LinhaCmv[], por: DimCmv): LinhaCmv[] {
   return out.sort((a, b) => b.cmv - a.cmv || b.faturamento - a.faturamento || a.rotulo.localeCompare(b.rotulo, 'pt-BR'))
 }
 
+/** Parte do faturamento, em %, com 1 casa (CMV % e Margem %). Sem faturamento positivo não há percentual: null ("—"). */
+export function pctDoFaturamento(valor: number, faturamento: number): number | null {
+  return faturamento > 0 ? Math.round((valor / faturamento) * 1000) / 10 : null
+}
+
+/** O que a tela mostra: com erro de leitura, só o erro (nunca "Sem vendas no período", que seria mentira). */
+export function estadoTelaCmv(d: { erro: string | null; linhas: unknown[] }): 'erro' | 'vazio' | 'dados' {
+  if (d.erro) return 'erro'
+  return d.linhas.length ? 'dados' : 'vazio'
+}
+
 export function resumoCmv(linhas: LinhaCmv[]): { faturamento: number; cmv: number; margem: number; margemPct: number | null; consumo: number; semCusto: number; custoSuspeito: number; faturamentoSuspeito: number } {
   let faturamento = 0, cmv = 0, consumo = 0, semCusto = 0, custoSuspeito = 0, faturamentoSuspeito = 0
   for (const l of linhas) {
@@ -193,7 +204,7 @@ export function resumoCmv(linhas: LinhaCmv[]): { faturamento: number; cmv: numbe
   }
   return {
     faturamento: r2(faturamento), cmv: r2(cmv), margem: r2(faturamento - cmv), consumo: r2(consumo), semCusto, custoSuspeito, faturamentoSuspeito: r2(faturamentoSuspeito),
-    margemPct: faturamento > 0 ? Math.round(((faturamento - cmv) / faturamento) * 1000) / 10 : null,
+    margemPct: pctDoFaturamento(faturamento - cmv, faturamento),
   }
 }
 

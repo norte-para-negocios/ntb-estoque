@@ -1,5 +1,5 @@
 import { formatCustoUnit } from '@/lib/num-br'
-import { textoAvisoSuspeito, type OrigemCusto } from '@/lib/relatorios/posicao-estoque-puro'
+import { acaoAvisoSuspeito, textoAvisoSuspeito, type OrigemCusto } from '@/lib/relatorios/posicao-estoque-puro'
 
 export type SuspeitaAviso = { chave: string; codigo: string; descricao: string; local: string; quant: number; cmcOmie: number; referencia: number | null; valorOmie: number; valor: number; motivo?: string }
 
@@ -9,13 +9,16 @@ const qtd = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 
 // Aviso das linhas com CMC suspeito no Omie (regra única em posicao_valorizada, migration 282): o total já vem ajustado
 // (a linha vale saldo × referência de custo); a lista mostra o dado a corrigir no Omie.
 export function AvisoCustoSuspeito({ suspeitas, ajusteOmie, totalAjustado, limite = 30, origem = 'omie' }: { suspeitas: SuspeitaAviso[]; ajusteOmie: number; totalAjustado: number; limite?: number; origem?: OrigemCusto }) {
-  const texto = textoAvisoSuspeito(suspeitas.length, ajusteOmie, origem)
   const proprio = origem === 'proprio'
+  // loja própria conta produtos (o mesmo produto pode aparecer em mais de um local)
+  const texto = textoAvisoSuspeito(proprio ? new Set(suspeitas.map((s) => s.codigo)).size : suspeitas.length, ajusteOmie, origem)
   if (!texto) return null
   return (
     <details className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">
       <summary className="cursor-pointer">
-        {texto}. Total {proprio ? 'pelo custo médio do sistema' : 'pelo custo do Omie'}: {brl(totalAjustado + ajusteOmie)}. Toque para ver a lista e corrija o custo (ou a unidade) desses produtos {proprio ? 'no cadastro' : 'no Omie'}.
+        {proprio
+          ? `${texto} ${acaoAvisoSuspeito('proprio')}`
+          : `${texto}. Total pelo custo do Omie: ${brl(totalAjustado + ajusteOmie)}. ${acaoAvisoSuspeito('omie')}`}
       </summary>
       <div className="mt-2 overflow-x-auto text-text">
         <table className="w-full min-w-[760px] border-collapse text-[12px]">

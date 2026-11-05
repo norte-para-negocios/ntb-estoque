@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getLojasAtivas, assertCronAuth } from '@/lib/omie/sync-all'
+import { corpoDoCron, statusDoCron } from '@/lib/cron/resposta-puro'
 
 export const maxDuration = 300
 
@@ -69,5 +70,6 @@ export async function GET(request: Request) {
     resumo.push({ loja_id: loja.id, ops: linhas.length, erro: upErr?.message ?? null })
   }
 
-  return NextResponse.json({ total_lojas: lojas.length, resumo })
+  const resultados = resumo.map((r) => ({ loja: r.loja_id, ok: !r.erro, erro: r.erro }))
+  return NextResponse.json({ total_lojas: lojas.length, resumo, ...corpoDoCron(resultados) }, { status: statusDoCron(resultados) })
 }

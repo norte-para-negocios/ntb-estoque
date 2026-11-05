@@ -23,12 +23,14 @@ type RespostaLancamento = {
 /** Texto de observação que acompanha o lançamento no ledger: motivo do item + observação geral + quem fez. */
 export async function observacaoDoLancamento(lojaId: number, movimentoId: number, carimbo: string): Promise<string> {
   const supabase = createServiceClient()
-  const { data: mov } = await supabase
+  const { data: mov, error } = await supabase
     .from('movimentos')
     .select('obs_item, transferencia:transferencias(observacao)')
     .eq('id', movimentoId)
     .eq('loja_id', lojaId)
     .maybeSingle<{ obs_item: string | null; transferencia: { observacao: string | null } | null }>()
+  // O ledger é imutável: sem conseguir ler o motivo, não lança com a observação incompleta.
+  if (error) throw new Error(`Falha ao ler a observação do item: ${error.message}`)
   return montarObsTransferencia(carimbo, mov?.transferencia?.observacao ?? null, mov?.obs_item ?? null)
 }
 
@@ -39,11 +41,16 @@ export async function lancarItemTransferencia(
   usuario: { id: string | null; carimbo: string }
 ): Promise<EnvioProprioResult & { lancamento?: RespostaLancamento }> {
   const supabase = createServiceClient()
-  const obs = await observacaoDoLancamento(lojaId, movimentoId, usuario.carimbo)
-  const { data, error } = await supabase.rpc('lancar_transferencia_item', {
-    // p_user: o carimbo ("NTB Estoque · Nome"), igual aos outros lançamentos; o kardex mostra isso em Usuário.
-    p_loja: lojaId, p_movimento: movimentoId, p_user: usuario.carimbo || usuario.id, p_obs: obs,
-  })
+  let obs: string | null = null
+  let erroObs: { message: string } | null = null
+  try { obs = await observacaoDoLancamento(lojaId, movimentoId, usuario.carimbo) }
+  catch (e) { erroObs = { message: e instanceof Error ? e.message : String(e) } }
+  const { data, error } = erroObs
+    ? { data: null, error: erroObs }
+    : await supabase.rpc('lancar_transferencia_item', {
+      // p_user: o carimbo ("NTB Estoque · Nome"), igual aos outros lançamentos; o kardex mostra isso em Usuário.
+      p_loja: lojaId, p_movimento: movimentoId, p_user: usuario.carimbo || usuario.id, p_obs: obs,
+    })
   if (error) {
     await supabase
       .from('movimentos')
@@ -85,12 +92,14 @@ export async function lancarPendentesDaTransferencia(
   transferenciaId: number,
   usuario: { id: string | null; carimbo: string }
 ): Promise<{ lancados: number; erros: number }> {
-  const { data: itens } = await createServiceClient()
+  const { data: itens, error } = await createServiceClient()
     .from('movimentos')
     .select('id, quan, status, ledger_ref')
     .eq('loja_id', lojaId)
     .eq('transferencia_id', transferenciaId)
     .order('id')
+  // Lista vazia por erro deixaria a transferência "Concluída" sem lançar nada: falha alto.
+  if (error) throw new Error(`Falha ao ler os itens da transferência: ${error.message}`)
   let lancados = 0
   let erros = 0
   for (const it of (itens ?? []) as { id: number; quan: number | null; status: string | null; ledger_ref: string | null }[]) {

@@ -103,6 +103,7 @@ type MovRow = {
   id: number; tipo: string; origem: string; ref: string; quantidade: number; custo_unitario: number | null
   saldo_apos: number; cmc_apos: number | null; codigo_local_estoque: number; user_id: string | null; obs: string | null
   created_at: string; custo_estimado: boolean; reverses_id: number | null; codigo_produto: number
+  revisado: boolean; revisado_em: string | null
 }
 
 /** Kardex: últimos movimentos (por produto, por local, ou geral). */
@@ -112,9 +113,10 @@ export async function carregarMovimentos(
   limite = 100,
 ): Promise<Movimento[]> {
   const supabase = await createClient()
-  let q = supabase.from('estoque_movimentos')
-    .select('id, tipo, origem, ref, quantidade, custo_unitario, saldo_apos, cmc_apos, codigo_local_estoque, user_id, obs, created_at, custo_estimado, reverses_id, codigo_produto')
-    .eq('loja_id', lojaId).order('id', { ascending: false }).limit(limite)
+  // 315: custo, saldo e CMC efetivos (última revisão); sem revisão = igual ao ledger
+  let q = supabase.from('estoque_movimentos_efetivo')
+    .select('id, tipo, origem, ref, quantidade, custo_unitario, saldo_apos, cmc_apos, codigo_local_estoque, user_id, obs, created_at, custo_estimado, reverses_id, codigo_produto, revisado, revisado_em')
+    .eq('loja_id', lojaId).order('data_ref', { ascending: false }).order('id', { ascending: false }).limit(limite)
   if (filtro.codigoProduto != null) q = q.eq('codigo_produto', filtro.codigoProduto)
   if (filtro.codigoLocal != null) q = q.eq('codigo_local_estoque', filtro.codigoLocal)
   const { data } = await q
@@ -141,6 +143,7 @@ export async function carregarMovimentos(
     codigoLocal: Number(r.codigo_local_estoque), user: r.user_id, obs: r.obs, criado: r.created_at,
     estornado: estornados.has(Number(r.id)), ehEstorno: r.reverses_id != null, custoEstimado: r.custo_estimado,
     codigoProduto: Number(r.codigo_produto), produto: nomeProd.get(Number(r.codigo_produto)),
+    revisado: !!r.revisado, revisadoEm: r.revisado_em,
   }))
 }
 

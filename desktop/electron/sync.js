@@ -479,6 +479,30 @@ function criarSync({ banco, remoto, cofre, fila, log = () => {}, aoMudarEstado =
     log(`reconciliadas ${rows.length} linhas`)
   }
 
+  // ---------------- estrutura nova adiada ----------------
+  // App atualizado abriu com fila pendente ou sem internet: o banco ficou com a estrutura antiga (banco.js). Assim
+  // que a fila esvazia (enviada ao servidor e reconciliada) recria o banco com a estrutura nova e refaz a carga,
+  // na mesma abertura. Item com erro na fila segura a recriação (recriar apagaria o que ele fez no banco local):
+  // o usuário descarta ou resolve pela tela de atualização.
+  const estruturaPendente = () => Boolean(banco.desatualizado?.())
+
+  async function atualizarEstrutura() {
+    // Só com o servidor respondendo: recriar sem internet deixaria o computador sem dados até a carga voltar.
+    // Sem internet chamar() lança ErroRede e o banco antigo fica como está.
+    const { json } = await chamar(() => remoto.get('/api/offline/tabelas'))
+    if (!json.ok) throw new Error(json.erro ?? 'servidor não respondeu à lista de tabelas')
+    log('fila vazia: recriando o banco local com a estrutura nova')
+    await fecharConexoes()
+    await banco.recriar()
+    aplicar.limparCache()
+    // PostgREST lê o catálogo de novo (tabelas e visões novas)
+    const c = await conexao()
+    await c.query("notify pgrst, 'reload schema'").catch(() => {})
+    carga = { pronta: false, fase: 'Terminando a atualização deste computador', pct: 1 }
+    aoMudarEstado()
+    await primeiraCarga()
+  }
+
   // ---------------- ciclo ----------------
   async function ciclo() {
     if (!remoto.temSessao() || !cofre.ler('usuario')) return
@@ -491,6 +515,10 @@ function criarSync({ banco, remoto, cofre, fila, log = () => {}, aoMudarEstado =
         if (!pendentes().length && fila.itens().every((i) => i.estado !== 'aguardando_local')) {
           await reconciliar()
           if (!fila.itens().length) fila.limpar()
+        }
+        if (estruturaPendente()) {
+          if (!fila.itens().length) await atualizarEstrutura()
+          return
         }
         await puxar()
         if (Date.now() - ultimoFoto > INTERVALO_FOTO) await fotos()
@@ -576,6 +604,8 @@ function criarSync({ banco, remoto, cofre, fila, log = () => {}, aoMudarEstado =
       comErro: fila.itens().filter((i) => i.estado === 'erro' || i.estado === 'verificar').length,
       carga,
       logado: Boolean(cofre.ler('usuario')),
+      estruturaPendente: estruturaPendente(),
+      naFila: fila.itens().length,
     }),
   }
 }

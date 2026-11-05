@@ -4,7 +4,7 @@ import { montarStatusPedido, normalizarPedidoRef, ehTabelaAusente, type LinhaReg
 
 // GET /api/integracao/ordem-producao/status?pedidoRef=<id do pedido no Norte Vendas> (02/11/2026).
 // O Vendas consulta quando a baixa ficou "incerta" (desistiu de esperar a resposta do POST). Responde a partir do
-// registro que o POST grava ANTES de mexer no estoque (venda_integracao_pedidos, migration 308): se chegou, se
+// registro que o POST grava ANTES de mexer no estoque (venda_integracao_pedidos, migration 319): se chegou, se
 // terminou e o resultado de cada item. Só leitura: não chama o Omie. Mesma autenticação das outras rotas de
 // integração (lojas.integracao_api_key). Tabela ausente/erro = 503 (o Vendas mantém a baixa incerta).
 export async function GET(request: Request) {

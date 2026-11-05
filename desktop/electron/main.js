@@ -99,7 +99,7 @@ async function subir() {
     },
   })
 
-  const remoto = criarRemoto({ base: SERVIDOR, versao: app.getVersion(), cofre, log })
+  const remoto = criarRemoto({ base: SERVIDOR, versao: app.getVersion(), cofre, log, hashEsquema: () => b.hashCanal() })
   const fila = criarFila(path.join(dirDados, 'fila.json'))
   const sync = criarSync({
     banco: b,
@@ -117,6 +117,7 @@ async function subir() {
     anonBuild: ANON_BUILD,
     tokenInterno,
     paginaCarga: path.join(__dirname, '..', 'carga.html'),
+    paginaAtualizacao: path.join(__dirname, '..', 'atualizacao.html'),
     log,
   })
   await gateway.escutar()

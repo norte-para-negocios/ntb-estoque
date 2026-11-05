@@ -296,8 +296,8 @@ export default async function HomePage() {
                 <CountUp value={produtos.count ?? 0} duration={750} />
               </div>
             </div>
-            {/* A.3.3: selo de sync com data+hora e aviso se atrasado */}
-            <div className="flex flex-col items-end gap-1">
+            {/* A.3.3: selo de sync com data+hora e aviso se atrasado. Loja de estoque próprio não sincroniza com o Omie: sem selo. */}
+            {!homeProprio && <div className="flex flex-col items-end gap-1">
               <div className="flex items-center gap-2 text-[13px] font-medium text-white">
                 <span className={`size-2 shrink-0 rounded-full ${syncAtraso ? 'bg-[#ffb340]' : 'bg-white/80'}`} />
                 <span className="num">sync {ultimaSync}</span>
@@ -305,7 +305,7 @@ export default async function HomePage() {
               {syncAtraso && (
                 <span className="text-[12px] text-text-muted">atrasado (+24h)</span>
               )}
-            </div>
+            </div>}
           </div>
         </div>
       </section>

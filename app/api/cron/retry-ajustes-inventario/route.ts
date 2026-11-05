@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { retryAjustesInventarioPendentes } from '@/lib/actions/inventario'
 import { getLojasAtivas, assertCronAuth } from '@/lib/omie/sync-all'
+import { corpoDoCron, resultadoDeRetry, statusDoCron } from '@/lib/cron/resposta-puro'
 
 export const maxDuration = 300
 
@@ -26,8 +27,9 @@ export async function GET(request: Request) {
   // trabalho, senao a maioria dos ciclos vira alarme falso.
   const houveTrabalhoOuErro = tentadas > 0 || resultados.some((r) => r.erro)
   const falhaTotal = houveTrabalhoOuErro && sucesso === 0
+  const porLoja = resultados.map(resultadoDeRetry)
   return NextResponse.json(
-    { lojas: lojas.length, tentadas, sucesso, falhas, resultados },
-    { status: falhaTotal ? 502 : 200 }
+    { lojas: lojas.length, tentadas, sucesso, falhas, resultados, erros: corpoDoCron(porLoja).erros },
+    { status: falhaTotal ? 502 : statusDoCron(porLoja) } // total 502 (regra antiga); parcial 500 (Fase 1, B1)
   )
 }

@@ -57,5 +57,7 @@ export async function GET(request: Request) {
       }
     }
   }
-  return NextResponse.json({ ok: true, corte, dry_run: dryRun, meses, resultados })
+  // Fase 1 (B1): período que não arquivou (erro de leitura/upload/registro/delete) -> 500 com o resultado por tabela/período.
+  const comErro = resultados.some((r) => r.status === 'erro')
+  return NextResponse.json({ ok: !comErro, corte, dry_run: dryRun, meses, resultados }, { status: comErro ? 500 : 200 })
 }

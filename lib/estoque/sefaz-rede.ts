@@ -3,9 +3,11 @@ import { SignedXml } from 'xml-crypto'
 import {
   ACAO_DIST, ACAO_EVENTO, cienciaRegistrada, codigoUf, lerRetornoDist, lerRetornoEvento, montarEventoCiencia, montarPedidoDistChave, montarPedidoDistNsu,
   soapDistribuicao, soapEvento, urlDistribuicao, urlEventoNacional, type RetornoDist,
-} from './sefaz-distdfe'
-import type { CredencialLoja } from './sefaz-certificado'
-import { lerRetornoManifestacao, montarEventoManifestacao, type TipoManifestacao } from './sefaz-manifestacao'
+// @ts-ignore: o import com extensão .ts é exigido pelo node --test (type stripping); o tsc do Next não o aceita
+} from './sefaz-distdfe.ts'
+import type { CredencialLoja } from './sefaz-certificado.ts'
+// @ts-ignore: o import com extensão .ts é exigido pelo node --test (type stripping); o tsc do Next não o aceita
+import { lerRetornoManifestacao, montarEventoManifestacao, type TipoManifestacao } from './sefaz-manifestacao.ts'
 
 // Chamadas de rede à SEFAZ (Ambiente Nacional) com o certificado A1 da loja. Distribuição é SÓ LEITURA; as escritas são a
 // manifestação de ciência da operação (210210, automática pela configuração) e a manifestação conclusiva do destinatário

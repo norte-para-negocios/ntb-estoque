@@ -11,6 +11,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { localDaVenda, type LojaLocais } from '@/lib/vendas/local-venda'
 import { planejarBaixa, type ItemVendaProprio, type ResultadoItemProprio } from './plano-baixa'
 import { estornar, saida } from './ledger'
+import { exigirLeitura, todosPulados, ehConflitoIdempotencia } from './venda-proprio-leituras'
 
 /** Executa o plano: saidas em ORDEM de codigo_produto (evita deadlock entre vendas simultaneas) e devolve na ordem original dos itens. */
 export async function baixarVendaProprio(
@@ -20,36 +21,56 @@ export async function baixarVendaProprio(
   pedidoRef: string | null,
   obs: string
 ): Promise<ResultadoItemProprio[]> {
+  // Sem referência do pedido não há idempotência: um retry baixaria de novo. O Norte Vendas sempre manda pedidoRef
+  // (lib/baixaEstoqueServidor.ts, pedidoRef = id do pedido); sem ele, nada é gravado e a venda volta retentável.
+  if (!pedidoRef) return todosPulados(itens, 'Venda sem referência do pedido')
+
+  // As 3 leituras decidem o caminho (sem cadastro / local / receita): erro em qualquer uma devolve a venda INTEIRA
+  // retentável, sem gravar nada (antes, erro virava lista vazia e o prato saía sem consumir os insumos).
   const codigos = Array.from(new Set(itens.map((i) => i?.codigo).filter((c): c is string => !!c)))
   const produtoPorCodigo = new Map<string, number>()
   const servicos = new Set<string>()
-  if (codigos.length) {
-    const { data } = await supabase.from('produtos').select('codigo, codigo_produto, tipo_item').eq('loja_id', loja.id).in('codigo', codigos)
-    for (const p of (data ?? []) as { codigo: string; codigo_produto: number; tipo_item: string | null }[]) {
-      produtoPorCodigo.set(p.codigo, Number(p.codigo_produto))
-      if (p.tipo_item === '09') servicos.add(p.codigo)
+  let plano: ReturnType<typeof planejarBaixa>
+  const comReceita = new Set<number>()
+  try {
+    if (codigos.length) {
+      const prods = exigirLeitura(
+        await supabase.from('produtos').select('codigo, codigo_produto, tipo_item').eq('loja_id', loja.id).in('codigo', codigos),
+        'produtos'
+      ) as { codigo: string; codigo_produto: number; tipo_item: string | null }[]
+      for (const p of prods) {
+        produtoPorCodigo.set(p.codigo, Number(p.codigo_produto))
+        if (p.tipo_item === '09') servicos.add(p.codigo)
+      }
     }
-  }
-  const { data: locais } = await supabase.from('local_estoques').select('codigo_local_estoque, padrao, inativo').eq('loja_id', loja.id)
-  const locaisDaLoja = new Set<number>(((locais ?? []) as { codigo_local_estoque: number }[]).map((l) => Number(l.codigo_local_estoque)))
-  const padrao = ((locais ?? []) as { codigo_local_estoque: number; padrao: string | null }[]).find((l) => l.padrao === 'S')
-  const plano = planejarBaixa(itens, loja, localDaVenda, produtoPorCodigo, padrao ? Number(padrao.codigo_local_estoque) : null, locaisDaLoja, servicos)
+    const locais = exigirLeitura(
+      await supabase.from('local_estoques').select('codigo_local_estoque, padrao, inativo').eq('loja_id', loja.id),
+      'locais de estoque'
+    ) as { codigo_local_estoque: number; padrao: string | null }[]
+    const locaisDaLoja = new Set<number>(locais.map((l) => Number(l.codigo_local_estoque)))
+    const padrao = locais.find((l) => l.padrao === 'S')
+    plano = planejarBaixa(itens, loja, localDaVenda, produtoPorCodigo, padrao ? Number(padrao.codigo_local_estoque) : null, locaisDaLoja, servicos)
 
-  const ref = pedidoRef ?? `sem-ref:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`
+    // Produto com ficha técnica ativa baixa os INSUMOS pela receita; sem ficha, baixa o próprio produto (como antes).
+    const produtosPlano = Array.from(new Set(plano.filter((p) => !p.pulo && !p.servico).map((p) => p.produto!)))
+    if (produtosPlano.length) {
+      const fichas = exigirLeitura(
+        await supabase.from('fichas_tecnicas').select('codigo_produto').eq('loja_id', loja.id).eq('ativa', true).in('codigo_produto', produtosPlano),
+        'fichas técnicas'
+      ) as { codigo_produto: number }[]
+      for (const f of fichas) comReceita.add(Number(f.codigo_produto))
+    }
+  } catch (e) {
+    return todosPulados(itens, e instanceof Error ? e.message : 'Falha ao ler o cadastro')
+  }
+
+  const ref = pedidoRef
   const resultados = new Array<ResultadoItemProprio>(plano.length)
 
   for (const p of plano) {
     if (p.pulo) resultados[p.indice] = { codigo: p.codigo, ok: false, op: p.pulo.op, baixa: p.pulo.baixa, erro: p.pulo.erro }
     // Taxa de serviço e outros serviços: ok sem tocar no estoque.
     else if (p.servico) resultados[p.indice] = { codigo: p.codigo, ok: true, op: 'sem_estrutura', baixa: 'Concluido' }
-  }
-
-  // Produto com ficha técnica ativa baixa os INSUMOS pela receita; sem ficha, baixa o próprio produto (como antes).
-  const comReceita = new Set<number>()
-  const produtosPlano = Array.from(new Set(plano.filter((p) => !p.pulo && !p.servico).map((p) => p.produto!)))
-  if (produtosPlano.length) {
-    const { data: fichas } = await supabase.from('fichas_tecnicas').select('codigo_produto').eq('loja_id', loja.id).eq('ativa', true).in('codigo_produto', produtosPlano)
-    for (const f of (fichas ?? []) as { codigo_produto: number }[]) comReceita.add(Number(f.codigo_produto))
   }
 
   const executaveis = plano
@@ -69,10 +90,12 @@ export async function baixarVendaProprio(
       resultados[p.indice] = { codigo: p.codigo, ok: true, op: 'sem_estrutura', baixa: 'Concluido', saldo: r.saldo, negativo: r.saldo < 0, duplicado: r.duplicado }
     } catch (e) {
       const erro = e instanceof Error ? e.message : 'Falha ao baixar o estoque'
-      // Com pedidoRef a saida e idempotente: reenviar e seguro, entao conta como "nada gravado" (retentavel).
-      resultados[p.indice] = pedidoRef
-        ? { codigo: p.codigo, ok: false, op: 'pulada', baixa: 'pulada', erro }
-        : { codigo: p.codigo, ok: false, op: 'erro', baixa: 'erro', erro }
+      // Com pedidoRef (sempre, ver acima) a saida e idempotente: reenviar e seguro, entao conta como "nada gravado" (retentavel).
+      // Exceção: conflito de idempotência (migration 308, PF002) = o mesmo pedido já foi baixado com outra quantidade.
+      // Reenviar daria o mesmo conflito para sempre: vira 'erro' (o gerente confere), nunca 'pulada'.
+      resultados[p.indice] = ehConflitoIdempotencia(erro)
+        ? { codigo: p.codigo, ok: false, op: 'erro', baixa: 'erro', erro: 'Este pedido já baixou este item com outra quantidade. Confira a venda.' }
+        : { codigo: p.codigo, ok: false, op: 'pulada', baixa: 'pulada', erro }
     }
   }
   return resultados
@@ -83,8 +106,10 @@ async function opDaVenda(
   supabase: SupabaseClient, lojaId: number, produto: number, quantidade: number, local: number, vendaRef: string, obs: string
 ): Promise<{ nCodOP: number; numero: string; existente: boolean }> {
   const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
-  const { data: existente } = await supabase.from('ordens_producao')
+  const { data: existente, error: erroExistente } = await supabase.from('ordens_producao')
     .select('id, identificacao_n_cod_op, identificacao_c_num_op, concluida').eq('loja_id', lojaId).eq('venda_ref', vendaRef).maybeSingle()
+  // Sem saber se a OP já existe, criar outra seria arriscar OP dupla: falha alto (o item volta retentável).
+  if (erroExistente) throw new Error(`Falha ao ler a OP da venda: ${erroExistente.message}`)
   let id: number, nCodOP: number, numero: string, jaConcluida = false
   if (existente) {
     id = Number(existente.id); nCodOP = Number(existente.identificacao_n_cod_op); numero = String(existente.identificacao_c_num_op ?? nCodOP)
@@ -97,8 +122,9 @@ async function opDaVenda(
     if (error) throw new Error(`OP da venda: ${error.message}`)
     const r = data as { id: number; n_cod_op: number; numero?: string }
     id = Number(r.id); nCodOP = Number(r.n_cod_op); numero = String(r.numero ?? r.n_cod_op)
-    const { data: lida } = await supabase.from('ordens_producao').select('identificacao_c_num_op').eq('id', id).maybeSingle()
-    if (lida?.identificacao_c_num_op) numero = String(lida.identificacao_c_num_op)
+    // Só o número de exibição: se a leitura falhar, fica o n_cod_op devolvido pela RPC.
+    const { data: lida, error: erroLida } = await supabase.from('ordens_producao').select('identificacao_c_num_op').eq('id', id).maybeSingle()
+    if (!erroLida && lida?.identificacao_c_num_op) numero = String(lida.identificacao_c_num_op)
   }
   if (!jaConcluida) {
     const { error } = await supabase.rpc('op_proprio_concluir', { p_loja: lojaId, p_op: id, p_data: hoje, p_qtde: quantidade, p_user: 'Norte Vendas', p_user_uuid: null })
@@ -127,7 +153,8 @@ export async function estornarVendaProprio(supabase: SupabaseClient, lojaId: num
   // OPs automáticas da venda: como no Omie, o estorno EXCLUI a OP (op_proprio_excluir reverte a conclusão,
   // devolvendo os insumos e tirando o item produzido, e apaga a OP; a trilha fica em op_historico). Reverter
   // sem excluir deixava a OP "Pendente" na lista, como se ainda houvesse algo a produzir.
-  const { data: ops } = await supabase.from('ordens_producao').select('id, identificacao_c_num_op').eq('loja_id', lojaId).like('venda_ref', `${pedidoRef}|%`)
+  const { data: ops, error: erroOps } = await supabase.from('ordens_producao').select('id, identificacao_c_num_op').eq('loja_id', lojaId).like('venda_ref', `${pedidoRef}|%`)
+  if (erroOps) { r.falhas++; r.detalhes.push(`OPs da venda: Falha ao ler: ${erroOps.message}`) }
   for (const o of (ops ?? []) as { id: number; identificacao_c_num_op: string | null }[]) {
     const { error: e } = await supabase.rpc('op_proprio_excluir', { p_loja: lojaId, p_op: o.id, p_user: 'Norte Vendas (estorno)' })
     if (e) { r.falhas++; r.detalhes.push(`OP ${o.identificacao_c_num_op ?? o.id}: ${e.message}`) } else r.opsExcluidas++

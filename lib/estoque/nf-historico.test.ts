@@ -39,3 +39,13 @@ test('recusa, envio sem resposta, documento ignorado e nota cancelada', () => {
     ['Entrada desfeita: 1 item', 'warn'],
     ['Nota cancelada na SEFAZ', 'err']])
 })
+test('entrada no estoque diz a data em que valeu e o aviso de mês fechado (313)', () => {
+  const h = montarHistoricoNF({ ...vazio, eventos: [
+    { tipo: 'lancada', linha: null, detalhe: { lancados: 2, ignorados: 0, pendentes: 0, data_entrada: '2026-10-09' }, autor: null, criado_em: '2026-11-02T13:00:00Z' },
+    { tipo: 'lancada', linha: null, detalhe: { lancados: 1, ignorados: 0, pendentes: 1, data_entrada: '2026-11-01', aviso_data: 'A nota é de 25/10/2026, mas outubro/2026 já foi fechado. A entrada ficou em 01/11/2026.' }, autor: null, criado_em: '2026-11-02T14:00:00Z' }] })
+  assert.equal(h[0].texto, 'Entrada no estoque: 2 itens, na data da nota (09/10/2026)')
+  assert.equal(h[0].tom, 'ok')
+  assert.equal(h[0].detalhe, undefined)
+  assert.equal(h[1].tom, 'warn')
+  assert.equal(h[1].detalhe, '1 pendente(s), 0 fora do estoque. A nota é de 25/10/2026, mas outubro/2026 já foi fechado. A entrada ficou em 01/11/2026.')
+})

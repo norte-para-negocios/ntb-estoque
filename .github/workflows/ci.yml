@@ -1,0 +1,40 @@
+# CI do Norte Estoque (Fase 1, 03/11/2026): testes puros (node --test), checagem de tipos e varredura de segredos.
+# Não faz deploy (deploy é manual no Contabo) e não usa nenhum segredo do app.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npx tsc --noEmit
+
+  segredos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Só detecta: em push/PR o gitleaks-action varre só os commits novos (não o histórico inteiro), com --redact
+      # (o valor achado nunca aparece no log) e sem subir o relatório como artefato.
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+          GITLEAKS_ENABLE_SUMMARY: false
+          GITLEAKS_ENABLE_COMMENTS: false

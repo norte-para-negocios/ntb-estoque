@@ -8,8 +8,9 @@ const fmtBRL = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', cur
 export async function EntradasGeradasNF({ lojaId, referencias }: { lojaId: number; referencias: string[] }) {
   if (!referencias.length) return null
   const sb = await createClient()
-  const { data: movs } = await sb.from('estoque_movimentos').select('id, codigo_produto, codigo_local_estoque, tipo, quantidade, custo_unitario, saldo_apos, cmc_apos, created_at')
-    .eq('loja_id', lojaId).eq('origem', 'COMPRA').in('ref', referencias).order('id').limit(500)
+  // custo, saldo e custo médio efetivos (visão da 311): a entrada vale na data da nota e o CMC pode ter sido refeito
+  const { data: movs } = await sb.from('estoque_movimentos_efetivo').select('id, codigo_produto, codigo_local_estoque, tipo, quantidade, custo_unitario, saldo_apos, cmc_apos, created_at')
+    .eq('loja_id', lojaId).eq('origem', 'COMPRA').in('ref', referencias).order('data_ref').order('id').limit(500)
   const ids = [...new Set((movs ?? []).map((m) => Number(m.codigo_produto)))]
   const locs = [...new Set((movs ?? []).map((m) => Number(m.codigo_local_estoque)))]
   const [{ data: prods }, { data: locais }] = await Promise.all([

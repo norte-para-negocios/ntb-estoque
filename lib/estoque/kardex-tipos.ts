@@ -24,6 +24,9 @@ export type LinhaKardex = {
   estornado_por: number | null
   transferencia_ref: string | null
   custo_estimado: boolean
+  /** 315: custo revisado depois do lançamento (última revisão) */
+  revisado?: boolean
+  revisado_em?: string | null
 }
 
 export const hojeBahia = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })

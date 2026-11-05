@@ -62,7 +62,15 @@ export function montarHistoricoNF(f: FontesHistorico): EventoHistorico[] {
       case 'item_configurado': add({ ...base, grupo: 'conferencia', texto: `Item ${e.linha ?? '?'} alterado`, tom: null, detalhe: detalheConfigurado(d, f.nomesLocais) }); break
       case 'item_vinculado': add({ ...base, grupo: 'conferencia', texto: `Item ${e.linha ?? '?'} ligado a um produto`, tom: null }); break
       case 'conferida': add({ ...base, grupo: 'conferencia', texto: 'Conferida', tom: 'ok' }); break
-      case 'lancada': add({ ...base, grupo: 'estoque', texto: `Entrada no estoque: ${itens(n(d.lancados))}`, tom: 'ok', detalhe: n(d.pendentes) || n(d.ignorados) ? `${n(d.pendentes)} pendente(s), ${n(d.ignorados)} fora do estoque` : undefined }); break
+      case 'lancada': {
+        // 313: a entrada vale na data da nota; se o mês dela estava fechado, vale o 1º dia aberto (aviso_data)
+        const data = typeof d.data_entrada === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.data_entrada) ? d.data_entrada.split('-').reverse().join('/') : null
+        const partes = [n(d.pendentes) || n(d.ignorados) ? `${n(d.pendentes)} pendente(s), ${n(d.ignorados)} fora do estoque` : null,
+                        typeof d.aviso_data === 'string' && d.aviso_data ? d.aviso_data : null].filter(Boolean)
+        add({ ...base, grupo: 'estoque', texto: `Entrada no estoque: ${itens(n(d.lancados))}${data ? `, na data da nota (${data})` : ''}`,
+              tom: d.aviso_data ? 'warn' : 'ok', detalhe: partes.length ? partes.join('. ') : undefined })
+        break
+      }
       case 'estornada': add({ ...base, grupo: 'estoque', texto: `Entrada desfeita: ${itens(n(d.estornados))}`, tom: 'warn' }); break
       case 'cte_vinculado': add({ ...base, grupo: 'conferencia', texto: 'Frete (CT-e) ligado à nota', tom: null }); break
       case 'cte_desvinculado': add({ ...base, grupo: 'conferencia', texto: 'Frete (CT-e) desligado da nota', tom: null }); break

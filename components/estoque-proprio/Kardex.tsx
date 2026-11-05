@@ -9,6 +9,7 @@ import { btnLinhaClass } from '@/components/ui-kit/Button'
 import { estornarMovimento } from '@/lib/actions/estoque-proprio'
 import { ROTULO_TIPO, type Movimento } from '@/app/(app)/estoque/tipos'
 import { formatCustoUnit } from '@/lib/num-br'
+import { rotuloCustoRevisado } from '@/lib/estoque/custo-revisado'
 
 const fmt = (n: number, d = 3) => n.toLocaleString('pt-BR', { maximumFractionDigits: d })
 const quando = (iso: string) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Bahia', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -71,7 +72,8 @@ export function Kardex({ movimentos, unidade, mostrarProduto = false, podeEstorn
                 </td>
                 <td className="whitespace-nowrap px-2 py-2.5 text-right num text-text-muted">
                   {m.custo != null ? formatCustoUnit(m.custo) : '-'}
-                  {m.custoEstimado && <span title="Entrada sem custo informado" className="ml-1">*</span>}
+                  {m.custoEstimado && <span title="Custo estimado: sem custo informado" className="ml-1">*</span>}
+                  {rotuloCustoRevisado(m.revisado, m.revisadoEm) && <div className="text-[11px] text-text-muted">{rotuloCustoRevisado(m.revisado, m.revisadoEm)}</div>}
                 </td>
                 <td className={`whitespace-nowrap px-2 py-2.5 text-right num ${m.saldoApos < 0 ? 'font-semibold text-err' : 'text-text'}`}>{fmt(m.saldoApos)}</td>
                 {podeEstornar && (

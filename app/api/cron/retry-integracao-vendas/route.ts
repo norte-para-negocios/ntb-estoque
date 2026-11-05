@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { assertCronAuth } from '@/lib/omie/sync-all'
 import { processarFilaVendas } from '@/lib/vendas-integracao'
+import { corpoDoCron, resultadoDeRetry, statusDoCron } from '@/lib/cron/resposta-puro'
 
 export const maxDuration = 300
 
@@ -12,5 +13,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const resumo = await processarFilaVendas(createServiceClient(), 10)
-  return NextResponse.json({ lojas: resumo })
+  const resultados = resumo.map(resultadoDeRetry)
+  return NextResponse.json({ lojas: resumo, ...corpoDoCron(resultados) }, { status: statusDoCron(resultados) })
 }

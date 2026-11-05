@@ -43,7 +43,7 @@ export function CompraManual({ locais }: { locais: { codigoLocal: number; descri
       })
       if ('error' in r) { toast.error('Não foi possível lançar', { description: r.error }); return }
       setChave(novaChaveIdempotencia())
-      toast.success(r.duplicado ? 'Esta compra já tinha sido lançada' : 'Compra lançada no estoque')
+      toast.success(r.duplicado ? 'Esta compra já tinha sido lançada' : 'Compra lançada no estoque', r.aviso ? { description: r.aviso } : undefined)
       router.push(r.notaId ? `/nota-fiscal/${r.notaId}` : '/nota-fiscal')
     })
   }

@@ -17,6 +17,7 @@ import { assinaturaConfere } from '@/lib/estoque/nfe-assinatura'
 import type { AlertaItem, ConfigInicialItem } from '@/lib/estoque/nf-item-regras'
 import { casarItem, montarContexto, type Depara, type ProdutoCad } from '@/lib/estoque/nf-conferencia'
 import { espelharNotaNoFrio } from '@/lib/estoque/nf-frio'
+import { avisoReprocessarLocal } from '@/lib/offline/limpar-esquema-puro'
 
 // Compras / NF-e de entrada do Estoque próprio. Só vale em loja 'proprio'. Toda entrada passa por lancar_compra (ledger).
 
@@ -110,14 +111,16 @@ export async function previaXml(xml: string): Promise<{ ok: true; previa: Previa
 }
 
 export type Mapeamento = { linha: number; codigoProduto: number | null; fator: number; codigoLocal?: number | null }
-type ResultadoLancamento = { ok: true; compraId: number; notaId: number | null; status: string; lancados: number; pendentes: number; duplicado: boolean; retida?: 'avisos' | 'reaberta' | null } | { error: string }
+type ResultadoLancamento = { ok: true; compraId: number; notaId: number | null; status: string; lancados: number; pendentes: number; duplicado: boolean; retida?: 'avisos' | 'reaberta' | null; aviso?: string } | { error: string }
 
 async function chamarLancar(lojaId: number, compra: Record<string, unknown>, local: number, userId: string | null): Promise<ResultadoLancamento> {
   // lancar_compra_com_lotes (migration 145) = lancar_compra + lote/validade de cada item até o gatilho de lotes.
   const { data, error } = await createServiceClient().rpc('lancar_compra_com_lotes', { p_compra: { ...compra, loja_id: lojaId }, p_local: local, p_user: userId })
   if (error) return { error: error.message }
   const r = data as { compra_id: number; status: string; lancados: number; pendentes: number; duplicado: boolean }
-  return { ok: true, compraId: r.compra_id, notaId: null, status: r.status, lancados: r.lancados, pendentes: r.pendentes, duplicado: r.duplicado }
+  // desktop sem internet: o custo médio só é refeito quando o servidor reexecutar a ação
+  const aviso = avisoReprocessarLocal(data)
+  return { ok: true, compraId: r.compra_id, notaId: null, status: r.status, lancados: r.lancados, pendentes: r.pendentes, duplicado: r.duplicado, ...(aviso ? { aviso } : {}) }
 }
 
 /** Importa o XML: relê no servidor (nunca confia nos valores do navegador), aplica o mapeamento e lança no ledger. */

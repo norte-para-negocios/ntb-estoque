@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { retryOPsPendentes } from '@/lib/actions/ordem-producao'
 import { getLojasAtivas, assertCronAuth } from '@/lib/omie/sync-all'
+import { corpoDoCron, resultadoDeRetry, statusDoCron } from '@/lib/cron/resposta-puro'
 
 export const maxDuration = 300
 
@@ -13,5 +14,6 @@ export async function GET(request: Request) {
   const tentadas = resultados.reduce((acc, r) => acc + r.tentadas, 0)
   const sucesso = resultados.reduce((acc, r) => acc + r.sucesso, 0)
   const falhas = resultados.reduce((acc, r) => acc + r.falhas, 0)
-  return NextResponse.json({ lojas: lojas.length, tentadas, sucesso, falhas, resultados })
+  const porLoja = resultados.map(resultadoDeRetry)
+  return NextResponse.json({ lojas: lojas.length, tentadas, sucesso, falhas, resultados, erros: corpoDoCron(porLoja).erros }, { status: statusDoCron(porLoja) })
 }

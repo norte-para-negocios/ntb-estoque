@@ -2,8 +2,10 @@
 // Fase 1 = Recebimentos (NF de entrada); as demais famílias entram por fase (ver omie-pendentes.ts e o plano).
 import type { Layout, Medida } from './pivot.ts'
 import type { PresetRelatorio } from './cubos/tipos.ts'
-import { CUBO_RECEBIMENTOS } from './cubos/recebimentos'
-import { PENDENTES_OMIE } from './omie-pendentes'
+// @ts-ignore: o import com extensão .ts é exigido pelo node --test (type stripping); o tsc do Next não o aceita
+import { CUBO_RECEBIMENTOS } from './cubos/recebimentos.ts'
+// @ts-ignore: o import com extensão .ts é exigido pelo node --test (type stripping); o tsc do Next não o aceita
+import { PENDENTES_OMIE } from './omie-pendentes.ts'
 
 export const CUBOS = { recebimentos: CUBO_RECEBIMENTOS } as const
 export type IdCubo = keyof typeof CUBOS

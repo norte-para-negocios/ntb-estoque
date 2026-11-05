@@ -69,5 +69,5 @@ export async function GET(request: Request) {
       erros.push(`${ini}: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
-  return NextResponse.json({ ok: true, loja: lojaId, modelo, ano, meses: meses.map((m) => m[0]), erros })
+  return NextResponse.json({ ok: erros.length === 0, loja: lojaId, modelo, ano, meses: meses.map((m) => m[0]), erros }, { status: erros.length ? 500 : 200 })
 }

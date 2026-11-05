@@ -394,7 +394,8 @@ export async function incluirOrdemProducao(
     nQtde: number
     codigoLocalEstoque?: number | null
     obs?: string
-  }
+  },
+  opts: { semRepetir?: boolean } = {}
 ) {
   const data: Record<string, unknown> = {
     identificacao: {
@@ -419,6 +420,7 @@ export async function incluirOrdemProducao(
     endpoint: 'v1/produtos/op',
     call: 'IncluirOrdemProducao',
     data,
+    semRepetir: opts.semRepetir,
   })
 }
 

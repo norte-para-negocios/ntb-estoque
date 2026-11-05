@@ -3,13 +3,15 @@
 // espera um pouco e tenta de novo. Qualquer outro erro volta na hora (sem insistir).
 export async function comEsperaDeCmc<T extends { status: string }>(
   tentar: () => Promise<T>,
-  opts: { esperasMs?: number[]; dormir?: (ms: number) => Promise<void> } = {},
+  // podeEsperar (03/11/2026): a rota da venda tem prazo; espera que não cabe não acontece e o cron assume o Sem CMC.
+  opts: { esperasMs?: number[]; dormir?: (ms: number) => Promise<void>; podeEsperar?: (ms: number) => boolean } = {},
 ): Promise<T> {
   const esperas = opts.esperasMs ?? [8000, 15000, 25000]
   const dormir = opts.dormir ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
   let r = await tentar()
   for (const ms of esperas) {
     if (r.status !== 'Sem CMC') return r
+    if (opts.podeEsperar && !opts.podeEsperar(ms)) return r
     await dormir(ms)
     r = await tentar()
   }
@@ -24,7 +26,7 @@ export function ehCalculoPendente(msg: string): boolean {
 
 export async function repetirSeCalculoPendente(
   tentar: () => Promise<unknown>,
-  opts: { esperasMs?: number[]; dormir?: (ms: number) => Promise<void> } = {},
+  opts: { esperasMs?: number[]; dormir?: (ms: number) => Promise<void>; podeEsperar?: (ms: number) => boolean } = {},
 ): Promise<void> {
   const esperas = opts.esperasMs ?? [8000, 15000, 25000]
   const dormir = opts.dormir ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
@@ -35,6 +37,7 @@ export async function repetirSeCalculoPendente(
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       if (!ehCalculoPendente(msg) || i >= esperas.length) throw e
+      if (opts.podeEsperar && !opts.podeEsperar(esperas[i])) throw e
       await dormir(esperas[i])
     }
   }

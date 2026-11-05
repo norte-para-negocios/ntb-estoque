@@ -29,6 +29,16 @@ function hashEsquema() {
   return h.digest('hex').slice(0, 16)
 }
 
+// Hash do esquema no formato do canal (desktop/schema/hash.txt, o mesmo que o servidor compara). Gravado no banco
+// local junto do hash interno: com a estrutura nova adiada, o app manda ao servidor o hash do banco que ele de fato tem.
+function hashCanalInstalador() {
+  try {
+    return fs.readFileSync(path.join(DIR_SCHEMA, 'hash.txt'), 'utf8').trim() || null
+  } catch {
+    return null
+  }
+}
+
 function binDirPadrao() {
   // Empacotado: resources/vendor/pgsql; em desenvolvimento: desktop/vendor/<plataforma>-<arch>/pgsql.
   if (process.resourcesPath && fs.existsSync(path.join(process.resourcesPath, 'vendor', 'pgsql', 'bin'))) {
@@ -98,8 +108,11 @@ async function iniciar(o) {
   const hash = hashEsquema()
   const est = await conectar('estoque')
   let esquemaAtual = null
+  let canalAtual = null
   try {
-    esquemaAtual = (await est.query("select valor->>'hash' as h from ntb_local.meta where chave = 'esquema'")).rows[0]?.h ?? null
+    const r = (await est.query("select valor->>'hash' as h, valor->>'canal' as c from ntb_local.meta where chave = 'esquema'")).rows[0]
+    esquemaAtual = r?.h ?? null
+    canalAtual = r?.c ?? null // banco criado por app até a 1.0.5: sem hash do canal
   } catch {
     esquemaAtual = null
   }
@@ -107,8 +120,11 @@ async function iniciar(o) {
 
   let recriado = false
   let desatualizado = false
+  const canalInstalador = hashCanalInstalador()
   // Esquema novo (app atualizado) com fila pendente ou sem internet: recriar apagaria os dados
-  // locais e o trabalho offline. Segue com o banco atual e recria na próxima abertura possível.
+  // locais e o trabalho offline. Segue com o banco atual; o motor de sincronização envia a fila e
+  // recria na mesma abertura assim que puder (sync.js, atualizarEstrutura). Enquanto isso as telas
+  // mostram o aviso de atualização pendente (gateway.js): o Next novo não roda no banco velho.
   if (esquemaAtual && esquemaAtual !== hash && o.adiarRecriacao) {
     log('estrutura nova adiada: há operações pendentes ou sem internet')
     desatualizado = true
@@ -131,9 +147,21 @@ async function iniciar(o) {
   // Apaga tudo e recria a estrutura (troca de usuário, "apagar dados", esquema novo).
   async function recriar() {
     await recriarBancos(conectar, o, hash)
+    desatualizado = false
   }
 
-  return { conectar, parar, recriar, recriado, desatualizado, hash }
+  return {
+    conectar,
+    parar,
+    recriar,
+    recriado,
+    hash,
+    // Estrutura nova adiada: o banco local ainda é o do app anterior.
+    desatualizado: () => desatualizado,
+    // Hash que vai no x-ntb-esquema: o do banco que está rodando. Banco adiado de app antigo = null (sem header,
+    // como a 1.0.3/1.0.4: o servidor deixa passar, a menos que OFFLINE_EXIGIR_HASH=1).
+    hashCanal: () => (desatualizado ? canalAtual : canalInstalador),
+  }
 }
 
 async function recriarBancos(conectar, o, hash) {
@@ -159,7 +187,7 @@ async function recriarBancos(conectar, o, hash) {
     await est.query('select ntb_local.instalar_rastreio()')
     const faixas = (await est.query('select ntb_local.ajustar_sequencias() as f')).rows[0].f
     await est.query(`insert into ntb_local.meta values ('faixas', $1) on conflict (chave) do update set valor = excluded.valor`, [faixas])
-    await est.query(`insert into ntb_local.meta values ('esquema', $1) on conflict (chave) do update set valor = excluded.valor`, [{ hash }])
+    await est.query(`insert into ntb_local.meta values ('esquema', $1) on conflict (chave) do update set valor = excluded.valor`, [{ hash, canal: hashCanalInstalador() }])
   } finally {
     await est.end()
   }
@@ -172,4 +200,4 @@ async function recriarBancos(conectar, o, hash) {
   }
 }
 
-module.exports = { iniciar, hashEsquema, binDirPadrao }
+module.exports = { iniciar, hashEsquema, hashCanalInstalador, binDirPadrao }
