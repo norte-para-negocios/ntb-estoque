@@ -20,8 +20,13 @@ import { custoDoPrato, entradasQueFormaramCusto, serieCustoMedio, type MovCusto 
 import { carregarFichasAtivas } from '@/lib/estoque/receita-db'
 import { EstoqueAtalhos } from '@/components/estoque-proprio/EstoqueAtalhos'
 import { LOJA_BLOQUEADA } from '@/lib/estoque/escrita-omie-puro'
+import { ehDesenvolvedor } from '@/lib/recursos-dev'
 
-export default async function ProdutoEstoquePage({ params }: { params: Promise<{ codigo: string }> }) {
+const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/
+
+export default async function ProdutoEstoquePage({ params, searchParams }: {
+  params: Promise<{ codigo: string }>; searchParams: Promise<{ de?: string; ate?: string }>
+}) {
   const lojaId = await getCurrentLojaId()
   const modo = await modoDaLoja(lojaId)
   if (modo !== 'proprio' && modo !== 'omie') notFound()
@@ -42,7 +47,14 @@ export default async function ProdutoEstoquePage({ params }: { params: Promise<{
   const visao = espelho ?? (await carregarEstoque(lojaId))
   const p = visao.linhas.find((l) => l.codigoProduto === cod)
   if (!p) notFound()
-  const movimentos = ehOmie ? [] : await carregarMovimentos(lojaId, { codigoProduto: cod }, 100)
+  // Filtro por período do kardex (pedido do Ramon 05/11/2026): pelo dia do movimento (data_ref), não pelo dia do lançamento.
+  // Só para login de desenvolvedor por enquanto (regra: recurso novo só no layout novo dos devs).
+  const dev = await ehDesenvolvedor()
+  const sp = dev ? await searchParams : {}
+  const de = sp.de && DATA_ISO.test(sp.de) ? sp.de : undefined
+  const ate = sp.ate && DATA_ISO.test(sp.ate) ? sp.ate : undefined
+  const comPeriodo = !!(de || ate)
+  const movimentos = ehOmie ? [] : await carregarMovimentos(lojaId, { codigoProduto: cod, ini: de, fim: ate }, comPeriodo ? 1000 : 100)
 
   // Loja Omie: kardex espelhado (kardex_omie, migration 159). Sem a tabela, a seção avisa em vez de quebrar.
   let kardexOmie: LinhaKardexTela[] = []
@@ -194,7 +206,16 @@ export default async function ProdutoEstoquePage({ params }: { params: Promise<{
         </section>
       ) : (
         <section aria-label="Kardex">
-          <h2 className="mb-2 text-[15px] font-semibold text-text">Movimentos (kardex)</h2>
+          <div className="mb-2 flex flex-wrap items-end justify-between gap-3">
+            <h2 className="text-[15px] font-semibold text-text">Movimentos (kardex)</h2>
+            {dev && <form method="get" className="flex flex-wrap items-end gap-2 text-[13px]">
+              <label className="flex flex-col gap-1 text-text-muted">De<input type="date" name="de" defaultValue={de ?? ''} className="h-9 rounded-[var(--r-md)] bg-surface-2 px-2 text-text" /></label>
+              <label className="flex flex-col gap-1 text-text-muted">Até<input type="date" name="ate" defaultValue={ate ?? ''} className="h-9 rounded-[var(--r-md)] bg-surface-2 px-2 text-text" /></label>
+              <button type="submit" className="h-9 rounded-[var(--r-md)] bg-brand px-3 font-medium text-white">Filtrar</button>
+              {comPeriodo && <a href={`/estoque/produto/${p.codigoProduto}`} className="h-9 px-2 leading-9 text-brand hover:underline">Limpar</a>}
+            </form>}
+          </div>
+          {comPeriodo && <p className="mb-2 text-[12px] text-text-muted">{movimentos.length} movimento{movimentos.length === 1 ? '' : 's'}{de ? ` de ${de.split('-').reverse().join('/')}` : ''}{ate ? ` até ${ate.split('-').reverse().join('/')}` : ''}, pelo dia do movimento.</p>}
           <Kardex movimentos={movimentos} unidade={p.unidade} podeEstornar={podeMovimentar} />
           <p className="mt-2 text-[12px] text-text-muted">* entrada sem custo informado: o custo médio não foi alterado.</p>
         </section>
