@@ -12,7 +12,7 @@ const q = (v: number | null) => (v == null ? '—' : v.toLocaleString('pt-BR', {
 const brl = (v: number | null) => (v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 4 }))
 const SIT: Record<SituacaoConf, { txt: string; cor: string }> = {
   ok: { txt: 'Quantidade certa', cor: 'text-ok' }, falta: { txt: 'Veio menos', cor: 'text-warn' }, excede: { txt: 'Veio mais', cor: 'text-warn' },
-  nao_veio: { txt: 'Não veio nesta nota', cor: 'text-text-muted' }, fora_do_pedido: { txt: 'Fora do pedido', cor: 'text-err' },
+  nao_veio: { txt: 'Não veio nesta nota', cor: 'text-text-muted' }, ja_atendido: { txt: 'Já veio em outra nota', cor: 'text-text-muted' }, fora_do_pedido: { txt: 'Fora do pedido', cor: 'text-err' },
 }
 const th = 'whitespace-nowrap px-2.5 py-2 text-[12px] font-semibold text-text-muted'
 
@@ -80,12 +80,12 @@ export function PedidoDaNotaNF({ compraId, dados, podeVincular }: { compraId: nu
                     <td className="px-2.5 py-2 text-text">{l.descricao}</td>
                     <td className="px-2.5 py-2 text-right num">{q(l.pedidoQtd)}</td>
                     <td className="px-2.5 py-2 text-right num">{q(l.notaQtd)}</td>
-                    <td className="px-2.5 py-2 text-right num">{l.situacao === 'nao_veio' ? '—' : q(l.recebido)}</td>
+                    <td className="px-2.5 py-2 text-right num">{l.situacao === 'nao_veio' || l.situacao === 'ja_atendido' ? '—' : q(l.recebido)}</td>
                     <td className="px-2.5 py-2 text-right num">{brl(l.pedidoPreco)}</td>
                     <td className={`px-2.5 py-2 text-right num ${l.precoDiferente ? 'text-warn font-semibold' : ''}`}>
                       {brl(l.notaPreco)}{l.precoDiferente && l.difPrecoPct != null ? ` (${l.difPrecoPct > 0 ? '+' : ''}${l.difPrecoPct.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%)` : ''}
                     </td>
-                    <td className={`whitespace-nowrap px-2.5 py-2 font-medium ${SIT[l.situacao].cor}`}>{SIT[l.situacao].txt}{l.precoDiferente ? ' · preço diferente' : ''}</td>
+                    <td className={`whitespace-nowrap px-2.5 py-2 font-medium ${SIT[l.situacao].cor}`}>{SIT[l.situacao].txt}{l.precoDiferente ? ' · preço diferente' : ''}{l.recebeuMenos ? <span className="text-warn"> · chegou menos que a nota</span> : ''}</td>
                   </tr>
                 ))}
               </tbody>

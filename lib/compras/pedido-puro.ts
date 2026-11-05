@@ -57,11 +57,14 @@ export type ItemNotaConf = {
   lancado: boolean
   pedidoItemId: number | null
 }
-export type SituacaoConf = 'ok' | 'falta' | 'excede' | 'nao_veio' | 'fora_do_pedido'
+/** ja_atendido = item do pedido que outras notas já cobriram por inteiro (nada mais esperado nesta). */
+export type SituacaoConf = 'ok' | 'falta' | 'excede' | 'nao_veio' | 'ja_atendido' | 'fora_do_pedido'
 export type LinhaConf = {
   pedidoItemId: number | null; notaItemId: number | null; descricao: string
   pedidoQtd: number | null; pedidoPreco: number | null; notaQtd: number | null; notaPreco: number | null; recebido: number
   situacao: SituacaoConf; precoDiferente: boolean; difPrecoPct: number | null
+  /** 3ª via: nota lançada e o que entrou no estoque é menor que a nota (o fornecedor faturou mais do que entregou). */
+  recebeuMenos: boolean
 }
 
 /** Tolerância de preço: diferença acima de R$ 0,01 e de 0,5% do preço combinado. */
@@ -78,23 +81,26 @@ export function conferirPedidoNota(pedido: ItemPedidoConf[], nota: ItemNotaConf[
     const ns = nota.filter((n) => n.pedidoItemId === p.id && n.codigoProduto === p.codigoProduto)
     if (!ns.length) {
       r.push({ pedidoItemId: p.id, notaItemId: null, descricao: p.descricao, pedidoQtd: p.quantidadeBase, pedidoPreco: p.precoBase,
-        notaQtd: null, notaPreco: null, recebido: 0, situacao: 'nao_veio', precoDiferente: false, difPrecoPct: null })
+        notaQtd: null, notaPreco: null, recebido: 0, situacao: p.quantidadeBase <= EPS ? 'ja_atendido' : 'nao_veio', precoDiferente: false, difPrecoPct: null,
+        recebeuMenos: false })
       continue
     }
     const qtd = ns.reduce((a, n) => a + n.quantidadeBase, 0)
     const valor = ns.reduce((a, n) => a + n.quantidadeBase * n.precoBase, 0)
     const preco = qtd > 0 ? valor / qtd : 0
     const recebido = ns.reduce((a, n) => a + (n.lancado ? n.recebido : 0), 0)
+    const recebeuMenos = ns.some((n) => n.lancado && n.recebido + EPS < n.quantidadeBase)
     const situacao: SituacaoConf = Math.abs(qtd - p.quantidadeBase) <= EPS ? 'ok' : qtd < p.quantidadeBase ? 'falta' : 'excede'
     r.push({ pedidoItemId: p.id, notaItemId: ns[0].id, descricao: p.descricao, pedidoQtd: p.quantidadeBase, pedidoPreco: p.precoBase,
       notaQtd: Math.round(qtd * 1e6) / 1e6, notaPreco: Math.round(preco * 1e6) / 1e6, recebido: Math.round(recebido * 1e6) / 1e6, situacao,
-      precoDiferente: precoDiverge(p.precoBase, preco), difPrecoPct: p.precoBase > 0 ? ((preco - p.precoBase) / p.precoBase) * 100 : null })
+      precoDiferente: precoDiverge(p.precoBase, preco), difPrecoPct: p.precoBase > 0 ? ((preco - p.precoBase) / p.precoBase) * 100 : null, recebeuMenos })
   }
   const prodDoItem = new Map(pedido.map((p) => [p.id, p.codigoProduto]))
   for (const n of nota) {
     if (n.pedidoItemId != null && prodDoItem.get(n.pedidoItemId) === n.codigoProduto) continue
     r.push({ pedidoItemId: null, notaItemId: n.id, descricao: n.descricao, pedidoQtd: null, pedidoPreco: null, notaQtd: n.quantidadeBase,
-      notaPreco: n.precoBase, recebido: n.lancado ? n.recebido : 0, situacao: 'fora_do_pedido', precoDiferente: false, difPrecoPct: null })
+      notaPreco: n.precoBase, recebido: n.lancado ? n.recebido : 0, situacao: 'fora_do_pedido', precoDiferente: false, difPrecoPct: null,
+      recebeuMenos: n.lancado && n.recebido + EPS < n.quantidadeBase })
   }
   return r
 }

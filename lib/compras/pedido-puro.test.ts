@@ -130,3 +130,34 @@ test('item da nota religado a outro produto não conta no item do pedido (revis�
   assert.equal(r.find((l) => l.pedidoItemId === 1)!.situacao, 'nao_veio')
   assert.equal(r.find((l) => l.notaItemId === 11)!.situacao, 'fora_do_pedido')
 })
+
+// Fase 3 (loja 19, NF 9002): nota de 8 com o pedido certo, mas só 6 chegaram. A tela dizia "Quantidade certa".
+test('conferirPedidoNota: recebido menor que a nota aparece, mesmo com a nota igual ao pedido', () => {
+  const r = conferirPedidoNota(
+    [{ id: 1, codigoProduto: 1, descricao: 'A', quantidadeBase: 8, precoBase: 2 }],
+    [{ id: 9, codigoProduto: 1, descricao: 'A', quantidadeBase: 8, precoBase: 2, recebido: 6, lancado: true, pedidoItemId: 1 }],
+  )
+  assert.equal(r[0].situacao, 'ok')
+  assert.equal(r[0].recebeuMenos, true)
+  // nota ainda não lançada: o recebido é 0 e não é "chegou menos"
+  const pend = conferirPedidoNota(
+    [{ id: 1, codigoProduto: 1, descricao: 'A', quantidadeBase: 8, precoBase: 2 }],
+    [{ id: 9, codigoProduto: 1, descricao: 'A', quantidadeBase: 8, precoBase: 2, recebido: 6, lancado: false, pedidoItemId: 1 }],
+  )
+  assert.equal(pend[0].recebeuMenos, false)
+  const cheio = conferirPedidoNota(
+    [{ id: 1, codigoProduto: 1, descricao: 'A', quantidadeBase: 8, precoBase: 2 }],
+    [{ id: 9, codigoProduto: 1, descricao: 'A', quantidadeBase: 8, precoBase: 2, recebido: 8, lancado: true, pedidoItemId: 1 }],
+  )
+  assert.equal(cheio[0].recebeuMenos, false)
+})
+
+// Fase 3 (loja 19, NF 9002): item do pedido que já veio inteiro na nota anterior aparecia como "Não veio nesta nota".
+test('conferirPedidoNota: item já atendido por outra nota não é "não veio"', () => {
+  const r = conferirPedidoNota(
+    [{ id: 1, codigoProduto: 1, descricao: 'A', quantidadeBase: 0, precoBase: 2 }, { id: 2, codigoProduto: 2, descricao: 'B', quantidadeBase: 3, precoBase: 2 }],
+    [{ id: 9, codigoProduto: 2, descricao: 'B', quantidadeBase: 3, precoBase: 2, recebido: 3, lancado: true, pedidoItemId: 2 }],
+  )
+  assert.equal(r.find((l) => l.pedidoItemId === 1)!.situacao, 'ja_atendido')
+  assert.equal(r.find((l) => l.pedidoItemId === 2)!.situacao, 'ok')
+})
