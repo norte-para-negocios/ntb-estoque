@@ -46,3 +46,23 @@ test('importarNotaPorChave precheca (com bloqueado_ate e is_test) antes de grava
   assert.ok(/from\('sefaz_nsu'\)\.select\('[^']*bloqueado_ate/.test(corpo.slice(0, iPre)), 'não lê bloqueado_ate antes do precheck')
   assert.ok(/from\('lojas'\)\.select\('[^']*is_test/.test(corpo.slice(0, iPre)), 'não lê is_test')
 })
+
+// Fase 3 (frente C): a sincronização manual (botão "Sincronizar" / /api/sync/notas-fiscais) chama sincronizarSefaz direto,
+// sem o filtro de lojasParaSefaz do cron. Loja de teste nunca pode chegar à SEFAZ (a ciência 210210 é um evento real).
+import { prechecarSincronizacao } from './sefaz-busca-chave.ts'
+test('sincronização com a SEFAZ: loja de teste, inativa, sem CNPJ ou sem certificado não consulta', () => {
+  assert.deepEqual(prechecarSincronizacao(loja), { ok: true, cnpj: '66764497000122' })
+  assert.deepEqual(prechecarSincronizacao({ ...loja, is_test: true }), { motivo: 'Loja de teste não consulta a SEFAZ.' })
+  assert.deepEqual(prechecarSincronizacao({ ...loja, ativo: false }), { motivo: 'Loja inativa.' })
+  assert.deepEqual(prechecarSincronizacao({ ...loja, modo_estoque: 'omie' }), { motivo: 'A loja não usa estoque próprio.' })
+  assert.deepEqual(prechecarSincronizacao(null), { motivo: 'A loja não usa estoque próprio.' })
+  assert.deepEqual(prechecarSincronizacao({ ...loja, cnpj: '123' }), { motivo: 'A loja precisa de um CNPJ válido para consultar as notas na SEFAZ.' })
+  assert.deepEqual(prechecarSincronizacao({ ...loja, certificado_path: null }), { motivo: 'A loja não tem certificado digital cadastrado.' })
+})
+test('sincronizarSefaz usa a checagem antes de carregar o certificado', () => {
+  const fonte = readFileSync(new URL('./sefaz-sync.ts', import.meta.url), 'utf8')
+  const corpo = fonte.slice(fonte.indexOf('export async function sincronizarSefaz'))
+  assert.ok(/prechecarSincronizacao\(/.test(corpo), 'sincronizarSefaz não chama prechecarSincronizacao')
+  assert.ok(corpo.indexOf('prechecarSincronizacao(') < corpo.indexOf('carregarCredencialLoja('), 'a checagem vem depois do certificado')
+  assert.ok(/is_test/.test(corpo.slice(0, corpo.indexOf('prechecarSincronizacao('))), 'a leitura da loja não traz is_test')
+})
