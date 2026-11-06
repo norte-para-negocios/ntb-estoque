@@ -10,6 +10,7 @@ import { Kardex } from '@/components/estoque-proprio/Kardex'
 import { carregarEstoque, carregarMovimentos, situacaoDe } from '../../dados'
 import { carregarEstoqueOmie } from '../../dados-omie'
 import { EspelhoOmieBarra } from '@/components/estoque-proprio/EspelhoOmieBarra'
+import { ehDesenvolvedor } from '@/lib/recursos-dev'
 
 export default async function LocalEstoqueProprioPage({ params }: { params: Promise<{ codigo: string }> }) {
   const lojaId = await getCurrentLojaId()
@@ -27,8 +28,9 @@ export default async function LocalEstoqueProprioPage({ params }: { params: Prom
   const visao = espelho ?? (await carregarEstoque(lojaId))
   const local = visao.locais.find((l) => l.codigoLocal === cod)
   if (!local) notFound()
+  const dev = await ehDesenvolvedor() // 410: versão da ficha no kardex só para desenvolvedor
   // estoque_movimentos é só do modo próprio; na loja Omie os movimentos ficam na página do produto.
-  const movimentos = ehOmie ? [] : await carregarMovimentos(lojaId, { codigoLocal: cod }, 50)
+  const movimentos = ehOmie ? [] : await carregarMovimentos(lojaId, { codigoLocal: cod }, 50, dev)
 
   const itens = visao.linhas.flatMap((l) => {
     const s = l.locais.find((x) => x.codigoLocal === cod)
@@ -79,7 +81,7 @@ export default async function LocalEstoqueProprioPage({ params }: { params: Prom
       ) : (
         <section aria-label="Movimentos recentes">
           <h2 className="mb-2 text-[15px] font-semibold text-text">Movimentos recentes</h2>
-          <Kardex movimentos={movimentos} mostrarProduto podeEstornar={podeMovimentar} />
+          <Kardex movimentos={movimentos} mostrarProduto podeEstornar={podeMovimentar} mostrarFicha={dev} />
         </section>
       )}
     </div>

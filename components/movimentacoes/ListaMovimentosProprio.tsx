@@ -15,6 +15,7 @@ import { ROTULO_ORIGEM, type LinhaKardex } from '@/lib/estoque/kardex-tipos'
 import { formatCustoUnit } from '@/lib/num-br'
 import { rotuloCustoRevisado } from '@/lib/estoque/custo-revisado'
 import { dataDoMovimento } from '@/lib/estoque/data-movimento'
+import { rotuloFicha } from '@/lib/estoque/ficha-versao-puro'
 
 // Movimento antigo guarda o id do usuário; se o perfil não existe mais, mostra isso em vez de um código longo.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -28,7 +29,11 @@ const COLUNAS = ['Data', 'Tipo', 'Produto', 'Quantidade', 'Local', 'Origem', 'Us
 
 const fmtQtd = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 4 })
 
-export function ListaMovimentosProprio({ linhas, podeEstornar }: { linhas: LinhaKardex[]; podeEstornar: boolean }) {
+export function ListaMovimentosProprio({ linhas, podeEstornar, fichas }: {
+  linhas: LinhaKardex[]; podeEstornar: boolean
+  /** 410: versão da ficha por movimento (id → versão), só para desenvolvedor. */
+  fichas?: Record<number, number>
+}) {
   const { visiveis, toggle } = useColunasVisiveis('/movimentacoes', COLUNAS)
   const [pending, startTransition] = useTransition()
   const [alvo, setAlvo] = useState<number | null>(null)
@@ -85,7 +90,7 @@ export function ListaMovimentosProprio({ linhas, podeEstornar }: { linhas: Linha
       render: (m: LinhaKardex) => (
         <button type="button" onClick={() => setAberto(m.id)} className="min-w-0 text-left" title="Ver detalhe">
           <span className="block truncate text-[14px] text-text hover:text-brand">{m.descricao ?? m.codigo_produto}</span>
-          <span className="num block truncate text-[12px] text-text-muted">{m.codigo}{m.obs ? ` · ${m.obs}` : ''}</span>
+          <span className="num block truncate text-[12px] text-text-muted">{m.codigo}{m.obs ? ` · ${m.obs}` : ''}{fichas?.[m.id] != null ? ` · ${rotuloFicha(fichas[m.id])}` : ''}</span>
         </button>
       ),
     },

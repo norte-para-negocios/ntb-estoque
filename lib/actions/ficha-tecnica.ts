@@ -10,6 +10,9 @@ import { modoDaLoja } from '@/lib/estoque/ledger'
 import { validarFicha, type ItemFicha } from '@/lib/estoque/receita'
 import { desativarFicha as desativarNoBanco, produzirLote, salvarFicha as salvarNoBanco } from '@/lib/estoque/receita-db'
 import { avisosDaProducao } from '@/lib/estoque/avisos-baixa'
+import { carregarFichasAtivas } from '@/lib/estoque/receita-db'
+import { cicloNaFicha } from '@/lib/estoque/arvore-custo-puro'
+import { createServiceClient } from '@/lib/supabase/server'
 
 type Erro = { error: string }
 
@@ -55,8 +58,24 @@ export async function salvarFichaTecnica(dados: {
     atualizar()
     return { ok: true, versao: r.versao }
   } catch (e) {
-    return { error: mensagem(e, 'Falha ao salvar a ficha técnica') }
+    const m = mensagem(e, 'Falha ao salvar a ficha técnica')
+    // 410: o banco recusa a receita circular (gatilho trg_ficha_itens_ciclo); aqui só dizemos o caminho com os nomes
+    if (m.startsWith('Receita circular')) {
+      const caminho = await caminhoDoCiclo(ctx.lojaId, dados.codigoProduto, dados.itens.map((i) => i.codigoInsumo)).catch(() => null)
+      if (caminho) return { error: `Receita circular: ${caminho}. Uma ficha não pode conter o próprio produto, nem por um pré-preparo.` }
+    }
+    return { error: m }
   }
+}
+
+async function caminhoDoCiclo(lojaId: number, produto: number, insumos: number[]): Promise<string | null> {
+  const sb = createServiceClient()
+  const ciclo = cicloNaFicha(await carregarFichasAtivas(sb, lojaId), produto, insumos)
+  if (!ciclo) return null
+  const { data, error } = await sb.from('produtos').select('codigo_produto, descricao').eq('loja_id', lojaId).in('codigo_produto', [...new Set(ciclo)])
+  if (error) return null
+  const nome = new Map((data ?? []).map((p) => [Number(p.codigo_produto), String(p.descricao)]))
+  return ciclo.map((c) => nome.get(c) ?? String(c)).join(' → ')
 }
 
 /** Desativa a receita: o produto volta a baixar a si mesmo na venda. */

@@ -8,6 +8,8 @@ import { FiltrosKardex } from '@/components/movimentacoes/FiltrosKardex'
 import { NovoAjusteManual } from '@/components/movimentacoes/NovoAjusteManual'
 import { ListaMovimentosProprio } from '@/components/movimentacoes/ListaMovimentosProprio'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
+import { versoesFichaDosMovimentos } from '@/lib/estoque/ficha-versao'
+import { ehDesenvolvedor } from '@/lib/recursos-dev'
 import { buscarKardex, hojeBahia, periodoKardex, POR_PAGINA_KARDEX, type ParamsKardex } from '@/lib/estoque/kardex'
 
 const fmtQtd = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 4 })
@@ -30,6 +32,8 @@ export async function MovimentosProprio({ sp, lojaId }: { sp: ParamsKardex; loja
   const locais = (locaisRaw ?? []) as { codigo_local_estoque: number; descricao: string | null }[]
   const familias = ((familiasRaw ?? []) as { nome: string }[]).map((f) => f.nome)
   const temProxima = k.total > page * POR_PAGINA_KARDEX
+  // 410: "ficha vN" nas baixas pela receita, só para desenvolvedor
+  const fichas = (await ehDesenvolvedor()) ? Object.fromEntries(await versoesFichaDosMovimentos(lojaId, k.linhas.map((l) => l.id))) : undefined
 
   // Saldo inicial/final quando todos os movimentos são de UM produto e UM local (busca por código exato + local escolhido).
   let saldoInicial: number | null = null
@@ -64,7 +68,7 @@ export async function MovimentosProprio({ sp, lojaId }: { sp: ParamsKardex; loja
         {saldoFinal != null && <span className={chip}>Saldo final (até <span className="num">{fmtDia(fim)}</span>) <span className="num font-semibold text-text">{fmtQtd(saldoFinal)}</span></span>}
       </div>
 
-      <ListaMovimentosProprio linhas={k.linhas} podeEstornar={podeCriar} />
+      <ListaMovimentosProprio linhas={k.linhas} podeEstornar={podeCriar} fichas={fichas} />
 
       {(page > 1 || temProxima) && <Paginacao basePath="/movimentacoes" page={page} temProxima={temProxima} total={k.total} porPagina={POR_PAGINA_KARDEX} />}
     </div>

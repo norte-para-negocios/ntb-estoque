@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
+import { versoesFichaDosMovimentos } from '@/lib/estoque/ficha-versao'
 
 import type { Movimento, Situacao } from './tipos'
 export type { Movimento, Situacao }
@@ -111,6 +112,8 @@ export async function carregarMovimentos(
   lojaId: number,
   filtro: { codigoProduto?: number; codigoLocal?: number; ini?: string; fim?: string },
   limite = 100,
+  /** 410: traz a versão da ficha de cada baixa pela receita (só para desenvolvedor). */
+  comFicha = false,
 ): Promise<Movimento[]> {
   const supabase = await createClient()
   // 315: custo, saldo e CMC efetivos (última revisão); sem revisão = igual ao ledger
@@ -135,6 +138,7 @@ export async function carregarMovimentos(
       : Promise.resolve({ data: [] as { codigo_produto: number; codigo: string; descricao: string }[] }),
   ])
   const estornados = new Set((estornos ?? []).map((e) => Number(e.reverses_id)))
+  const versoes = comFicha ? await versoesFichaDosMovimentos(lojaId, ids) : new Map<number, number>()
   const nomeLocal = new Map((locais ?? []).map((l) => [Number(l.codigo_local_estoque), l.descricao as string]))
   const nomeProd = new Map((prods ?? []).map((p) => [Number(p.codigo_produto), `${p.descricao} (${p.codigo})`]))
 
@@ -146,6 +150,7 @@ export async function carregarMovimentos(
     estornado: estornados.has(Number(r.id)), ehEstorno: r.reverses_id != null, custoEstimado: r.custo_estimado,
     codigoProduto: Number(r.codigo_produto), produto: nomeProd.get(Number(r.codigo_produto)),
     revisado: !!r.revisado, revisadoEm: r.revisado_em,
+    ...(comFicha ? { fichaVersao: versoes.get(Number(r.id)) ?? null } : {}),
   }))
 }
 

@@ -18,6 +18,8 @@ import { CustoProduto, type LinhaPrato } from '@/components/estoque-proprio/Cust
 import { NotasDoProduto } from '@/components/estoque-proprio/NotasDoProduto'
 import { custoDoPrato, entradasQueFormaramCusto, serieCustoMedio, type MovCusto } from '@/lib/estoque/custo-produto-puro'
 import { carregarFichasAtivas } from '@/lib/estoque/receita-db'
+import { arvoreCustoFicha, type ArvoreCusto } from '@/lib/estoque/arvore-custo-puro'
+import { ArvoreCustoFicha } from '@/components/estoque-proprio/ArvoreCustoFicha'
 import { EstoqueAtalhos } from '@/components/estoque-proprio/EstoqueAtalhos'
 import { LOJA_BLOQUEADA } from '@/lib/estoque/escrita-omie-puro'
 import { ehDesenvolvedor } from '@/lib/recursos-dev'
@@ -54,7 +56,7 @@ export default async function ProdutoEstoquePage({ params, searchParams }: {
   const de = sp.de && DATA_ISO.test(sp.de) ? sp.de : undefined
   const ate = sp.ate && DATA_ISO.test(sp.ate) ? sp.ate : undefined
   const comPeriodo = !!(de || ate)
-  const movimentos = ehOmie ? [] : await carregarMovimentos(lojaId, { codigoProduto: cod, ini: de, fim: ate }, comPeriodo ? 1000 : 100)
+  const movimentos = ehOmie ? [] : await carregarMovimentos(lojaId, { codigoProduto: cod, ini: de, fim: ate }, comPeriodo ? 1000 : 100, dev)
 
   // Loja Omie: kardex espelhado (kardex_omie, migration 159). Sem a tabela, a seção avisa em vez de quebrar.
   let kardexOmie: LinhaKardexTela[] = []
@@ -138,6 +140,16 @@ export default async function ProdutoEstoquePage({ params, searchParams }: {
     }
   }
 
+  // T5.5 (só desenvolvedor, estoque próprio): árvore de custo pela ficha (prato → pré-preparo → insumos).
+  let arvore: ArvoreCusto | null = null
+  if (dev && !ehOmie) {
+    const supabase = await createClient()
+    const fichas = await carregarFichasAtivas(supabase, lojaId).catch(() => new Map())
+    const cmcs = new Map(visao.linhas.map((l) => [l.codigoProduto, l.custoSuspeito ? null : (l.cmc ?? null)] as [number, number | null]))
+    arvore = arvoreCustoFicha(fichas, cmcs, cod, 1)
+  }
+  const infoArvore = new Map(visao.linhas.map((l) => [l.codigoProduto, { descricao: l.descricao, unidade: l.unidade }]))
+
   const locaisAtivos = visao.locais.filter((l) => !l.inativo)
   const saldos = p.locais.map((x) => ({ codigoLocal: x.codigoLocal, saldo: x.saldo, minimo: x.minimo }))
   // Mostra todo local ativo, mesmo sem movimento (saldo 0), para dar para receber/transferir nele.
@@ -196,6 +208,7 @@ export default async function ProdutoEstoquePage({ params, searchParams }: {
       </section>
 
       <CustoProduto series={serieCustoMedio(movsCusto)} entradas={entradasQueFormaramCusto(movsCusto)} nomeLocal={nomeLocalCusto} unidade={p.unidade} prato={prato} notaFicha={notaFicha} />
+      {arvore && <ArvoreCustoFicha arvore={arvore} unidade={p.unidade} info={infoArvore} custoMedio={p.cmc || null} />}
 
       {ehOmie ? (
         <section aria-label="Movimentos no Omie">
@@ -216,7 +229,7 @@ export default async function ProdutoEstoquePage({ params, searchParams }: {
             </form>}
           </div>
           {comPeriodo && <p className="mb-2 text-[12px] text-text-muted">{movimentos.length} movimento{movimentos.length === 1 ? '' : 's'}{de ? ` de ${de.split('-').reverse().join('/')}` : ''}{ate ? ` até ${ate.split('-').reverse().join('/')}` : ''}, pelo dia do movimento.</p>}
-          <Kardex movimentos={movimentos} unidade={p.unidade} podeEstornar={podeMovimentar} />
+          <Kardex movimentos={movimentos} unidade={p.unidade} podeEstornar={podeMovimentar} mostrarFicha={dev} />
           <p className="mt-2 text-[12px] text-text-muted">* entrada sem custo informado: o custo médio não foi alterado.</p>
         </section>
       )}

@@ -1,5 +1,6 @@
 import type { DetalheOPProprio as Detalhe } from '@/lib/estoque/op-proprio'
 import { ReverterOPBotao } from '@/components/ordem-producao/ReverterOPBotao'
+import type { CustoRealTeorico } from '@/lib/estoque/ficha-versao-puro'
 
 // Detalhe da OP do estoque próprio: tudo o que antes só existia no Omie. Receita usada (ficha e versão), cada execução com os insumos
 // consumidos (bruto e custo), os movimentos gerados no ledger (e se já foram estornados) e a trilha completa de mudanças.
@@ -44,9 +45,11 @@ function resumoDetalhes(evento: string, d: Record<string, unknown>): string {
 }
 
 export function DetalheOPProprio({
-  detalhe, opId, numOP, concluida, podeReverter, custoTotal, custoUnitario, unidade, criadaPor, criadaEm, concluidaPor, concluidaEm, revertidaPor, revertidaEm, vendaRef, vendaUrl,
+  detalhe, custosReais, opId, numOP, concluida, podeReverter, custoTotal, custoUnitario, unidade, criadaPor, criadaEm, concluidaPor, concluidaEm, revertidaPor, revertidaEm, vendaRef, vendaUrl,
 }: {
   detalhe: Detalhe | null
+  /** 410: custo real × teórico por execução (ref), só para desenvolvedor. Sem isso a tela fica como antes. */
+  custosReais?: Record<string, CustoRealTeorico>
   opId: number
   numOP: string
   concluida: boolean
@@ -116,6 +119,7 @@ export function DetalheOPProprio({
           <p className="mb-3 text-[13px] text-text-muted">
             {fq(e.quantidade)} {unidade} · custo {fr(e.custo_total)} ({fr(e.custo_unitario, 6)} por {unidade || 'unidade'}) · {fd(e.created_at)}{e.user_id ? ` · ${e.user_id}` : ''}
           </p>
+          {custosReais?.[e.ref] && <CustoRealTeoricoBloco c={custosReais[e.ref]} />}
           <div className="overflow-x-auto rounded-[var(--r-md)] bg-surface-2/50">
             <table className="w-full min-w-[560px] text-sm">
               <thead><tr><th className={th}>Insumo consumido</th><th className={`${th} text-right`}>Qtde bruta</th><th className={th}>Un.</th><th className={`${th} text-right`}>Custo unit.</th><th className={`${th} text-right`}>Custo</th><th className={`${th} text-right`}>Mov.</th></tr></thead>
@@ -184,5 +188,47 @@ export function DetalheOPProprio({
         )}
       </div>
     </>
+  )
+}
+
+// 410 (só desenvolvedor): o que os insumos custaram de fato (ledger efetivo, com revisões) × o que a ficha usada manda,
+// descendo nas sub-receitas até o insumo comprado, ao custo médio do momento da OP.
+function CustoRealTeoricoBloco({ c }: { c: CustoRealTeorico }) {
+  const tom = (d: number) => (Math.abs(d) < 0.005 ? 'text-text-muted' : d > 0 ? 'text-err' : 'text-ok')
+  return (
+    <div className="mb-4 rounded-[var(--r-md)] bg-surface-2/50 p-4">
+      <div className="mb-2 text-[13px] font-semibold text-text">Custo real × pela ficha <span className="font-normal text-text-muted">(ficha v{c.versao ?? '-'})</span></div>
+      <dl className="grid gap-3 sm:grid-cols-4">
+        <div><dt className="text-[12px] text-text-muted">Custo real</dt><dd className="num text-[15px] text-text">{fr(c.custoReal)}</dd></div>
+        <div><dt className="text-[12px] text-text-muted">Pela ficha</dt><dd className="num text-[15px] text-text">{fr(c.custoTeorico)}</dd></div>
+        <div><dt className="text-[12px] text-text-muted">Diferença</dt><dd className={`num text-[15px] font-medium ${tom(c.diferenca)}`}>{c.diferenca > 0 ? '+' : ''}{fr(c.diferenca)}{c.diferencaPct != null ? ` (${c.diferencaPct.toLocaleString('pt-BR')}%)` : ''}</dd></div>
+        <div><dt className="text-[12px] text-text-muted">Gravado na conclusão</dt><dd className="num text-[15px] text-text-muted">{fr(c.custoGravado)}</dd></div>
+      </dl>
+      {(c.teoricoSemCusto > 0 || c.teoricoEstimado > 0) && (
+        <p className="mt-2 text-[12px] text-warn">
+          {c.teoricoSemCusto > 0 ? `${c.teoricoSemCusto} insumo(s) sem custo no momento da OP. ` : ''}
+          {c.teoricoEstimado > 0 ? `${c.teoricoEstimado} insumo(s) com custo estimado (último custo de entrada).` : ''}
+        </p>
+      )}
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full min-w-[620px] text-sm">
+          <thead><tr><th className={th}>Insumo</th><th className={`${th} text-right`}>Real</th><th className={`${th} text-right`}>Pela ficha</th><th className={`${th} text-right`}>Diferença</th></tr></thead>
+          <tbody>
+            {c.itens.map((i) => (
+              <tr key={i.codigoInsumo} className="border-t border-border/60">
+                <td className="px-3 py-2">
+                  <div className="text-text">{i.descricao ?? i.codigoInsumo}{i.subReceita && <span className="ml-1.5 rounded-full bg-info/10 px-1.5 py-0.5 text-[11px] font-medium text-info">pré-preparo · ficha v{i.versaoSub ?? '-'}</span>}</div>
+                  <div className="num text-[12px] text-text-muted">{i.codigo}</div>
+                </td>
+                <td className="px-3 py-2 text-right num">{i.custoReal == null ? '-' : fr(i.custoReal)}<div className="text-[12px] text-text-muted">{i.qtdReal == null ? 'não consumido' : `${fq(i.qtdReal)} ${i.unidade ?? ''} × ${fr(i.custoUnitReal, 6)}`}{i.realEstimado ? ' *' : ''}</div></td>
+                <td className="px-3 py-2 text-right num">{i.custoTeorico == null ? '-' : fr(i.custoTeorico)}<div className="text-[12px] text-text-muted">{i.qtdTeorica == null ? 'fora da ficha' : `${fq(i.qtdTeorica)} ${i.unidade ?? ''} × ${fr(i.custoUnitTeorico, 6)}`}</div></td>
+                <td className={`px-3 py-2 text-right num ${tom(i.diferenca)}`}>{i.diferenca > 0 ? '+' : ''}{fr(i.diferenca)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 text-[12px] text-text-muted">Real = custo de cada consumo hoje no estoque (já com notas e correções lançadas depois). Pela ficha = quantidade da ficha × custo médio no momento da OP; pré-preparo pelo custo da ficha dele. * custo estimado.</p>
+    </div>
   )
 }

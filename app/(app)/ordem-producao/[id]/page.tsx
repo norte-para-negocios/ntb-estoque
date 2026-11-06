@@ -18,6 +18,8 @@ import { Copy } from 'lucide-react'
 import { btnClass } from '@/components/ui-kit/Button'
 import { DetalheOPProprio } from '@/components/ordem-producao/DetalheOPProprio'
 import { detalheOPProprio } from '@/lib/estoque/op-proprio'
+import { custoRealTeoricoDasExecucoes } from '@/lib/estoque/ficha-versao'
+import { ehDesenvolvedor } from '@/lib/recursos-dev'
 import { urlVendaNoVendas } from '@/lib/estoque/link-vendas'
 import { MovimentosDaOP } from '@/components/ordem-producao/MovimentosDaOP'
 import type { ItemFichaOP } from '@/lib/movimentacoes/movimentacoes-puro'
@@ -166,6 +168,12 @@ export default async function OrdemProducaoDetalhePage({
   const podeDuplicar = proprio && (await requirePermissao(lojaId, 'Ordens de Producao - Criar'))
   const dataReferencia: string | null = op.dt_conclusao_real ?? op.identificacao_d_dt_previsao ?? null
 
+  const detalheProprio = proprio ? await detalheOPProprio(lojaId, op.id) : null
+  // 410: custo real (ledger efetivo) × teórico pela ficha de cada execução, só para desenvolvedor
+  const custosReais = detalheProprio && (await ehDesenvolvedor())
+    ? await custoRealTeoricoDasExecucoes(lojaId, detalheProprio.execucoes.filter((e) => e.status === 'concluida').map((e) => e.ref))
+    : undefined
+
   return (
     <div className="space-y-4">
       <DetailHeader
@@ -247,7 +255,8 @@ export default async function OrdemProducaoDetalhePage({
 
       {proprio && (
         <DetalheOPProprio
-          detalhe={await detalheOPProprio(lojaId, op.id)}
+          detalhe={detalheProprio}
+          custosReais={custosReais}
           opId={op.id}
           numOP={numOP}
           concluida={concluida}
