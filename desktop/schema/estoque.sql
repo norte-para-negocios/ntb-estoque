@@ -213,6 +213,56 @@ begin
 end $$;
 
 
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: fin_contas_correntes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fin_contas_correntes (
+    id bigint NOT NULL,
+    loja_id bigint NOT NULL,
+    nome text NOT NULL,
+    tipo text DEFAULT 'banco'::text NOT NULL,
+    banco text,
+    agencia text,
+    numero_conta text,
+    saldo_inicial numeric(14,2) DEFAULT 0 NOT NULL,
+    data_saldo_inicial date DEFAULT ((now() AT TIME ZONE 'America/Bahia'::text))::date NOT NULL,
+    ativa boolean DEFAULT true NOT NULL,
+    observacao text,
+    criado_por text,
+    criado_por_nome text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT fin_contas_correntes_nome_check CHECK (((length(btrim(nome)) >= 2) AND (length(btrim(nome)) <= 80))),
+    CONSTRAINT fin_contas_correntes_saldo_inicial_check CHECK ((saldo_inicial <> 'NaN'::numeric)),
+    CONSTRAINT fin_contas_correntes_tipo_check CHECK ((tipo = ANY (ARRAY['caixa'::text, 'banco'::text, 'outro'::text])))
+);
+
+
+--
+-- Name: _fin_conta_para_lancar(bigint, bigint, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._fin_conta_para_lancar(p_loja bigint, p_conta bigint, p_data date) RETURNS public.fin_contas_correntes
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare c fin_contas_correntes%rowtype;
+begin
+  select * into c from fin_contas_correntes where id = p_conta and loja_id = p_loja for share;
+  if not found then raise exception 'Escolha a conta corrente' using errcode = '22023'; end if;
+  if not c.ativa then raise exception 'A conta corrente % está inativa', c.nome using errcode = '22023'; end if;
+  if p_data < c.data_saldo_inicial then
+    raise exception 'A data é anterior ao saldo inicial da conta % (%)', c.nome, c.data_saldo_inicial using errcode = '22023';
+  end if;
+  return c;
+end $$;
+
+
 --
 -- Name: _fin_titulos_da_nota_gerar(bigint, bigint, text, text, boolean); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -292,10 +342,6 @@ begin
     'motivo', case when v_regra is null then 'Nota sem valor e sem duplicata' end);
 end $$;
 
-
-SET default_tablespace = '';
-
-SET default_table_access_method = heap;
 
 --
 -- Name: estoque_movimentos; Type: TABLE; Schema: public; Owner: -
@@ -2457,6 +2503,52 @@ $$;
 
 
 --
+-- Name: fin_aprovacao_nivel(bigint, numeric); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_aprovacao_nivel(p_loja bigint, p_valor numeric) RETURNS integer
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select case when not c.aprovacao_ativa or p_valor <= c.aprovacao_ate then 0 when p_valor > c.aprovacao_alto_acima then 2 else 1 end
+  from fin_config(p_loja) c
+$$;
+
+
+--
+-- Name: fin_avulsos_transferencias_listar(bigint, date, date, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_avulsos_transferencias_listar(p_loja bigint, p_de date DEFAULT NULL::date, p_ate date DEFAULT NULL::date, p_limite integer DEFAULT 300) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  with j as (select coalesce(p_de, fin_hoje() - 90) as de, coalesce(p_ate, fin_hoje()) as ate, greatest(least(p_limite, 1000), 1) as lim)
+  select jsonb_build_object(
+    'avulsos', coalesce((select jsonb_agg(x order by (x->>'data') desc, (x->>'id')::bigint desc) from (
+        select jsonb_build_object('id', l.id, 'data', l.data, 'tipo', l.tipo, 'valor', l.valor, 'descricao', l.descricao,
+          'conta_id', l.conta_id, 'conta_nome', c.nome, 'categoria_id', l.categoria_id, 'categoria_nome', k.nome, 'criado_por_nome', l.criado_por_nome,
+          'estorno_id', e.id, 'estorno_data', e.data, 'estorno_descricao', e.descricao) as x
+        from fin_lancamentos l join j on true
+        join fin_contas_correntes c on c.id = l.conta_id
+        left join fin_categorias k on k.id = l.categoria_id
+        left join fin_lancamentos e on e.estorno_de = l.id
+        where l.loja_id = p_loja and l.origem_tipo = 'manual' and l.data between j.de and j.ate
+        order by l.data desc, l.id desc limit (select lim from j)) s), '[]'::jsonb),
+    'transferencias', coalesce((select jsonb_agg(x order by (x->>'data') desc, (x->>'id')::bigint desc) from (
+        select jsonb_build_object('id', t.id, 'data', t.data, 'valor', t.valor, 'descricao', t.descricao,
+          'conta_origem_id', t.conta_origem_id, 'conta_origem_nome', o.nome, 'conta_destino_id', t.conta_destino_id, 'conta_destino_nome', d.nome,
+          'criado_por_nome', t.criado_por_nome, 'estornada_em', t.estornada_em, 'estornada_por_nome', t.estornada_por_nome,
+          'motivo_estorno', t.motivo_estorno) as x
+        from fin_transferencias t join j on true
+        join fin_contas_correntes o on o.id = t.conta_origem_id
+        join fin_contas_correntes d on d.id = t.conta_destino_id
+        where t.loja_id = p_loja and t.data between j.de and j.ate
+        order by t.data desc, t.id desc limit (select lim from j)) s), '[]'::jsonb))
+$$;
+
+
+--
 -- Name: fin_categoria_da_nota(bigint, bigint); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -2572,6 +2664,106 @@ end $$;
 
 
 --
+-- Name: fin_config_loja; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fin_config_loja (
+    loja_id bigint NOT NULL,
+    aprovacao_ativa boolean DEFAULT false NOT NULL,
+    aprovacao_ate numeric(14,2) DEFAULT 1000 NOT NULL,
+    aprovacao_alto_acima numeric(14,2) DEFAULT 5000 NOT NULL,
+    aprovacao_autor_pode_aprovar boolean DEFAULT true NOT NULL,
+    recorrentes_dias integer DEFAULT 45 NOT NULL,
+    atualizado_por text,
+    atualizado_por_nome text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT fin_config_loja_aprovacao_alto_acima_check CHECK (((aprovacao_alto_acima >= (0)::numeric) AND (aprovacao_alto_acima <> 'NaN'::numeric))),
+    CONSTRAINT fin_config_loja_aprovacao_ate_check CHECK (((aprovacao_ate >= (0)::numeric) AND (aprovacao_ate <> 'NaN'::numeric))),
+    CONSTRAINT fin_config_loja_check CHECK ((aprovacao_alto_acima >= aprovacao_ate)),
+    CONSTRAINT fin_config_loja_recorrentes_dias_check CHECK (((recorrentes_dias >= 1) AND (recorrentes_dias <= 366)))
+);
+
+
+--
+-- Name: fin_config(bigint); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_config(p_loja bigint) RETURNS public.fin_config_loja
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare c fin_config_loja%rowtype;
+begin
+  select * into c from fin_config_loja where loja_id = p_loja;
+  if not found then
+    c.loja_id := p_loja; c.aprovacao_ativa := false; c.aprovacao_ate := 1000; c.aprovacao_alto_acima := 5000;
+    c.aprovacao_autor_pode_aprovar := true; c.recorrentes_dias := 45;
+  end if;
+  return c;
+end $$;
+
+
+--
+-- Name: fin_config_ler(bigint); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_config_ler(p_loja bigint) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select jsonb_build_object('aprovacao_ativa', c.aprovacao_ativa, 'aprovacao_ate', c.aprovacao_ate, 'aprovacao_alto_acima', c.aprovacao_alto_acima,
+    'aprovacao_autor_pode_aprovar', c.aprovacao_autor_pode_aprovar, 'recorrentes_dias', c.recorrentes_dias,
+    'atualizado_por_nome', c.atualizado_por_nome, 'updated_at', c.updated_at,
+    'salva', exists (select 1 from fin_config_loja x where x.loja_id = p_loja))
+  from fin_config(p_loja) c
+$$;
+
+
+--
+-- Name: fin_config_salvar(bigint, jsonb, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_config_salvar(p_loja bigint, p_dados jsonb, p_user text DEFAULT NULL::text, p_user_nome text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare a fin_config_loja%rowtype; d fin_config_loja%rowtype;
+begin
+  perform fin_exigir_loja_propria(p_loja);
+  a := fin_config(p_loja);
+  d := a;
+  d.aprovacao_ativa := coalesce((p_dados->>'aprovacao_ativa')::boolean, a.aprovacao_ativa);
+  d.aprovacao_ate := fin_numero(p_dados->>'aprovacao_ate', a.aprovacao_ate);
+  d.aprovacao_alto_acima := fin_numero(p_dados->>'aprovacao_alto_acima', a.aprovacao_alto_acima);
+  d.aprovacao_autor_pode_aprovar := coalesce((p_dados->>'aprovacao_autor_pode_aprovar')::boolean, a.aprovacao_autor_pode_aprovar);
+  d.recorrentes_dias := coalesce(nullif(p_dados->>'recorrentes_dias', '')::int, a.recorrentes_dias);
+  if d.aprovacao_ate < 0 or d.aprovacao_alto_acima < 0 then
+    raise exception 'Os valores das faixas não podem ser negativos' using errcode = '22023';
+  end if;
+  if d.aprovacao_alto_acima < d.aprovacao_ate then
+    raise exception 'O valor do admin/dono não pode ser menor que o valor sem aprovação' using errcode = '22023';
+  end if;
+  if d.recorrentes_dias not between 1 and 366 then
+    raise exception 'Os dias do gerador de recorrentes vão de 1 a 366' using errcode = '22023';
+  end if;
+  insert into fin_config_loja (loja_id, aprovacao_ativa, aprovacao_ate, aprovacao_alto_acima, aprovacao_autor_pode_aprovar, recorrentes_dias,
+      atualizado_por, atualizado_por_nome)
+  values (p_loja, d.aprovacao_ativa, d.aprovacao_ate, d.aprovacao_alto_acima, d.aprovacao_autor_pode_aprovar, d.recorrentes_dias, p_user, p_user_nome)
+  on conflict (loja_id) do update set aprovacao_ativa = excluded.aprovacao_ativa, aprovacao_ate = excluded.aprovacao_ate,
+      aprovacao_alto_acima = excluded.aprovacao_alto_acima, aprovacao_autor_pode_aprovar = excluded.aprovacao_autor_pode_aprovar,
+      recorrentes_dias = excluded.recorrentes_dias, atualizado_por = excluded.atualizado_por, atualizado_por_nome = excluded.atualizado_por_nome,
+      updated_at = now();
+  perform fin_registrar_evento(p_loja, 'config', p_loja, 'editada', jsonb_build_object(
+    'antes', jsonb_build_object('aprovacao_ativa', a.aprovacao_ativa, 'aprovacao_ate', a.aprovacao_ate, 'aprovacao_alto_acima', a.aprovacao_alto_acima,
+       'aprovacao_autor_pode_aprovar', a.aprovacao_autor_pode_aprovar, 'recorrentes_dias', a.recorrentes_dias),
+    'depois', jsonb_build_object('aprovacao_ativa', d.aprovacao_ativa, 'aprovacao_ate', d.aprovacao_ate, 'aprovacao_alto_acima', d.aprovacao_alto_acima,
+       'aprovacao_autor_pode_aprovar', d.aprovacao_autor_pode_aprovar, 'recorrentes_dias', d.recorrentes_dias)), p_user, p_user_nome);
+  return fin_config_ler(p_loja);
+end $$;
+
+
+--
 -- Name: fin_conta_salvar(bigint, bigint, jsonb, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -2653,6 +2845,56 @@ CREATE FUNCTION public.fin_cp_da_nota_ligado(p_loja bigint) RETURNS boolean
     SET search_path TO 'public'
     AS $$
   select coalesce((select fin_cp_da_nota_ativo and modo_estoque = 'proprio' from lojas where id = p_loja), false)
+$$;
+
+
+--
+-- Name: fin_cr_forma_do_pagamento(text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_cr_forma_do_pagamento(p_metodo text, p_bandeira text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    AS $$
+  select case
+    when upper(btrim(coalesce(p_metodo, ''))) in ('CREDIT', 'DEBIT')
+         and lower(btrim(coalesce(p_bandeira, ''))) in ('alelo', 'sodexo', 'ticket', 'vr') then 'voucher'
+    when upper(btrim(coalesce(p_metodo, ''))) = 'CREDIT' then 'credito'
+    when upper(btrim(coalesce(p_metodo, ''))) = 'DEBIT' then 'debito'
+    when upper(btrim(coalesce(p_metodo, ''))) = 'PIX' then 'pix'
+    when upper(btrim(coalesce(p_metodo, ''))) = 'CASH' then 'dinheiro'
+    when upper(btrim(coalesce(p_metodo, ''))) in ('VOUCHER', 'MEAL_VOUCHER', 'FOOD_VOUCHER', 'VALE', 'VR', 'VA') then 'voucher'
+    when upper(btrim(coalesce(p_metodo, ''))) in ('APP', 'APP_ENTREGA', 'DELIVERY_APP', 'IFOOD', 'RAPPI', 'AIQFOME', '99FOOD', 'KEETA') then 'app_entrega'
+    else 'outros' end
+$$;
+
+
+--
+-- Name: fin_cr_somar_dias(date, integer, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_cr_somar_dias(p_data date, p_dias integer, p_uteis boolean) RETURNS date
+    LANGUAGE plpgsql IMMUTABLE
+    AS $$
+declare d date := p_data; n int := 0;
+begin
+  if not coalesce(p_uteis, false) then return p_data + coalesce(p_dias, 0); end if;
+  while n < coalesce(p_dias, 0) loop
+    d := d + 1;
+    if extract(isodow from d) < 6 then n := n + 1; end if;
+  end loop;
+  return d;
+end $$;
+
+
+--
+-- Name: fin_cr_vendas_ligado(bigint); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_cr_vendas_ligado(p_loja bigint) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  select coalesce((select fin_cr_vendas_ativo and modo_estoque = 'proprio' and id <> 4 from lojas where id = p_loja), false)
 $$;
 
 
@@ -2798,6 +3040,64 @@ end $$;
 
 
 --
+-- Name: fin_forma_recebimento_salvar(bigint, text, jsonb, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_forma_recebimento_salvar(p_loja bigint, p_forma text, p_dados jsonb, p_user text DEFAULT NULL::text, p_user_nome text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  f fin_formas_recebimento%rowtype; v_adq text; v_pct numeric; v_fixa numeric; v_prazo int; v_uteis boolean; v_conta bigint;
+  v_obs text; v_antes jsonb; v_depois jsonb;
+begin
+  perform fin_exigir_loja_propria(p_loja);
+  if p_forma is null or p_forma not in ('credito', 'debito', 'pix', 'dinheiro', 'app_entrega', 'voucher', 'outros') then
+    raise exception 'Forma de recebimento inválida' using errcode = '22023';
+  end if;
+  v_adq := nullif(btrim(coalesce(p_dados->>'adquirente', '')), '');
+  if v_adq is not null and length(v_adq) > 60 then raise exception 'Nome do adquirente longo demais (até 60 letras)' using errcode = '22023'; end if;
+  begin
+    v_pct := coalesce(nullif(btrim(coalesce(p_dados->>'taxa_percentual', '')), '')::numeric, 0);
+    v_fixa := coalesce(nullif(btrim(coalesce(p_dados->>'taxa_fixa', '')), '')::numeric, 0);
+    v_prazo := coalesce(nullif(btrim(coalesce(p_dados->>'prazo_dias', '')), '')::int, 0);
+  exception when others then
+    raise exception 'Taxa ou prazo com número inválido' using errcode = '22023';
+  end;
+  if v_pct = 'NaN' or v_pct < 0 or v_pct >= 100 then raise exception 'A taxa (%%) precisa ficar entre 0 e 99,99' using errcode = '22023'; end if;
+  if round(v_pct, 4) <> v_pct then raise exception 'A taxa (%%) aceita até 4 casas decimais' using errcode = '22023'; end if;
+  if v_fixa = 'NaN' or v_fixa < 0 or v_fixa >= 1000 then raise exception 'A taxa fixa precisa ficar entre 0 e 999,99' using errcode = '22023'; end if;
+  if round(v_fixa, 2) <> v_fixa then raise exception 'A taxa fixa aceita até 2 casas decimais' using errcode = '22023'; end if;
+  if v_prazo < 0 or v_prazo > 400 then raise exception 'O prazo precisa ficar entre 0 e 400 dias' using errcode = '22023'; end if;
+  v_uteis := coalesce((p_dados->>'dias_uteis')::boolean, false);
+  v_conta := nullif(btrim(coalesce(p_dados->>'conta_id', '')), '')::bigint;
+  if v_conta is not null and not exists (select 1 from fin_contas_correntes where id = v_conta and loja_id = p_loja and ativa) then
+    raise exception 'Conta corrente de destino não encontrada ou inativa' using errcode = '22023';
+  end if;
+  v_obs := nullif(btrim(coalesce(p_dados->>'observacao', '')), '');
+
+  select * into f from fin_formas_recebimento where loja_id = p_loja and forma = p_forma for update;
+  v_depois := jsonb_build_object('adquirente', v_adq, 'taxa_percentual', v_pct, 'taxa_fixa', v_fixa, 'prazo_dias', v_prazo,
+    'dias_uteis', v_uteis, 'conta_id', v_conta, 'observacao', v_obs);
+  if found then
+    v_antes := jsonb_build_object('adquirente', f.adquirente, 'taxa_percentual', f.taxa_percentual, 'taxa_fixa', f.taxa_fixa,
+      'prazo_dias', f.prazo_dias, 'dias_uteis', f.dias_uteis, 'conta_id', f.conta_id, 'observacao', f.observacao);
+    if v_antes = v_depois then return jsonb_build_object('ok', true, 'id', f.id, 'mudou', false); end if;
+    update fin_formas_recebimento set adquirente = v_adq, taxa_percentual = v_pct, taxa_fixa = v_fixa, prazo_dias = v_prazo,
+        dias_uteis = v_uteis, conta_id = v_conta, observacao = v_obs, updated_at = now() where id = f.id;
+  else
+    insert into fin_formas_recebimento (loja_id, forma, adquirente, taxa_percentual, taxa_fixa, prazo_dias, dias_uteis, conta_id,
+        observacao, criado_por, criado_por_nome)
+    values (p_loja, p_forma, v_adq, v_pct, v_fixa, v_prazo, v_uteis, v_conta, v_obs, p_user, p_user_nome)
+    returning * into f;
+  end if;
+  perform fin_registrar_evento(p_loja, 'forma_recebimento', f.id, 'salvar',
+    jsonb_build_object('forma', p_forma, 'antes', v_antes, 'depois', v_depois), p_user, p_user_nome);
+  return jsonb_build_object('ok', true, 'id', f.id, 'mudou', true);
+end $$;
+
+
+--
 -- Name: fin_hoje(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -2806,6 +3106,81 @@ CREATE FUNCTION public.fin_hoje() RETURNS date
     AS $$
   select (now() at time zone 'America/Bahia')::date
 $$;
+
+
+--
+-- Name: fin_lancamento_avulso_estornar(bigint, bigint, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_lancamento_avulso_estornar(p_loja bigint, p_lancamento bigint, p_motivo text, p_user text DEFAULT NULL::text, p_user_nome text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare l fin_lancamentos%rowtype; v_est bigint;
+begin
+  perform fin_exigir_loja_propria(p_loja);
+  if length(btrim(coalesce(p_motivo, ''))) < 3 then raise exception 'Informe o motivo do estorno' using errcode = '22023'; end if;
+  select * into l from fin_lancamentos where id = p_lancamento and loja_id = p_loja for update;
+  if not found then raise exception 'Lançamento não encontrado' using errcode = '22023'; end if;
+  if l.origem_tipo <> 'manual' then
+    raise exception 'Só lançamento avulso se estorna aqui (pagamento e transferência têm o próprio estorno)' using errcode = '22023';
+  end if;
+  select id into v_est from fin_lancamentos where estorno_de = l.id;
+  if found then return jsonb_build_object('ok', true, 'duplicado', true, 'id', v_est); end if;
+  insert into fin_lancamentos (loja_id, conta_id, data, tipo, valor, descricao, categoria_id, origem_tipo, origem_id, estorno_de, criado_por, criado_por_nome)
+  values (p_loja, l.conta_id, fin_hoje(), case l.tipo when 'entrada' then 'saida' else 'entrada' end, l.valor,
+      left('Estorno: ' || coalesce(l.descricao, 'lançamento avulso') || ' (' || btrim(p_motivo) || ')', 300), l.categoria_id, 'estorno_manual', l.id, l.id,
+      p_user, p_user_nome)
+  returning id into v_est;
+  perform fin_registrar_evento(p_loja, 'lancamento', l.id, 'avulso_estornado', jsonb_build_object('estorno_id', v_est, 'motivo', btrim(p_motivo),
+    'valor', l.valor), p_user, p_user_nome);
+  return jsonb_build_object('ok', true, 'duplicado', false, 'id', v_est);
+end $$;
+
+
+--
+-- Name: fin_lancamento_avulso_registrar(bigint, jsonb, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_lancamento_avulso_registrar(p_loja bigint, p_dados jsonb, p_user text DEFAULT NULL::text, p_user_nome text DEFAULT NULL::text, p_chave text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_chave text := nullif(btrim(coalesce(p_chave, '')), ''); v_tipo text := p_dados->>'tipo'; v_valor numeric; v_data date;
+  v_desc text := btrim(coalesce(p_dados->>'descricao', '')); v_cat bigint := nullif(p_dados->>'categoria_id', '')::bigint;
+  v_cat_tipo text; c fin_contas_correntes%rowtype; l fin_lancamentos%rowtype; v_assin text;
+begin
+  perform fin_exigir_loja_propria(p_loja);
+  if v_chave is null then raise exception 'Chave de idempotência obrigatória' using errcode = '22023'; end if;
+  v_valor := fin_numero(p_dados->>'valor', 0);
+  v_data := coalesce(nullif(p_dados->>'data', '')::date, fin_hoje());
+  v_assin := md5(concat_ws('|', coalesce(p_dados->>'conta_id', ''), v_data, coalesce(v_tipo, ''), v_valor, v_desc, coalesce(v_cat::text, '')));
+  perform pg_advisory_xact_lock(7370, p_loja::int);
+  select * into l from fin_lancamentos where loja_id = p_loja and chave_idempotencia = v_chave;
+  if found then
+    if l.assinatura is distinct from v_assin then raise exception 'Essa chave já foi usada com outros dados' using errcode = '22023'; end if;
+    return jsonb_build_object('ok', true, 'duplicado', true, 'id', l.id);
+  end if;
+  if v_tipo is null or v_tipo not in ('entrada', 'saida') then raise exception 'Escolha entrada ou saída' using errcode = '22023'; end if;
+  if v_valor <= 0 then raise exception 'O valor precisa ser maior que zero' using errcode = '22023'; end if;
+  if v_data > fin_hoje() then raise exception 'A data não pode ser futura' using errcode = '22023'; end if;
+  if length(v_desc) < 2 then raise exception 'Informe a descrição' using errcode = '22023'; end if;
+  select tipo into v_cat_tipo from fin_categorias where id = v_cat and loja_id = p_loja and ativa;
+  if v_cat_tipo is null then raise exception 'Escolha a categoria (entra na DRE)' using errcode = '22023'; end if;
+  if (v_tipo = 'saida') <> (v_cat_tipo = 'despesa') then
+    raise exception '% precisa de uma categoria de %', case when v_tipo = 'saida' then 'Saída' else 'Entrada' end,
+      case when v_tipo = 'saida' then 'despesa' else 'receita' end using errcode = '22023';
+  end if;
+  c := _fin_conta_para_lancar(p_loja, nullif(p_dados->>'conta_id', '')::bigint, v_data);
+  insert into fin_lancamentos (loja_id, conta_id, data, tipo, valor, descricao, categoria_id, origem_tipo, origem_id, chave_idempotencia, assinatura,
+      criado_por, criado_por_nome)
+  values (p_loja, c.id, v_data, v_tipo, v_valor, left(v_desc, 300), v_cat, 'manual', null, v_chave, v_assin, p_user, p_user_nome)
+  returning * into l;
+  perform fin_registrar_evento(p_loja, 'lancamento', l.id, 'avulso_registrado', jsonb_build_object('conta_id', c.id, 'tipo', v_tipo,
+    'valor', v_valor, 'data', v_data, 'categoria_id', v_cat, 'descricao', l.descricao), p_user, p_user_nome);
+  return jsonb_build_object('ok', true, 'duplicado', false, 'id', l.id);
+end $$;
 
 
 --
@@ -3085,6 +3460,398 @@ $$;
 
 
 --
+-- Name: fin_receber_vendas_gerar(bigint, date, date, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_receber_vendas_gerar(p_loja bigint, p_de date, p_ate date, p_user text DEFAULT NULL::text, p_user_nome text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  r record; t fin_titulos_receber%rowtype; v_cat bigint; v_vistos text[] := '{}';
+  n_criados int := 0; n_atualizados int := 0; n_iguais int := 0; n_cancelados int := 0; n_divergentes int := 0;
+begin
+  if p_loja = 4 then raise exception 'A loja 4 não entra no financeiro do Norte' using errcode = '22023'; end if;
+  perform fin_exigir_loja_propria(p_loja);
+  if not fin_cr_vendas_ligado(p_loja) then
+    raise exception 'A geração de contas a receber das vendas está desligada nesta loja' using errcode = '22023';
+  end if;
+  if p_de is null or p_ate is null or p_de > p_ate or p_ate - p_de > 92 then
+    raise exception 'Período inválido (de até a data final, no máximo 93 dias)' using errcode = '22023';
+  end if;
+  -- uma geração por loja de cada vez (cron e botão juntos se enfileiram)
+  perform pg_advisory_xact_lock(hashtext('fin_cr_vendas:' || p_loja));
+  select id into v_cat from fin_categorias where loja_id = p_loja and padrao = 'rec_vendas' and tipo = 'receita' and ativa;
+
+  for r in select * from fin_receber_vendas_previa(p_loja, p_de, p_ate) loop
+    v_vistos := v_vistos || (r.data_venda::text || '|' || r.forma);
+    select * into t from fin_titulos_receber
+     where loja_id = p_loja and origem_tipo = 'vendas' and data_venda = r.data_venda and forma = r.forma and status <> 'cancelado'
+     for update;
+    if not found then
+      insert into fin_titulos_receber (loja_id, data_venda, forma, adquirente, quantidade, valor_bruto, taxa_percentual, taxa_fixa,
+          valor_taxa, valor_liquido, prazo_dias, dias_uteis, data_prevista, conta_id, categoria_id, configurar)
+      values (p_loja, r.data_venda, r.forma, r.adquirente, r.quantidade, r.valor_bruto, r.taxa_percentual, r.taxa_fixa,
+          r.valor_taxa, r.valor_liquido, r.prazo_dias, r.dias_uteis, r.data_prevista, r.conta_id, v_cat, r.configurar)
+      returning * into t;
+      perform fin_registrar_evento(p_loja, 'titulo_receber', t.id, 'gerado', jsonb_build_object('data_venda', r.data_venda,
+        'forma', r.forma, 'bruto', r.valor_bruto, 'liquido', r.valor_liquido, 'configurar', r.configurar), p_user, p_user_nome);
+      n_criados := n_criados + 1;
+    elsif t.status = 'aberto' then
+      if (t.quantidade, t.valor_bruto, t.adquirente, t.taxa_percentual, t.taxa_fixa, t.valor_taxa, t.prazo_dias, t.dias_uteis,
+          t.data_prevista, t.conta_id, t.categoria_id, t.configurar)
+         is distinct from
+         (r.quantidade, r.valor_bruto, r.adquirente, r.taxa_percentual, r.taxa_fixa, r.valor_taxa, r.prazo_dias, r.dias_uteis,
+          r.data_prevista, r.conta_id, coalesce(t.categoria_id, v_cat), r.configurar) then
+        update fin_titulos_receber set quantidade = r.quantidade, valor_bruto = r.valor_bruto, adquirente = r.adquirente,
+            taxa_percentual = r.taxa_percentual, taxa_fixa = r.taxa_fixa, valor_taxa = r.valor_taxa, valor_liquido = r.valor_liquido,
+            prazo_dias = r.prazo_dias, dias_uteis = r.dias_uteis, data_prevista = r.data_prevista, conta_id = r.conta_id,
+            categoria_id = coalesce(t.categoria_id, v_cat), configurar = r.configurar, updated_at = now()
+         where id = t.id;
+        perform fin_registrar_evento(p_loja, 'titulo_receber', t.id, 'atualizado', jsonb_build_object(
+          'antes', jsonb_build_object('bruto', t.valor_bruto, 'liquido', t.valor_liquido, 'data_prevista', t.data_prevista),
+          'depois', jsonb_build_object('bruto', r.valor_bruto, 'liquido', r.valor_liquido, 'data_prevista', r.data_prevista)),
+          p_user, p_user_nome);
+        n_atualizados := n_atualizados + 1;
+      else
+        n_iguais := n_iguais + 1;
+      end if;
+    else -- recebido: a baixa manda; a venda que mudou depois vira aviso (um evento por valor novo, não um por rodada)
+      if t.valor_bruto <> r.valor_bruto then
+        n_divergentes := n_divergentes + 1;
+        if not exists (select 1 from fin_eventos where loja_id = p_loja and entidade = 'titulo_receber' and entidade_id = t.id
+                         and tipo = 'vendas_mudaram_apos_baixa' and (detalhe->>'bruto_vendas')::numeric = r.valor_bruto) then
+          perform fin_registrar_evento(p_loja, 'titulo_receber', t.id, 'vendas_mudaram_apos_baixa',
+            jsonb_build_object('bruto_titulo', t.valor_bruto, 'bruto_vendas', r.valor_bruto), p_user, p_user_nome);
+        end if;
+      else
+        n_iguais := n_iguais + 1;
+      end if;
+    end if;
+  end loop;
+
+  -- dia × forma do período que ficou sem venda (tudo cancelado/devolvido)
+  for t in select * from fin_titulos_receber
+            where loja_id = p_loja and origem_tipo = 'vendas' and data_venda between p_de and p_ate and status <> 'cancelado'
+              and not ((data_venda::text || '|' || forma) = any (v_vistos))
+            order by id for update loop
+    if t.status = 'aberto' then
+      update fin_titulos_receber set status = 'cancelado', cancelado_em = now(),
+          motivo_cancelamento = 'As vendas deste dia nesta forma foram canceladas', updated_at = now() where id = t.id;
+      perform fin_registrar_evento(p_loja, 'titulo_receber', t.id, 'cancelado',
+        jsonb_build_object('motivo', 'vendas canceladas', 'bruto', t.valor_bruto), p_user, p_user_nome);
+      n_cancelados := n_cancelados + 1;
+    else
+      n_divergentes := n_divergentes + 1;
+      if not exists (select 1 from fin_eventos where loja_id = p_loja and entidade = 'titulo_receber' and entidade_id = t.id
+                       and tipo = 'vendas_mudaram_apos_baixa' and (detalhe->>'bruto_vendas')::numeric = 0) then
+        perform fin_registrar_evento(p_loja, 'titulo_receber', t.id, 'vendas_mudaram_apos_baixa',
+          jsonb_build_object('bruto_titulo', t.valor_bruto, 'bruto_vendas', 0), p_user, p_user_nome);
+      end if;
+    end if;
+  end loop;
+
+  return jsonb_build_object('ok', true, 'de', p_de, 'ate', p_ate, 'criados', n_criados, 'atualizados', n_atualizados,
+    'iguais', n_iguais, 'cancelados', n_cancelados, 'divergentes', n_divergentes);
+end $$;
+
+
+--
+-- Name: fin_receber_vendas_previa(bigint, date, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_receber_vendas_previa(p_loja bigint, p_de date, p_ate date) RETURNS TABLE(data_venda date, forma text, quantidade integer, valor_bruto numeric, adquirente text, taxa_percentual numeric, taxa_fixa numeric, valor_taxa numeric, valor_liquido numeric, prazo_dias integer, dias_uteis boolean, data_prevista date, conta_id bigint, configurar boolean)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  with pg as (
+    select v.data, fin_cr_forma_do_pagamento(g.metodo, g.bandeira) as forma, g.valor
+      from vendas_proprio v join vendas_proprio_pagamentos g on g.venda_id = v.id
+     where v.loja_id = p_loja and v.data between p_de and p_ate and not v.cancelado and not v.devolvido and g.valor > 0
+  ), agg as (
+    select data, forma, count(*)::int as qtd, sum(valor) as bruto from pg group by data, forma
+  ), calc as (
+    select a.*, f.id as cfg, f.adquirente, coalesce(f.taxa_percentual, 0) as pct, coalesce(f.taxa_fixa, 0) as fixa,
+           coalesce(f.prazo_dias, 0) as prazo, coalesce(f.dias_uteis, false) as uteis, f.conta_id,
+           least(round(a.bruto * coalesce(f.taxa_percentual, 0) / 100 + coalesce(f.taxa_fixa, 0) * a.qtd, 2), a.bruto) as taxa
+      from agg a left join fin_formas_recebimento f on f.loja_id = p_loja and f.forma = a.forma
+  )
+  select data, forma, qtd, bruto, adquirente, pct, fixa, taxa, bruto - taxa, prazo, uteis, fin_cr_somar_dias(data, prazo, uteis),
+         conta_id, cfg is null
+    from calc order by data, forma
+$$;
+
+
+--
+-- Name: fin_recebimento_estornar(bigint, bigint, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_recebimento_estornar(p_loja bigint, p_recebimento bigint, p_motivo text, p_user text DEFAULT NULL::text, p_user_nome text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare rc fin_recebimentos%rowtype; t fin_titulos_receber%rowtype; v_titulo bigint; v_lanc bigint;
+begin
+  perform fin_exigir_loja_propria(p_loja);
+  if length(btrim(coalesce(p_motivo, ''))) < 3 then raise exception 'Informe o motivo do estorno' using errcode = '22023'; end if;
+  select titulo_id into v_titulo from fin_recebimentos where id = p_recebimento and loja_id = p_loja;
+  if not found then raise exception 'Recebimento não encontrado' using errcode = '22023'; end if;
+  -- mesma ordem de trava da baixa: primeiro o título
+  select * into t from fin_titulos_receber where id = v_titulo and loja_id = p_loja for update;
+  select * into rc from fin_recebimentos where id = p_recebimento and loja_id = p_loja for update;
+  if rc.estornado_em is not null then
+    return jsonb_build_object('ok', true, 'duplicado', true, 'id', rc.id, 'status', t.status);
+  end if;
+
+  insert into fin_lancamentos (loja_id, conta_id, data, tipo, valor, descricao, categoria_id, origem_tipo, origem_id, criado_por, criado_por_nome)
+  values (p_loja, rc.conta_id, fin_hoje(), 'saida', rc.valor_recebido,
+      'Estorno do recebimento das vendas de ' || to_char(t.data_venda, 'DD/MM/YYYY'), t.categoria_id, 'recebimento', rc.id,
+      p_user, p_user_nome)
+  returning id into v_lanc;
+  update fin_recebimentos set estornado_em = now(), estornado_por = p_user, estornado_por_nome = p_user_nome,
+      motivo_estorno = btrim(p_motivo), estorno_lancamento_id = v_lanc where id = rc.id;
+  update fin_titulos_receber set status = 'aberto', valor_recebido = null, data_recebimento = null, updated_at = now() where id = t.id;
+  perform fin_registrar_evento(p_loja, 'titulo_receber', t.id, 'estorno_recebimento', jsonb_build_object('recebimento_id', rc.id,
+    'valor_recebido', rc.valor_recebido, 'motivo', btrim(p_motivo)), p_user, p_user_nome);
+  return jsonb_build_object('ok', true, 'duplicado', false, 'id', rc.id, 'status', 'aberto');
+end $$;
+
+
+--
+-- Name: fin_recebimento_registrar(bigint, bigint, jsonb, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_recebimento_registrar(p_loja bigint, p_titulo bigint, p_dados jsonb, p_user text DEFAULT NULL::text, p_user_nome text DEFAULT NULL::text, p_chave text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  t fin_titulos_receber%rowtype; c fin_contas_correntes%rowtype; rc fin_recebimentos%rowtype;
+  v_chave text := nullif(btrim(coalesce(p_chave, '')), ''); v_assin text; v_valor numeric; v_data date; v_conta bigint;
+  v_rid bigint; v_lanc bigint;
+  v_rot constant jsonb := '{"credito":"cartão de crédito","debito":"cartão de débito","pix":"PIX","dinheiro":"dinheiro","app_entrega":"app de entrega","voucher":"vale-refeição","outros":"outras formas"}';
+begin
+  perform fin_exigir_loja_propria(p_loja);
+  if v_chave is null then raise exception 'Chave de idempotência obrigatória' using errcode = '22023'; end if;
+  select * into t from fin_titulos_receber where id = p_titulo and loja_id = p_loja for update;
+  if not found then raise exception 'Conta a receber não encontrada' using errcode = '22023'; end if;
+
+  v_assin := md5(concat_ws('|', t.id, coalesce(nullif(p_dados->>'conta_id', ''), ''), coalesce(nullif(p_dados->>'data_recebimento', ''), ''),
+      coalesce(fin_numero(p_dados->>'valor_recebido')::text, ''), coalesce(nullif(btrim(coalesce(p_dados->>'observacao', '')), ''), '')));
+  select * into rc from fin_recebimentos where loja_id = p_loja and chave_idempotencia = v_chave;
+  if found then
+    if rc.titulo_id <> t.id or rc.assinatura <> v_assin then raise exception 'Essa chave já foi usada com outros dados' using errcode = '22023'; end if;
+    return jsonb_build_object('ok', true, 'duplicado', true, 'id', rc.id, 'lancamento_id', rc.lancamento_id, 'diferenca', rc.diferenca);
+  end if;
+
+  if t.status = 'cancelado' then raise exception 'Conta a receber cancelada não recebe baixa' using errcode = '22023'; end if;
+  if t.status = 'recebido' then raise exception 'Esta conta já foi recebida (estorne a baixa para refazer)' using errcode = '22023'; end if;
+
+  v_valor := fin_numero(p_dados->>'valor_recebido', t.valor_liquido);
+  if v_valor is null or v_valor <= 0 then raise exception 'O valor recebido precisa ser maior que zero' using errcode = '22023'; end if;
+  v_data := coalesce(nullif(p_dados->>'data_recebimento', '')::date, fin_hoje());
+  if v_data > fin_hoje() then raise exception 'A data do recebimento não pode ser futura' using errcode = '22023'; end if;
+  if v_data < t.data_venda then raise exception 'A data do recebimento não pode ser anterior à venda' using errcode = '22023'; end if;
+
+  v_conta := coalesce(nullif(p_dados->>'conta_id', '')::bigint, t.conta_id);
+  select * into c from fin_contas_correntes where id = v_conta and loja_id = p_loja for share;
+  if not found then raise exception 'Escolha a conta corrente que recebeu' using errcode = '22023'; end if;
+  if not c.ativa then raise exception 'A conta corrente está inativa' using errcode = '22023'; end if;
+  if v_data < c.data_saldo_inicial then
+    raise exception 'A data do recebimento é anterior ao saldo inicial da conta (%)', c.data_saldo_inicial using errcode = '22023';
+  end if;
+
+  v_rid := nextval(pg_get_serial_sequence('fin_recebimentos', 'id'));
+  insert into fin_lancamentos (loja_id, conta_id, data, tipo, valor, descricao, categoria_id, origem_tipo, origem_id, criado_por, criado_por_nome)
+  values (p_loja, c.id, v_data, 'entrada', v_valor,
+      'Recebimento das vendas de ' || to_char(t.data_venda, 'DD/MM/YYYY') || ' · ' || coalesce(v_rot->>t.forma, t.forma)
+        || coalesce(' · ' || t.adquirente, ''),
+      t.categoria_id, 'recebimento', v_rid, p_user, p_user_nome)
+  returning id into v_lanc;
+  insert into fin_recebimentos (id, loja_id, titulo_id, conta_id, data_recebimento, valor_recebido, valor_previsto, observacao,
+      lancamento_id, chave_idempotencia, assinatura, criado_por, criado_por_nome)
+  values (v_rid, p_loja, t.id, c.id, v_data, v_valor, t.valor_liquido, nullif(btrim(coalesce(p_dados->>'observacao', '')), ''),
+      v_lanc, v_chave, v_assin, p_user, p_user_nome)
+  returning * into rc;
+  update fin_titulos_receber set status = 'recebido', valor_recebido = v_valor, data_recebimento = v_data, updated_at = now()
+   where id = t.id;
+  perform fin_registrar_evento(p_loja, 'titulo_receber', t.id, 'recebimento', jsonb_build_object('recebimento_id', v_rid,
+    'valor_recebido', v_valor, 'previsto', t.valor_liquido, 'diferenca', rc.diferenca, 'conta_id', c.id, 'data', v_data),
+    p_user, p_user_nome);
+  return jsonb_build_object('ok', true, 'duplicado', false, 'id', v_rid, 'lancamento_id', v_lanc, 'diferenca', rc.diferenca);
+end $$;
+
+
+--
+-- Name: fin_recorrente_datas(text, integer, date, date, date, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_recorrente_datas(p_periodicidade text, p_dia integer, p_inicio date, p_fim date, p_de date, p_ate date) RETURNS SETOF date
+    LANGUAGE sql IMMUTABLE
+    AS $$
+  with j as (select greatest(p_de, p_inicio) as ini, case when p_fim is not null and p_fim < p_ate then p_fim else p_ate end as fim)
+  select d::date from j, lateral (
+    select (m + (least(p_dia, extract(day from (m + interval '1 month - 1 day'))::int) - 1) * interval '1 day')::date as d
+    from generate_series(date_trunc('month', j.ini::timestamp), date_trunc('month', j.fim::timestamp), interval '1 month') m
+    where p_periodicidade = 'mensal'
+    union all
+    select g::date from generate_series((j.ini + ((p_dia - extract(isodow from j.ini)::int + 7) % 7))::timestamp, j.fim::timestamp, interval '7 days') g
+    where p_periodicidade = 'semanal'
+  ) x
+  where j.ini <= j.fim and x.d between j.ini and j.fim
+  order by 1
+$$;
+
+
+--
+-- Name: fin_recorrente_salvar(bigint, bigint, jsonb, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_recorrente_salvar(p_loja bigint, p_id bigint, p_dados jsonb, p_user text DEFAULT NULL::text, p_user_nome text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  r fin_recorrentes%rowtype; f fornecedores%rowtype; v_desc text := btrim(coalesce(p_dados->>'descricao', '')); v_valor numeric;
+  v_per text := coalesce(nullif(p_dados->>'periodicidade', ''), 'mensal'); v_dia int := nullif(p_dados->>'dia', '')::int;
+  v_ini date := nullif(p_dados->>'data_inicio', '')::date; v_fim date := nullif(p_dados->>'data_fim', '')::date;
+  v_cat bigint := nullif(p_dados->>'categoria_id', '')::bigint; v_forn bigint := nullif(p_dados->>'fornecedor_id', '')::bigint; v_antes jsonb;
+begin
+  perform fin_exigir_loja_propria(p_loja);
+  if length(v_desc) < 2 then raise exception 'Informe a descrição (ex.: Aluguel)' using errcode = '22023'; end if;
+  v_valor := fin_numero(p_dados->>'valor', 0);
+  if v_valor <= 0 then raise exception 'O valor precisa ser maior que zero' using errcode = '22023'; end if;
+  if v_per not in ('mensal', 'semanal') then raise exception 'Periodicidade inválida' using errcode = '22023'; end if;
+  if v_per = 'mensal' and (v_dia is null or v_dia not between 1 and 31) then
+    raise exception 'O dia do vencimento vai de 1 a 31' using errcode = '22023';
+  end if;
+  if v_per = 'semanal' and (v_dia is null or v_dia not between 1 and 7) then
+    raise exception 'Escolha o dia da semana do vencimento' using errcode = '22023';
+  end if;
+  if v_ini is null then raise exception 'Informe o início' using errcode = '22023'; end if;
+  if v_fim is not null and v_fim < v_ini then raise exception 'O fim não pode ser antes do início' using errcode = '22023'; end if;
+  if v_cat is not null and not exists (select 1 from fin_categorias where id = v_cat and loja_id = p_loja and tipo = 'despesa') then
+    raise exception 'Categoria inválida (precisa ser uma categoria de despesa desta loja)' using errcode = '22023';
+  end if;
+  select * into f from fornecedores where id = v_forn and loja_id = p_loja;
+  if not found then raise exception 'Escolha um fornecedor do cadastro' using errcode = '22023'; end if;
+
+  if p_id is null then
+    if f.inativo then raise exception 'Fornecedor inativo' using errcode = '22023'; end if;
+    insert into fin_recorrentes (loja_id, descricao, fornecedor_id, categoria_id, documento, valor, valor_estimado, periodicidade, dia,
+        data_inicio, data_fim, ativa, observacao, criado_por, criado_por_nome)
+    values (p_loja, v_desc, f.id, v_cat, nullif(btrim(coalesce(p_dados->>'documento', '')), ''), v_valor,
+        coalesce((p_dados->>'valor_estimado')::boolean, false), v_per, v_dia, v_ini, v_fim, coalesce((p_dados->>'ativa')::boolean, true),
+        nullif(btrim(coalesce(p_dados->>'observacao', '')), ''), p_user, p_user_nome)
+    returning * into r;
+    perform fin_registrar_evento(p_loja, 'recorrente', r.id, 'criada', jsonb_build_object('descricao', r.descricao, 'valor', r.valor,
+      'estimado', r.valor_estimado, 'periodicidade', r.periodicidade, 'dia', r.dia, 'inicio', r.data_inicio, 'fim', r.data_fim), p_user, p_user_nome);
+    return jsonb_build_object('ok', true, 'id', r.id, 'criada', true);
+  end if;
+
+  select * into r from fin_recorrentes where id = p_id and loja_id = p_loja for update;
+  if not found then raise exception 'Conta recorrente não encontrada' using errcode = '22023'; end if;
+  if f.inativo and f.id <> r.fornecedor_id then raise exception 'Fornecedor inativo' using errcode = '22023'; end if;
+  v_antes := jsonb_build_object('descricao', r.descricao, 'fornecedor_id', r.fornecedor_id, 'valor', r.valor, 'estimado', r.valor_estimado,
+    'periodicidade', r.periodicidade, 'dia', r.dia, 'inicio', r.data_inicio, 'fim', r.data_fim, 'ativa', r.ativa, 'categoria_id', r.categoria_id);
+  update fin_recorrentes set descricao = v_desc, fornecedor_id = f.id, categoria_id = v_cat,
+      documento = nullif(btrim(coalesce(p_dados->>'documento', '')), ''), valor = v_valor,
+      valor_estimado = coalesce((p_dados->>'valor_estimado')::boolean, r.valor_estimado), periodicidade = v_per, dia = v_dia,
+      data_inicio = v_ini, data_fim = v_fim, ativa = coalesce((p_dados->>'ativa')::boolean, r.ativa),
+      observacao = nullif(btrim(coalesce(p_dados->>'observacao', '')), ''), updated_at = now()
+    where id = r.id returning * into r;
+  perform fin_registrar_evento(p_loja, 'recorrente', r.id, 'editada', jsonb_build_object('antes', v_antes, 'depois', jsonb_build_object(
+    'descricao', r.descricao, 'fornecedor_id', r.fornecedor_id, 'valor', r.valor, 'estimado', r.valor_estimado, 'periodicidade', r.periodicidade,
+    'dia', r.dia, 'inicio', r.data_inicio, 'fim', r.data_fim, 'ativa', r.ativa, 'categoria_id', r.categoria_id)), p_user, p_user_nome);
+  return jsonb_build_object('ok', true, 'id', r.id, 'criada', false);
+end $$;
+
+
+--
+-- Name: fin_recorrentes_gerar(bigint, integer, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_recorrentes_gerar(p_loja bigint DEFAULT NULL::bigint, p_dias integer DEFAULT NULL::integer, p_hoje date DEFAULT NULL::date) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_hoje date := coalesce(p_hoje, fin_hoje()); l record; r fin_recorrentes%rowtype; d date; v_dias int; v_oc bigint; v_t jsonb;
+  v_ger int; v_falhas int; v_erro text; v_erro_rec text; v_out jsonb := '[]'::jsonb;
+begin
+  if p_loja = 4 then raise exception 'Loja 4 fora do financeiro do Norte' using errcode = '22023'; end if;
+  if p_loja is not null then perform fin_exigir_loja_propria(p_loja); end if;
+  if p_dias is not null and p_dias not between 1 and 366 then raise exception 'Dias de 1 a 366' using errcode = '22023'; end if;
+  for l in select id from lojas where modo_estoque = 'proprio' and ativo and id <> 4 and (p_loja is null or id = p_loja) order by id loop
+    v_dias := coalesce(p_dias, (fin_config(l.id)).recorrentes_dias);
+    v_ger := 0; v_falhas := 0;
+    for r in select * from fin_recorrentes where loja_id = l.id and ativa order by id loop
+      v_erro_rec := null;
+      for d in select x from fin_recorrente_datas(r.periodicidade, r.dia, r.data_inicio, r.data_fim, v_hoje, v_hoje + v_dias) x loop
+        continue when exists (select 1 from fin_recorrentes_ocorrencias where recorrente_id = r.id and data_vencimento = d);
+        begin
+          v_oc := null;
+          insert into fin_recorrentes_ocorrencias (loja_id, recorrente_id, data_vencimento) values (l.id, r.id, d)
+            on conflict (recorrente_id, data_vencimento) do nothing returning id into v_oc;
+          if v_oc is not null then
+            v_t := fin_titulo_pagar_salvar(l.id, null, jsonb_build_object('fornecedor_id', r.fornecedor_id, 'documento', r.documento,
+                'valor', r.valor::text, 'data_vencimento', d, 'categoria_id', r.categoria_id,
+                'observacao', 'Recorrente: ' || r.descricao || case when r.valor_estimado then ' (valor estimado: confirmar antes de pagar)' else '' end,
+                'origem_tipo', 'recorrente', 'origem_id', v_oc), null, 'Contas recorrentes', 'recorrente:' || r.id || ':' || d);
+            update fin_recorrentes_ocorrencias set titulo_id = (v_t->>'id')::bigint where id = v_oc;
+            if r.valor_estimado then
+              update fin_titulos_pagar set valor_a_confirmar = true where id = (v_t->>'id')::bigint;
+            end if;
+            v_ger := v_ger + 1;
+          end if;
+        exception when others then
+          get stacked diagnostics v_erro = message_text;
+          v_falhas := v_falhas + 1;
+          v_erro_rec := coalesce(v_erro_rec, left(d::text || ': ' || v_erro, 300));
+        end;
+      end loop;
+      -- um evento por recorrente e rodada (não um por data): o último diz se a geração está falhando
+      if v_erro_rec is not null then
+        perform fin_registrar_evento(l.id, 'recorrente', r.id, 'geracao_falha', jsonb_build_object('erro', v_erro_rec, 'hoje', v_hoje), null, 'Contas recorrentes');
+      elsif exists (select 1 from fin_eventos e where e.loja_id = l.id and e.entidade = 'recorrente' and e.entidade_id = r.id
+                    and e.tipo in ('geracao_falha', 'geracao_ok') and e.id = (select max(e2.id) from fin_eventos e2 where e2.loja_id = l.id
+                    and e2.entidade = 'recorrente' and e2.entidade_id = r.id and e2.tipo in ('geracao_falha', 'geracao_ok')) and e.tipo = 'geracao_falha') then
+        perform fin_registrar_evento(l.id, 'recorrente', r.id, 'geracao_ok', jsonb_build_object('hoje', v_hoje), null, 'Contas recorrentes');
+      end if;
+    end loop;
+    v_out := v_out || jsonb_build_object('loja_id', l.id, 'gerados', v_ger, 'falhas', v_falhas, 'dias', v_dias);
+  end loop;
+  return jsonb_build_object('ok', true, 'hoje', v_hoje, 'lojas', v_out);
+end $$;
+
+
+--
+-- Name: fin_recorrentes_listar(bigint, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_recorrentes_listar(p_loja bigint, p_hoje date DEFAULT NULL::date) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(jsonb_agg(jsonb_build_object('id', r.id, 'descricao', r.descricao, 'fornecedor_id', r.fornecedor_id,
+      'fornecedor_nome', coalesce(nullif(f.nome_fantasia, ''), f.razao_social), 'categoria_id', r.categoria_id, 'categoria_nome', k.nome,
+      'documento', r.documento, 'valor', r.valor, 'valor_estimado', r.valor_estimado, 'periodicidade', r.periodicidade, 'dia', r.dia,
+      'data_inicio', r.data_inicio, 'data_fim', r.data_fim, 'ativa', r.ativa, 'observacao', r.observacao,
+      'geradas', (select count(*) from fin_recorrentes_ocorrencias o where o.recorrente_id = r.id),
+      'ultima_gerada', (select max(o.data_vencimento) from fin_recorrentes_ocorrencias o where o.recorrente_id = r.id),
+      'proxima', (select min(o.data_vencimento) from fin_recorrentes_ocorrencias o join fin_titulos_pagar t on t.id = o.titulo_id
+                  where o.recorrente_id = r.id and o.data_vencimento >= coalesce(p_hoje, fin_hoje()) and t.status <> 'cancelado'),
+      'ultima_falha', (select e.detalhe->>'erro' from fin_eventos e where e.loja_id = r.loja_id and e.entidade = 'recorrente'
+                       and e.entidade_id = r.id and e.tipo in ('geracao_falha', 'geracao_ok') order by e.id desc limit 1))
+      order by r.ativa desc, r.descricao, r.id), '[]'::jsonb)
+  from fin_recorrentes r
+  join fornecedores f on f.id = r.fornecedor_id
+  left join fin_categorias k on k.id = r.categoria_id
+  where r.loja_id = p_loja
+$$;
+
+
+--
 -- Name: fin_registrar_evento(bigint, text, bigint, text, jsonb, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -3123,6 +3890,45 @@ CREATE FUNCTION public.fin_status_titulo(p_valor numeric, p_quitado numeric) RET
     AS $$
   select case when p_quitado <= 0 then 'aberto' when p_quitado >= p_valor then 'pago' else 'parcial' end
 $$;
+
+
+--
+-- Name: fin_titulo_aprovacao_decidir(bigint, bigint, text, integer, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_titulo_aprovacao_decidir(p_loja bigint, p_id bigint, p_acao text, p_nivel_usuario integer, p_motivo text DEFAULT NULL::text, p_user text DEFAULT NULL::text, p_user_nome text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare t fin_titulos_pagar%rowtype; v_motivo text := nullif(btrim(coalesce(p_motivo, '')), '');
+begin
+  perform fin_exigir_loja_propria(p_loja);
+  if p_acao not in ('aprovar', 'reprovar') then raise exception 'Decisão inválida' using errcode = '22023'; end if;
+  select * into t from fin_titulos_pagar where id = p_id and loja_id = p_loja for update;
+  if not found then raise exception 'Conta a pagar não encontrada' using errcode = '22023'; end if;
+  if (p_acao = 'aprovar' and t.aprovacao = 'aprovado') or (p_acao = 'reprovar' and t.aprovacao = 'reprovado') then
+    return jsonb_build_object('ok', true, 'duplicado', true, 'aprovacao', t.aprovacao);
+  end if;
+  if t.status = 'cancelado' then raise exception 'Conta cancelada não passa por aprovação' using errcode = '22023'; end if;
+  if t.aprovacao <> 'pendente' then raise exception 'Esta conta não está aguardando aprovação' using errcode = '22023'; end if;
+  if coalesce(p_nivel_usuario, 0) < 1 then raise exception 'Sem permissão para aprovar pagamentos' using errcode = '22023'; end if;
+  if p_nivel_usuario < t.aprovacao_nivel then
+    raise exception 'Esta conta passa do valor do gerente: só admin/dono aprova' using errcode = '22023';
+  end if;
+  if not (fin_config(p_loja)).aprovacao_autor_pode_aprovar and t.criado_por is not null and t.criado_por = p_user then
+    raise exception 'Quem lançou a conta não pode aprovar nem reprovar a própria conta' using errcode = '22023';
+  end if;
+  if p_acao = 'reprovar' and length(coalesce(v_motivo, '')) < 3 then
+    raise exception 'Informe o motivo da reprovação' using errcode = '22023';
+  end if;
+  update fin_titulos_pagar set aprovacao = case when p_acao = 'aprovar' then 'aprovado' else 'reprovado' end,
+      aprovacao_nivel_aprovado = case when p_acao = 'aprovar' then p_nivel_usuario end,
+      aprovacao_em = now(), aprovacao_por = p_user, aprovacao_por_nome = p_user_nome, aprovacao_motivo = v_motivo, updated_at = now()
+    where id = t.id returning * into t;
+  perform fin_registrar_evento(p_loja, 'titulo_pagar', t.id, case when p_acao = 'aprovar' then 'aprovada' else 'reprovada' end,
+    jsonb_build_object('nivel_exigido', t.aprovacao_nivel, 'nivel_usuario', p_nivel_usuario, 'valor', t.valor, 'motivo', v_motivo), p_user, p_user_nome);
+  return jsonb_build_object('ok', true, 'duplicado', false, 'aprovacao', t.aprovacao);
+end $$;
 
 
 --
@@ -3276,6 +4082,57 @@ end $$;
 
 
 --
+-- Name: fin_titulo_valor_confirmar(bigint, bigint, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_titulo_valor_confirmar(p_loja bigint, p_id bigint, p_valor text, p_user text DEFAULT NULL::text, p_user_nome text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare t fin_titulos_pagar%rowtype; v numeric; v_antes numeric;
+begin
+  perform fin_exigir_loja_propria(p_loja);
+  v := fin_numero(p_valor);
+  if v is null or v <= 0 then raise exception 'O valor precisa ser maior que zero' using errcode = '22023'; end if;
+  select * into t from fin_titulos_pagar where id = p_id and loja_id = p_loja for update;
+  if not found then raise exception 'Conta a pagar não encontrada' using errcode = '22023'; end if;
+  if not t.valor_a_confirmar then return jsonb_build_object('ok', true, 'duplicado', true, 'valor', t.valor, 'aprovacao', t.aprovacao); end if;
+  if t.status in ('cancelado', 'pago') then raise exception 'Conta cancelada ou paga: o valor não muda' using errcode = '22023'; end if;
+  if v < t.valor_quitado then raise exception 'O valor não pode ficar abaixo do que já foi pago (%)', t.valor_quitado using errcode = '22023'; end if;
+  v_antes := t.valor;
+  update fin_titulos_pagar set valor = v, status = fin_status_titulo(v, t.valor_quitado), valor_a_confirmar = false,
+      data_quitacao = case when fin_status_titulo(v, t.valor_quitado) = 'pago' then fin_hoje() end, updated_at = now()
+    where id = t.id returning * into t;
+  perform fin_registrar_evento(p_loja, 'titulo_pagar', t.id, 'valor_confirmado', jsonb_build_object('estimado', v_antes, 'valor', v), p_user, p_user_nome);
+  return jsonb_build_object('ok', true, 'duplicado', false, 'valor', t.valor, 'aprovacao', t.aprovacao);
+end $$;
+
+
+--
+-- Name: fin_titulos_aprovacao_listar(bigint, text, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_titulos_aprovacao_listar(p_loja bigint, p_situacao text DEFAULT 'pendente'::text, p_limite integer DEFAULT 200) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(jsonb_agg(jsonb_build_object('id', x.id, 'numero', x.numero, 'fornecedor_nome', x.fornecedor_nome, 'documento', x.documento,
+      'parcela', x.parcela, 'total_parcelas', x.total_parcelas, 'valor', x.valor, 'data_vencimento', x.data_vencimento,
+      'categoria_nome', k.nome, 'origem_tipo', x.origem_tipo, 'origem_id', x.origem_id, 'status', x.status,
+      'situacao', fin_situacao_titulo(x.status, x.data_vencimento), 'aprovacao', x.aprovacao, 'aprovacao_nivel', x.aprovacao_nivel,
+      'aprovacao_em', x.aprovacao_em, 'aprovacao_por_nome', x.aprovacao_por_nome, 'aprovacao_motivo', x.aprovacao_motivo,
+      'criado_por', x.criado_por, 'criado_por_nome', x.criado_por_nome, 'valor_a_confirmar', x.valor_a_confirmar, 'observacao', x.observacao)
+      order by x.data_vencimento, x.id), '[]'::jsonb)
+  from (select * from fin_titulos_pagar t where t.loja_id = p_loja and t.status <> 'cancelado'
+          and case coalesce(p_situacao, 'pendente')
+                when 'decididas' then t.aprovacao in ('aprovado', 'reprovado') and t.aprovacao_em >= now() - interval '90 days'
+                else t.aprovacao = coalesce(p_situacao, 'pendente') end
+        order by t.data_vencimento, t.id limit greatest(least(p_limite, 1000), 1)) x
+  left join fin_categorias k on k.id = x.categoria_id
+$$;
+
+
+--
 -- Name: fin_titulos_da_nota_estornar(bigint, bigint, text, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -3382,6 +4239,129 @@ begin
      from filtrado)
   into v_itens, v_tot;
   return jsonb_build_object('itens', v_itens, 'totais', v_tot);
+end $$;
+
+
+--
+-- Name: fin_titulos_receber_listar(bigint, jsonb, integer, integer, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_titulos_receber_listar(p_loja bigint, p_filtros jsonb DEFAULT '{}'::jsonb, p_limite integer DEFAULT 50, p_offset integer DEFAULT 0, p_hoje date DEFAULT NULL::date) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_hoje date := coalesce(p_hoje, fin_hoje()); v_sit text := nullif(p_filtros->>'situacao', ''); v jsonb;
+begin
+  with base as (
+    select t.*, case when t.status = 'aberto' and t.data_prevista < v_hoje then 'atrasado' else t.status end as situacao,
+           c.nome as conta_nome, r.id as recebimento_id, r.conta_id as recebimento_conta_id
+      from fin_titulos_receber t
+      left join fin_contas_correntes c on c.id = t.conta_id
+      left join fin_recebimentos r on r.titulo_id = t.id and r.estornado_em is null
+     where t.loja_id = p_loja
+       and (nullif(p_filtros->>'venda_de', '') is null or t.data_venda >= (p_filtros->>'venda_de')::date)
+       and (nullif(p_filtros->>'venda_ate', '') is null or t.data_venda <= (p_filtros->>'venda_ate')::date)
+       and (nullif(p_filtros->>'prevista_de', '') is null or t.data_prevista >= (p_filtros->>'prevista_de')::date)
+       and (nullif(p_filtros->>'prevista_ate', '') is null or t.data_prevista <= (p_filtros->>'prevista_ate')::date)
+       and (nullif(p_filtros->>'forma', '') is null or t.forma = p_filtros->>'forma')
+  ), filtrada as (
+    select * from base where case
+      when v_sit is null then status <> 'cancelado'
+      when v_sit = 'em_aberto' then status = 'aberto'
+      when v_sit = 'configurar' then configurar and status <> 'cancelado'
+      else situacao = v_sit end
+  )
+  select jsonb_build_object(
+    'itens', coalesce((select jsonb_agg(to_jsonb(p) - 'created_at' - 'updated_at' order by p.data_venda desc, p.forma)
+                         from (select * from filtrada order by data_venda desc, forma limit greatest(1, least(coalesce(p_limite, 50), 500))
+                               offset greatest(0, coalesce(p_offset, 0))) p), '[]'::jsonb),
+    'totais', (select jsonb_build_object('quantidade', count(*), 'bruto', coalesce(sum(valor_bruto), 0),
+        'taxa', coalesce(sum(valor_taxa), 0), 'liquido', coalesce(sum(valor_liquido), 0),
+        'a_receber', coalesce(sum(valor_liquido) filter (where status = 'aberto'), 0),
+        'atrasado', coalesce(sum(valor_liquido) filter (where situacao = 'atrasado'), 0),
+        'recebido', coalesce(sum(valor_recebido), 0), 'diferenca', coalesce(sum(diferenca), 0),
+        'configurar', count(*) filter (where configurar and status <> 'cancelado')) from filtrada))
+  into v;
+  return v;
+end $$;
+
+
+--
+-- Name: fin_transferencia_estornar(bigint, bigint, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_transferencia_estornar(p_loja bigint, p_id bigint, p_motivo text, p_user text DEFAULT NULL::text, p_user_nome text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare tr fin_transferencias%rowtype; v_s bigint; v_e bigint; v_motivo text := btrim(coalesce(p_motivo, ''));
+begin
+  perform fin_exigir_loja_propria(p_loja);
+  if length(v_motivo) < 3 then raise exception 'Informe o motivo do estorno' using errcode = '22023'; end if;
+  select * into tr from fin_transferencias where id = p_id and loja_id = p_loja for update;
+  if not found then raise exception 'Transferência não encontrada' using errcode = '22023'; end if;
+  if tr.estornada_em is not null then return jsonb_build_object('ok', true, 'duplicado', true, 'id', tr.id); end if;
+  -- devolve na origem a saída e tira do destino a entrada (cada estorno aponta para o lançamento que anula)
+  insert into fin_lancamentos (loja_id, conta_id, data, tipo, valor, descricao, origem_tipo, origem_id, estorno_de, criado_por, criado_por_nome)
+  values (p_loja, tr.conta_origem_id, fin_hoje(), 'entrada', tr.valor, left('Estorno da transferência nº ' || tr.id || ' (' || v_motivo || ')', 300),
+      'estorno_transferencia', tr.id, tr.lanc_saida_id, p_user, p_user_nome) returning id into v_s;
+  insert into fin_lancamentos (loja_id, conta_id, data, tipo, valor, descricao, origem_tipo, origem_id, estorno_de, criado_por, criado_por_nome)
+  values (p_loja, tr.conta_destino_id, fin_hoje(), 'saida', tr.valor, left('Estorno da transferência nº ' || tr.id || ' (' || v_motivo || ')', 300),
+      'estorno_transferencia', tr.id, tr.lanc_entrada_id, p_user, p_user_nome) returning id into v_e;
+  update fin_transferencias set estornada_em = now(), estornada_por = p_user, estornada_por_nome = p_user_nome, motivo_estorno = v_motivo,
+      estorno_saida_id = v_s, estorno_entrada_id = v_e where id = tr.id;
+  perform fin_registrar_evento(p_loja, 'transferencia', tr.id, 'estornada', jsonb_build_object('motivo', v_motivo, 'valor', tr.valor), p_user, p_user_nome);
+  return jsonb_build_object('ok', true, 'duplicado', false, 'id', tr.id);
+end $$;
+
+
+--
+-- Name: fin_transferencia_registrar(bigint, jsonb, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_transferencia_registrar(p_loja bigint, p_dados jsonb, p_user text DEFAULT NULL::text, p_user_nome text DEFAULT NULL::text, p_chave text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_chave text := nullif(btrim(coalesce(p_chave, '')), ''); v_orig bigint := nullif(p_dados->>'conta_origem_id', '')::bigint;
+  v_dest bigint := nullif(p_dados->>'conta_destino_id', '')::bigint; v_valor numeric; v_data date; v_desc text; v_assin text;
+  tr fin_transferencias%rowtype; co fin_contas_correntes%rowtype; cd fin_contas_correntes%rowtype; v_id bigint; v_s bigint; v_e bigint;
+begin
+  perform fin_exigir_loja_propria(p_loja);
+  if v_chave is null then raise exception 'Chave de idempotência obrigatória' using errcode = '22023'; end if;
+  v_valor := fin_numero(p_dados->>'valor', 0);
+  v_data := coalesce(nullif(p_dados->>'data', '')::date, fin_hoje());
+  v_desc := nullif(left(btrim(coalesce(p_dados->>'descricao', '')), 200), '');
+  v_assin := md5(concat_ws('|', coalesce(v_orig::text, ''), coalesce(v_dest::text, ''), v_data, v_valor, coalesce(v_desc, '')));
+  perform pg_advisory_xact_lock(7370, p_loja::int);
+  select * into tr from fin_transferencias where loja_id = p_loja and chave_idempotencia = v_chave;
+  if found then
+    if tr.assinatura <> v_assin then raise exception 'Essa chave já foi usada com outros dados' using errcode = '22023'; end if;
+    return jsonb_build_object('ok', true, 'duplicado', true, 'id', tr.id);
+  end if;
+  if v_orig is null then raise exception 'Escolha a conta de origem' using errcode = '22023'; end if;
+  if v_dest is null then raise exception 'Escolha a conta de destino' using errcode = '22023'; end if;
+  if v_orig = v_dest then raise exception 'Origem e destino não podem ser a mesma conta' using errcode = '22023'; end if;
+  if v_valor <= 0 then raise exception 'O valor precisa ser maior que zero' using errcode = '22023'; end if;
+  if v_data > fin_hoje() then raise exception 'A data não pode ser futura' using errcode = '22023'; end if;
+  -- trava as duas contas sempre na mesma ordem (id menor primeiro)
+  if v_orig < v_dest then co := _fin_conta_para_lancar(p_loja, v_orig, v_data); cd := _fin_conta_para_lancar(p_loja, v_dest, v_data);
+  else cd := _fin_conta_para_lancar(p_loja, v_dest, v_data); co := _fin_conta_para_lancar(p_loja, v_orig, v_data); end if;
+
+  v_id := nextval(pg_get_serial_sequence('fin_transferencias', 'id'));
+  insert into fin_lancamentos (loja_id, conta_id, data, tipo, valor, descricao, categoria_id, origem_tipo, origem_id, criado_por, criado_por_nome)
+  values (p_loja, co.id, v_data, 'saida', v_valor, left('Transferência para ' || cd.nome || coalesce(' · ' || v_desc, ''), 300), null,
+      'transferencia', v_id, p_user, p_user_nome) returning id into v_s;
+  insert into fin_lancamentos (loja_id, conta_id, data, tipo, valor, descricao, categoria_id, origem_tipo, origem_id, criado_por, criado_por_nome)
+  values (p_loja, cd.id, v_data, 'entrada', v_valor, left('Transferência de ' || co.nome || coalesce(' · ' || v_desc, ''), 300), null,
+      'transferencia', v_id, p_user, p_user_nome) returning id into v_e;
+  insert into fin_transferencias (id, loja_id, conta_origem_id, conta_destino_id, data, valor, descricao, lanc_saida_id, lanc_entrada_id,
+      chave_idempotencia, assinatura, criado_por, criado_por_nome)
+  values (v_id, p_loja, co.id, cd.id, v_data, v_valor, v_desc, v_s, v_e, v_chave, v_assin, p_user, p_user_nome);
+  perform fin_registrar_evento(p_loja, 'transferencia', v_id, 'registrada', jsonb_build_object('origem', co.id, 'destino', cd.id,
+    'valor', v_valor, 'data', v_data), p_user, p_user_nome);
+  return jsonb_build_object('ok', true, 'duplicado', false, 'id', v_id);
 end $$;
 
 
@@ -9576,6 +10556,28 @@ end $$;
 
 
 --
+-- Name: trg_fin_pagamento_exige_aprovacao(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.trg_fin_pagamento_exige_aprovacao() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_apr text; v_conf boolean;
+begin
+  select aprovacao, valor_a_confirmar into v_apr, v_conf from fin_titulos_pagar where id = new.titulo_id and loja_id = new.loja_id;
+  if v_apr = 'pendente' then
+    raise exception 'Conta aguardando aprovação: só pode ser paga depois de aprovada' using errcode = '22023';
+  elsif v_apr = 'reprovado' then
+    raise exception 'Conta reprovada: não pode ser paga' using errcode = '22023';
+  elsif v_conf then
+    raise exception 'Confirme o valor da conta (valor estimado) antes de pagar' using errcode = '22023';
+  end if;
+  return new;
+end $$;
+
+
+--
 -- Name: trg_fin_pagamentos_guarda(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -9593,6 +10595,108 @@ begin
         (old.id, old.loja_id, old.titulo_id, old.conta_id, old.data_pagamento, old.valor_principal, old.juros, old.desconto,
          old.valor_pago, old.lancamento_id, old.chave_idempotencia, old.assinatura) then
     raise exception 'fin_pagamentos é imutável (só o estorno altera)' using errcode = '55000';
+  end if;
+  return new;
+end $$;
+
+
+--
+-- Name: trg_fin_recebimentos_guarda(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.trg_fin_recebimentos_guarda() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+begin
+  if tg_op = 'DELETE' then
+    raise exception 'fin_recebimentos não se apaga: use o estorno' using errcode = '55000';
+  end if;
+  if old.estornado_em is not null
+     or (new.id, new.loja_id, new.titulo_id, new.conta_id, new.data_recebimento, new.valor_recebido, new.valor_previsto,
+         new.lancamento_id, new.chave_idempotencia, new.assinatura)
+        is distinct from
+        (old.id, old.loja_id, old.titulo_id, old.conta_id, old.data_recebimento, old.valor_recebido, old.valor_previsto,
+         old.lancamento_id, old.chave_idempotencia, old.assinatura) then
+    raise exception 'fin_recebimentos é imutável (só o estorno altera)' using errcode = '55000';
+  end if;
+  return new;
+end $$;
+
+
+--
+-- Name: trg_fin_titulo_aprovacao(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.trg_fin_titulo_aprovacao() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_nivel int;
+begin
+  if tg_op = 'INSERT' then
+    v_nivel := case when new.status = 'cancelado' then 0 else fin_aprovacao_nivel(new.loja_id, new.valor) end;
+    new.aprovacao := case when v_nivel = 0 then 'nao_exige' else 'pendente' end;
+    new.aprovacao_nivel := v_nivel;
+    new.aprovacao_nivel_aprovado := null; new.aprovacao_em := null; new.aprovacao_por := null; new.aprovacao_por_nome := null;
+    new.aprovacao_motivo := null;
+    return new;
+  end if;
+  if new.valor is not distinct from old.valor or new.status = 'cancelado' then return new; end if;
+  if old.aprovacao = 'reprovado' then
+    raise exception 'Conta reprovada: o valor não muda. Cancele e lance de novo.' using errcode = '22023';
+  end if;
+  v_nivel := fin_aprovacao_nivel(new.loja_id, new.valor);
+  if old.aprovacao = 'aprovado' then
+    if v_nivel > old.aprovacao_nivel_aprovado then
+      new.aprovacao := 'pendente'; new.aprovacao_nivel := v_nivel; new.aprovacao_nivel_aprovado := null;
+      new.aprovacao_em := null; new.aprovacao_por := null; new.aprovacao_por_nome := null; new.aprovacao_motivo := null;
+    end if;
+  elsif v_nivel = 0 then
+    new.aprovacao := 'nao_exige'; new.aprovacao_nivel := 0;
+  else
+    new.aprovacao := 'pendente'; new.aprovacao_nivel := v_nivel;
+  end if;
+  if new.aprovacao is distinct from old.aprovacao or new.aprovacao_nivel is distinct from old.aprovacao_nivel then
+    perform fin_registrar_evento(new.loja_id, 'titulo_pagar', new.id, 'aprovacao_recalculada', jsonb_build_object('valor_antes', old.valor,
+      'valor', new.valor, 'antes', old.aprovacao, 'depois', new.aprovacao, 'nivel', new.aprovacao_nivel), null, null);
+  end if;
+  return new;
+end $$;
+
+
+--
+-- Name: trg_fin_titulo_aprovacao_evento(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.trg_fin_titulo_aprovacao_evento() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  if new.aprovacao = 'pendente' then
+    perform fin_registrar_evento(new.loja_id, 'titulo_pagar', new.id, 'aprovacao_exigida',
+      jsonb_build_object('valor', new.valor, 'nivel', new.aprovacao_nivel), new.criado_por, new.criado_por_nome);
+  end if;
+  return null;
+end $$;
+
+
+--
+-- Name: trg_fin_transferencias_guarda(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.trg_fin_transferencias_guarda() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+begin
+  if tg_op = 'DELETE' then raise exception 'fin_transferencias não se apaga: use o estorno' using errcode = '55000'; end if;
+  if old.estornada_em is not null
+     or (new.id, new.loja_id, new.conta_origem_id, new.conta_destino_id, new.data, new.valor, new.descricao, new.lanc_saida_id,
+         new.lanc_entrada_id, new.chave_idempotencia, new.assinatura)
+        is distinct from
+        (old.id, old.loja_id, old.conta_origem_id, old.conta_destino_id, old.data, old.valor, old.descricao, old.lanc_saida_id,
+         old.lanc_entrada_id, old.chave_idempotencia, old.assinatura) then
+    raise exception 'fin_transferencias é imutável (só o estorno altera)' using errcode = '55000';
   end if;
   return new;
 end $$;
@@ -11974,32 +13078,6 @@ ALTER TABLE public.fin_categorias ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTI
 
 
 --
--- Name: fin_contas_correntes; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.fin_contas_correntes (
-    id bigint NOT NULL,
-    loja_id bigint NOT NULL,
-    nome text NOT NULL,
-    tipo text DEFAULT 'banco'::text NOT NULL,
-    banco text,
-    agencia text,
-    numero_conta text,
-    saldo_inicial numeric(14,2) DEFAULT 0 NOT NULL,
-    data_saldo_inicial date DEFAULT ((now() AT TIME ZONE 'America/Bahia'::text))::date NOT NULL,
-    ativa boolean DEFAULT true NOT NULL,
-    observacao text,
-    criado_por text,
-    criado_por_nome text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT fin_contas_correntes_nome_check CHECK (((length(btrim(nome)) >= 2) AND (length(btrim(nome)) <= 80))),
-    CONSTRAINT fin_contas_correntes_saldo_inicial_check CHECK ((saldo_inicial <> 'NaN'::numeric)),
-    CONSTRAINT fin_contas_correntes_tipo_check CHECK ((tipo = ANY (ARRAY['caixa'::text, 'banco'::text, 'outro'::text])))
-);
-
-
---
 -- Name: fin_contas_correntes_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -12060,6 +13138,47 @@ CREATE TABLE public.fin_familia_categoria (
 
 
 --
+-- Name: fin_formas_recebimento; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fin_formas_recebimento (
+    id bigint NOT NULL,
+    loja_id bigint NOT NULL,
+    forma text NOT NULL,
+    adquirente text,
+    taxa_percentual numeric(7,4) DEFAULT 0 NOT NULL,
+    taxa_fixa numeric(14,2) DEFAULT 0 NOT NULL,
+    prazo_dias integer DEFAULT 0 NOT NULL,
+    dias_uteis boolean DEFAULT false NOT NULL,
+    conta_id bigint,
+    observacao text,
+    criado_por text,
+    criado_por_nome text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT fin_formas_recebimento_adquirente_check CHECK (((adquirente IS NULL) OR ((length(btrim(adquirente)) >= 1) AND (length(btrim(adquirente)) <= 60)))),
+    CONSTRAINT fin_formas_recebimento_forma_check CHECK ((forma = ANY (ARRAY['credito'::text, 'debito'::text, 'pix'::text, 'dinheiro'::text, 'app_entrega'::text, 'voucher'::text, 'outros'::text]))),
+    CONSTRAINT fin_formas_recebimento_prazo_dias_check CHECK (((prazo_dias >= 0) AND (prazo_dias <= 400))),
+    CONSTRAINT fin_formas_recebimento_taxa_fixa_check CHECK (((taxa_fixa >= (0)::numeric) AND (taxa_fixa < (1000)::numeric) AND (taxa_fixa <> 'NaN'::numeric))),
+    CONSTRAINT fin_formas_recebimento_taxa_percentual_check CHECK (((taxa_percentual >= (0)::numeric) AND (taxa_percentual < (100)::numeric) AND (taxa_percentual <> 'NaN'::numeric)))
+);
+
+
+--
+-- Name: fin_formas_recebimento_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.fin_formas_recebimento ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.fin_formas_recebimento_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: fin_lancamentos; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -12078,8 +13197,10 @@ CREATE TABLE public.fin_lancamentos (
     criado_por text,
     criado_por_nome text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT fin_lancamentos_check CHECK (((estorno_de IS NULL) OR (origem_tipo = 'estorno_pagamento'::text))),
-    CONSTRAINT fin_lancamentos_origem_tipo_check CHECK ((origem_tipo = ANY (ARRAY['pagamento'::text, 'estorno_pagamento'::text, 'manual'::text, 'transferencia'::text, 'recebimento'::text]))),
+    chave_idempotencia text,
+    assinatura text,
+    CONSTRAINT fin_lancamentos_check CHECK (((estorno_de IS NULL) = (origem_tipo <> ALL (ARRAY['estorno_pagamento'::text, 'estorno_manual'::text, 'estorno_transferencia'::text])))),
+    CONSTRAINT fin_lancamentos_origem_tipo_check CHECK ((origem_tipo = ANY (ARRAY['pagamento'::text, 'estorno_pagamento'::text, 'manual'::text, 'estorno_manual'::text, 'transferencia'::text, 'estorno_transferencia'::text, 'recebimento'::text]))),
     CONSTRAINT fin_lancamentos_tipo_check CHECK ((tipo = ANY (ARRAY['entrada'::text, 'saida'::text]))),
     CONSTRAINT fin_lancamentos_valor_check CHECK (((valor > (0)::numeric) AND (valor <> 'NaN'::numeric)))
 );
@@ -12150,6 +13271,123 @@ ALTER TABLE public.fin_pagamentos ALTER COLUMN id ADD GENERATED BY DEFAULT AS ID
 
 
 --
+-- Name: fin_recebimentos; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fin_recebimentos (
+    id bigint NOT NULL,
+    loja_id bigint NOT NULL,
+    titulo_id bigint NOT NULL,
+    conta_id bigint NOT NULL,
+    data_recebimento date NOT NULL,
+    valor_recebido numeric(14,2) NOT NULL,
+    valor_previsto numeric(14,2) NOT NULL,
+    diferenca numeric(14,2) GENERATED ALWAYS AS ((valor_recebido - valor_previsto)) STORED,
+    observacao text,
+    lancamento_id bigint NOT NULL,
+    chave_idempotencia text NOT NULL,
+    assinatura text NOT NULL,
+    criado_por text,
+    criado_por_nome text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    estornado_em timestamp with time zone,
+    estornado_por text,
+    estornado_por_nome text,
+    motivo_estorno text,
+    estorno_lancamento_id bigint,
+    CONSTRAINT fin_recebimentos_check CHECK (((estornado_em IS NULL) = (estorno_lancamento_id IS NULL))),
+    CONSTRAINT fin_recebimentos_valor_recebido_check CHECK (((valor_recebido > (0)::numeric) AND (valor_recebido <> 'NaN'::numeric)))
+);
+
+
+--
+-- Name: fin_recebimentos_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.fin_recebimentos ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.fin_recebimentos_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: fin_recorrentes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fin_recorrentes (
+    id bigint NOT NULL,
+    loja_id bigint NOT NULL,
+    descricao text NOT NULL,
+    fornecedor_id bigint NOT NULL,
+    categoria_id bigint,
+    documento text,
+    valor numeric(14,2) NOT NULL,
+    valor_estimado boolean DEFAULT false NOT NULL,
+    periodicidade text DEFAULT 'mensal'::text NOT NULL,
+    dia smallint NOT NULL,
+    data_inicio date NOT NULL,
+    data_fim date,
+    ativa boolean DEFAULT true NOT NULL,
+    observacao text,
+    criado_por text,
+    criado_por_nome text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT fin_recorrentes_check CHECK ((((periodicidade = 'mensal'::text) AND ((dia >= 1) AND (dia <= 31))) OR ((periodicidade = 'semanal'::text) AND ((dia >= 1) AND (dia <= 7))))),
+    CONSTRAINT fin_recorrentes_check1 CHECK (((data_fim IS NULL) OR (data_fim >= data_inicio))),
+    CONSTRAINT fin_recorrentes_descricao_check CHECK (((length(btrim(descricao)) >= 2) AND (length(btrim(descricao)) <= 120))),
+    CONSTRAINT fin_recorrentes_periodicidade_check CHECK ((periodicidade = ANY (ARRAY['mensal'::text, 'semanal'::text]))),
+    CONSTRAINT fin_recorrentes_valor_check CHECK (((valor > (0)::numeric) AND (valor <> 'NaN'::numeric)))
+);
+
+
+--
+-- Name: fin_recorrentes_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.fin_recorrentes ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.fin_recorrentes_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: fin_recorrentes_ocorrencias; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fin_recorrentes_ocorrencias (
+    id bigint NOT NULL,
+    loja_id bigint NOT NULL,
+    recorrente_id bigint NOT NULL,
+    data_vencimento date NOT NULL,
+    titulo_id bigint,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: fin_recorrentes_ocorrencias_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.fin_recorrentes_ocorrencias ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.fin_recorrentes_ocorrencias_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: fin_titulos_pagar; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -12183,10 +13421,19 @@ CREATE TABLE public.fin_titulos_pagar (
     criado_por_nome text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    aprovacao text DEFAULT 'nao_exige'::text NOT NULL,
+    aprovacao_nivel smallint DEFAULT 0 NOT NULL,
+    aprovacao_nivel_aprovado smallint,
+    aprovacao_em timestamp with time zone,
+    aprovacao_por text,
+    aprovacao_por_nome text,
+    aprovacao_motivo text,
+    valor_a_confirmar boolean DEFAULT false NOT NULL,
+    CONSTRAINT fin_titulos_pagar_aprovacao_check CHECK (((aprovacao = ANY (ARRAY['nao_exige'::text, 'pendente'::text, 'aprovado'::text, 'reprovado'::text])) AND ((aprovacao_nivel >= 0) AND (aprovacao_nivel <= 2)) AND ((aprovacao = 'nao_exige'::text) = (aprovacao_nivel = 0)) AND ((aprovacao = 'aprovado'::text) = (aprovacao_nivel_aprovado IS NOT NULL)))),
     CONSTRAINT fin_titulos_pagar_check CHECK ((total_parcelas >= parcela)),
     CONSTRAINT fin_titulos_pagar_check1 CHECK ((((status = 'aberto'::text) AND (valor_quitado = (0)::numeric) AND (cancelado_em IS NULL)) OR ((status = 'parcial'::text) AND (valor_quitado > (0)::numeric) AND (valor_quitado < valor) AND (cancelado_em IS NULL)) OR ((status = 'pago'::text) AND (valor_quitado = valor) AND (cancelado_em IS NULL)) OR ((status = 'cancelado'::text) AND (valor_quitado = (0)::numeric) AND (cancelado_em IS NOT NULL)))),
     CONSTRAINT fin_titulos_pagar_data_competencia_check CHECK ((EXTRACT(day FROM data_competencia) = (1)::numeric)),
-    CONSTRAINT fin_titulos_pagar_origem_tipo_check CHECK ((origem_tipo = ANY (ARRAY['manual'::text, 'nota_entrada'::text, 'pedido_compra'::text, 'importacao'::text]))),
+    CONSTRAINT fin_titulos_pagar_origem_tipo_check CHECK ((origem_tipo = ANY (ARRAY['manual'::text, 'nota_entrada'::text, 'pedido_compra'::text, 'importacao'::text, 'recorrente'::text]))),
     CONSTRAINT fin_titulos_pagar_parcela_check CHECK ((parcela >= 1)),
     CONSTRAINT fin_titulos_pagar_status_check CHECK ((status = ANY (ARRAY['aberto'::text, 'parcial'::text, 'pago'::text, 'cancelado'::text]))),
     CONSTRAINT fin_titulos_pagar_total_parcelas_check CHECK ((total_parcelas >= 1)),
@@ -12201,6 +13448,108 @@ CREATE TABLE public.fin_titulos_pagar (
 
 ALTER TABLE public.fin_titulos_pagar ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME public.fin_titulos_pagar_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: fin_titulos_receber; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fin_titulos_receber (
+    id bigint NOT NULL,
+    loja_id bigint NOT NULL,
+    origem_tipo text DEFAULT 'vendas'::text NOT NULL,
+    data_venda date NOT NULL,
+    forma text NOT NULL,
+    adquirente text,
+    quantidade integer DEFAULT 0 NOT NULL,
+    valor_bruto numeric(14,2) NOT NULL,
+    taxa_percentual numeric(7,4) DEFAULT 0 NOT NULL,
+    taxa_fixa numeric(14,2) DEFAULT 0 NOT NULL,
+    valor_taxa numeric(14,2) DEFAULT 0 NOT NULL,
+    valor_liquido numeric(14,2) NOT NULL,
+    prazo_dias integer DEFAULT 0 NOT NULL,
+    dias_uteis boolean DEFAULT false NOT NULL,
+    data_prevista date NOT NULL,
+    conta_id bigint,
+    categoria_id bigint,
+    configurar boolean DEFAULT false NOT NULL,
+    status text DEFAULT 'aberto'::text NOT NULL,
+    valor_recebido numeric(14,2),
+    data_recebimento date,
+    diferenca numeric(14,2) GENERATED ALWAYS AS ((valor_recebido - valor_liquido)) STORED,
+    cancelado_em timestamp with time zone,
+    motivo_cancelamento text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT fin_titulos_receber_check CHECK (((valor_taxa >= (0)::numeric) AND (valor_taxa <= valor_bruto))),
+    CONSTRAINT fin_titulos_receber_check1 CHECK ((valor_liquido = (valor_bruto - valor_taxa))),
+    CONSTRAINT fin_titulos_receber_check2 CHECK ((data_prevista >= data_venda)),
+    CONSTRAINT fin_titulos_receber_check3 CHECK ((((status = 'aberto'::text) AND (valor_recebido IS NULL) AND (data_recebimento IS NULL) AND (cancelado_em IS NULL)) OR ((status = 'recebido'::text) AND (valor_recebido IS NOT NULL) AND (data_recebimento IS NOT NULL) AND (cancelado_em IS NULL)) OR ((status = 'cancelado'::text) AND (valor_recebido IS NULL) AND (cancelado_em IS NOT NULL)))),
+    CONSTRAINT fin_titulos_receber_forma_check CHECK ((forma = ANY (ARRAY['credito'::text, 'debito'::text, 'pix'::text, 'dinheiro'::text, 'app_entrega'::text, 'voucher'::text, 'outros'::text]))),
+    CONSTRAINT fin_titulos_receber_origem_tipo_check CHECK ((origem_tipo = 'vendas'::text)),
+    CONSTRAINT fin_titulos_receber_quantidade_check CHECK ((quantidade >= 0)),
+    CONSTRAINT fin_titulos_receber_status_check CHECK ((status = ANY (ARRAY['aberto'::text, 'recebido'::text, 'cancelado'::text]))),
+    CONSTRAINT fin_titulos_receber_valor_bruto_check CHECK (((valor_bruto > (0)::numeric) AND (valor_bruto <> 'NaN'::numeric)))
+);
+
+
+--
+-- Name: fin_titulos_receber_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.fin_titulos_receber ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.fin_titulos_receber_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: fin_transferencias; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fin_transferencias (
+    id bigint NOT NULL,
+    loja_id bigint NOT NULL,
+    conta_origem_id bigint NOT NULL,
+    conta_destino_id bigint NOT NULL,
+    data date NOT NULL,
+    valor numeric(14,2) NOT NULL,
+    descricao text,
+    lanc_saida_id bigint NOT NULL,
+    lanc_entrada_id bigint NOT NULL,
+    chave_idempotencia text NOT NULL,
+    assinatura text NOT NULL,
+    criado_por text,
+    criado_por_nome text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    estornada_em timestamp with time zone,
+    estornada_por text,
+    estornada_por_nome text,
+    motivo_estorno text,
+    estorno_saida_id bigint,
+    estorno_entrada_id bigint,
+    CONSTRAINT fin_transferencias_check CHECK ((conta_origem_id <> conta_destino_id)),
+    CONSTRAINT fin_transferencias_check1 CHECK ((((estornada_em IS NULL) = (estorno_saida_id IS NULL)) AND ((estorno_saida_id IS NULL) = (estorno_entrada_id IS NULL)))),
+    CONSTRAINT fin_transferencias_valor_check CHECK (((valor > (0)::numeric) AND (valor <> 'NaN'::numeric)))
+);
+
+
+--
+-- Name: fin_transferencias_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.fin_transferencias ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.fin_transferencias_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -12881,6 +14230,7 @@ CREATE TABLE public.lojas (
     omie_pedido_categoria text,
     omie_pedido_email_aprovador text,
     fin_cp_da_nota_ativo boolean DEFAULT false NOT NULL,
+    fin_cr_vendas_ativo boolean DEFAULT false NOT NULL,
     CONSTRAINT lojas_codigo_municipio_chk CHECK (((codigo_municipio IS NULL) OR ((codigo_municipio)::text ~ '^[0-9]{7}$'::text))),
     CONSTRAINT lojas_meta_compras_pct_check CHECK (((meta_compras_pct >= (0)::numeric) AND (meta_compras_pct <= (100)::numeric))),
     CONSTRAINT lojas_modo_estoque_chk CHECK ((modo_estoque = ANY (ARRAY['omie'::text, 'proprio'::text, 'nenhum'::text]))),
@@ -12922,6 +14272,13 @@ COMMENT ON COLUMN public.lojas.omie_pedido_email_aprovador IS 'C1: cEmailAprovad
 --
 
 COMMENT ON COLUMN public.lojas.fin_cp_da_nota_ativo IS 'Fase 4: a nota de entrada gera/estorna conta a pagar (migration 340). Desligado até o dono liberar.';
+
+
+--
+-- Name: COLUMN lojas.fin_cr_vendas_ativo; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.lojas.fin_cr_vendas_ativo IS 'Fase 4: as vendas do Norte Vendas geram contas a receber (migration 380). Desligado até o dono liberar.';
 
 
 --
@@ -16239,6 +17596,14 @@ ALTER TABLE ONLY public.fin_categorias
 
 
 --
+-- Name: fin_config_loja fin_config_loja_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_config_loja
+    ADD CONSTRAINT fin_config_loja_pkey PRIMARY KEY (loja_id);
+
+
+--
 -- Name: fin_contas_correntes fin_contas_correntes_id_loja_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -16279,6 +17644,22 @@ ALTER TABLE ONLY public.fin_familia_categoria
 
 
 --
+-- Name: fin_formas_recebimento fin_formas_recebimento_loja_id_forma_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_formas_recebimento
+    ADD CONSTRAINT fin_formas_recebimento_loja_id_forma_key UNIQUE (loja_id, forma);
+
+
+--
+-- Name: fin_formas_recebimento fin_formas_recebimento_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_formas_recebimento
+    ADD CONSTRAINT fin_formas_recebimento_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: fin_lancamentos fin_lancamentos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -16300,6 +17681,54 @@ ALTER TABLE ONLY public.fin_pagamentos
 
 ALTER TABLE ONLY public.fin_pagamentos
     ADD CONSTRAINT fin_pagamentos_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fin_recebimentos fin_recebimentos_loja_id_chave_idempotencia_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_recebimentos
+    ADD CONSTRAINT fin_recebimentos_loja_id_chave_idempotencia_key UNIQUE (loja_id, chave_idempotencia);
+
+
+--
+-- Name: fin_recebimentos fin_recebimentos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_recebimentos
+    ADD CONSTRAINT fin_recebimentos_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fin_recorrentes fin_recorrentes_id_loja_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_recorrentes
+    ADD CONSTRAINT fin_recorrentes_id_loja_id_key UNIQUE (id, loja_id);
+
+
+--
+-- Name: fin_recorrentes_ocorrencias fin_recorrentes_ocorrencias_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_recorrentes_ocorrencias
+    ADD CONSTRAINT fin_recorrentes_ocorrencias_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fin_recorrentes_ocorrencias fin_recorrentes_ocorrencias_recorrente_id_data_vencimento_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_recorrentes_ocorrencias
+    ADD CONSTRAINT fin_recorrentes_ocorrencias_recorrente_id_data_vencimento_key UNIQUE (recorrente_id, data_vencimento);
+
+
+--
+-- Name: fin_recorrentes fin_recorrentes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_recorrentes
+    ADD CONSTRAINT fin_recorrentes_pkey PRIMARY KEY (id);
 
 
 --
@@ -16332,6 +17761,38 @@ ALTER TABLE ONLY public.fin_titulos_pagar
 
 ALTER TABLE ONLY public.fin_titulos_pagar
     ADD CONSTRAINT fin_titulos_pagar_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fin_titulos_receber fin_titulos_receber_id_loja_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_titulos_receber
+    ADD CONSTRAINT fin_titulos_receber_id_loja_id_key UNIQUE (id, loja_id);
+
+
+--
+-- Name: fin_titulos_receber fin_titulos_receber_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_titulos_receber
+    ADD CONSTRAINT fin_titulos_receber_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fin_transferencias fin_transferencias_loja_id_chave_idempotencia_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_transferencias
+    ADD CONSTRAINT fin_transferencias_loja_id_chave_idempotencia_key UNIQUE (loja_id, chave_idempotencia);
+
+
+--
+-- Name: fin_transferencias fin_transferencias_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_transferencias
+    ADD CONSTRAINT fin_transferencias_pkey PRIMARY KEY (id);
 
 
 --
@@ -17779,6 +19240,13 @@ CREATE INDEX fin_eventos_entidade ON public.fin_eventos USING btree (loja_id, en
 
 
 --
+-- Name: fin_lancamentos_chave; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX fin_lancamentos_chave ON public.fin_lancamentos USING btree (loja_id, chave_idempotencia) WHERE (chave_idempotencia IS NOT NULL);
+
+
+--
 -- Name: fin_lancamentos_conta; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -17807,6 +19275,27 @@ CREATE INDEX fin_pagamentos_titulo ON public.fin_pagamentos USING btree (titulo_
 
 
 --
+-- Name: fin_recebimentos_um_ativo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX fin_recebimentos_um_ativo ON public.fin_recebimentos USING btree (titulo_id) WHERE (estornado_em IS NULL);
+
+
+--
+-- Name: fin_recorrentes_loja; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fin_recorrentes_loja ON public.fin_recorrentes USING btree (loja_id, ativa);
+
+
+--
+-- Name: fin_titulos_pagar_aprovacao_pendente; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fin_titulos_pagar_aprovacao_pendente ON public.fin_titulos_pagar USING btree (loja_id, data_vencimento) WHERE ((aprovacao = 'pendente'::text) AND (status <> 'cancelado'::text));
+
+
+--
 -- Name: fin_titulos_pagar_forn; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -17832,6 +19321,34 @@ CREATE INDEX fin_titulos_pagar_status ON public.fin_titulos_pagar USING btree (l
 --
 
 CREATE INDEX fin_titulos_pagar_venc ON public.fin_titulos_pagar USING btree (loja_id, data_vencimento, id);
+
+
+--
+-- Name: fin_titulos_receber_dia_forma; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX fin_titulos_receber_dia_forma ON public.fin_titulos_receber USING btree (loja_id, origem_tipo, data_venda, forma) WHERE (status <> 'cancelado'::text);
+
+
+--
+-- Name: fin_titulos_receber_prevista; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fin_titulos_receber_prevista ON public.fin_titulos_receber USING btree (loja_id, data_prevista, id);
+
+
+--
+-- Name: fin_titulos_receber_venda; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fin_titulos_receber_venda ON public.fin_titulos_receber USING btree (loja_id, data_venda, id);
+
+
+--
+-- Name: fin_transferencias_loja; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fin_transferencias_loja ON public.fin_transferencias USING btree (loja_id, data, id);
 
 
 --
@@ -18848,10 +20365,45 @@ CREATE TRIGGER fin_lancamentos_imutavel BEFORE DELETE OR UPDATE ON public.fin_la
 
 
 --
+-- Name: fin_pagamentos fin_pagamento_exige_aprovacao; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER fin_pagamento_exige_aprovacao BEFORE INSERT ON public.fin_pagamentos FOR EACH ROW EXECUTE FUNCTION public.trg_fin_pagamento_exige_aprovacao();
+
+
+--
 -- Name: fin_pagamentos fin_pagamentos_guarda; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER fin_pagamentos_guarda BEFORE DELETE OR UPDATE ON public.fin_pagamentos FOR EACH ROW EXECUTE FUNCTION public.trg_fin_pagamentos_guarda();
+
+
+--
+-- Name: fin_recebimentos fin_recebimentos_guarda; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER fin_recebimentos_guarda BEFORE DELETE OR UPDATE ON public.fin_recebimentos FOR EACH ROW EXECUTE FUNCTION public.trg_fin_recebimentos_guarda();
+
+
+--
+-- Name: fin_titulos_pagar fin_titulo_aprovacao; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER fin_titulo_aprovacao BEFORE INSERT OR UPDATE OF valor ON public.fin_titulos_pagar FOR EACH ROW EXECUTE FUNCTION public.trg_fin_titulo_aprovacao();
+
+
+--
+-- Name: fin_titulos_pagar fin_titulo_aprovacao_evento; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER fin_titulo_aprovacao_evento AFTER INSERT ON public.fin_titulos_pagar FOR EACH ROW EXECUTE FUNCTION public.trg_fin_titulo_aprovacao_evento();
+
+
+--
+-- Name: fin_transferencias fin_transferencias_guarda; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER fin_transferencias_guarda BEFORE DELETE OR UPDATE ON public.fin_transferencias FOR EACH ROW EXECUTE FUNCTION public.trg_fin_transferencias_guarda();
 
 
 --
@@ -20026,6 +21578,14 @@ ALTER TABLE ONLY public.fin_categorias
 
 
 --
+-- Name: fin_config_loja fin_config_loja_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_config_loja
+    ADD CONSTRAINT fin_config_loja_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id);
+
+
+--
 -- Name: fin_contas_correntes fin_contas_correntes_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -20055,6 +21615,22 @@ ALTER TABLE ONLY public.fin_familia_categoria
 
 ALTER TABLE ONLY public.fin_familia_categoria
     ADD CONSTRAINT fin_familia_categoria_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id);
+
+
+--
+-- Name: fin_formas_recebimento fin_formas_recebimento_conta_id_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_formas_recebimento
+    ADD CONSTRAINT fin_formas_recebimento_conta_id_loja_id_fkey FOREIGN KEY (conta_id, loja_id) REFERENCES public.fin_contas_correntes(id, loja_id);
+
+
+--
+-- Name: fin_formas_recebimento fin_formas_recebimento_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_formas_recebimento
+    ADD CONSTRAINT fin_formas_recebimento_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id);
 
 
 --
@@ -20130,6 +21706,94 @@ ALTER TABLE ONLY public.fin_pagamentos
 
 
 --
+-- Name: fin_recebimentos fin_recebimentos_conta_id_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_recebimentos
+    ADD CONSTRAINT fin_recebimentos_conta_id_loja_id_fkey FOREIGN KEY (conta_id, loja_id) REFERENCES public.fin_contas_correntes(id, loja_id);
+
+
+--
+-- Name: fin_recebimentos fin_recebimentos_estorno_lancamento_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_recebimentos
+    ADD CONSTRAINT fin_recebimentos_estorno_lancamento_id_fkey FOREIGN KEY (estorno_lancamento_id) REFERENCES public.fin_lancamentos(id);
+
+
+--
+-- Name: fin_recebimentos fin_recebimentos_lancamento_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_recebimentos
+    ADD CONSTRAINT fin_recebimentos_lancamento_id_fkey FOREIGN KEY (lancamento_id) REFERENCES public.fin_lancamentos(id);
+
+
+--
+-- Name: fin_recebimentos fin_recebimentos_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_recebimentos
+    ADD CONSTRAINT fin_recebimentos_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id);
+
+
+--
+-- Name: fin_recebimentos fin_recebimentos_titulo_id_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_recebimentos
+    ADD CONSTRAINT fin_recebimentos_titulo_id_loja_id_fkey FOREIGN KEY (titulo_id, loja_id) REFERENCES public.fin_titulos_receber(id, loja_id);
+
+
+--
+-- Name: fin_recorrentes fin_recorrentes_categoria_id_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_recorrentes
+    ADD CONSTRAINT fin_recorrentes_categoria_id_loja_id_fkey FOREIGN KEY (categoria_id, loja_id) REFERENCES public.fin_categorias(id, loja_id);
+
+
+--
+-- Name: fin_recorrentes fin_recorrentes_fornecedor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_recorrentes
+    ADD CONSTRAINT fin_recorrentes_fornecedor_id_fkey FOREIGN KEY (fornecedor_id) REFERENCES public.fornecedores(id);
+
+
+--
+-- Name: fin_recorrentes fin_recorrentes_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_recorrentes
+    ADD CONSTRAINT fin_recorrentes_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id);
+
+
+--
+-- Name: fin_recorrentes_ocorrencias fin_recorrentes_ocorrencias_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_recorrentes_ocorrencias
+    ADD CONSTRAINT fin_recorrentes_ocorrencias_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id);
+
+
+--
+-- Name: fin_recorrentes_ocorrencias fin_recorrentes_ocorrencias_recorrente_id_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_recorrentes_ocorrencias
+    ADD CONSTRAINT fin_recorrentes_ocorrencias_recorrente_id_loja_id_fkey FOREIGN KEY (recorrente_id, loja_id) REFERENCES public.fin_recorrentes(id, loja_id);
+
+
+--
+-- Name: fin_recorrentes_ocorrencias fin_recorrentes_ocorrencias_titulo_id_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_recorrentes_ocorrencias
+    ADD CONSTRAINT fin_recorrentes_ocorrencias_titulo_id_loja_id_fkey FOREIGN KEY (titulo_id, loja_id) REFERENCES public.fin_titulos_pagar(id, loja_id);
+
+
+--
 -- Name: fin_titulos_pagar fin_titulos_pagar_categoria_id_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -20151,6 +21815,86 @@ ALTER TABLE ONLY public.fin_titulos_pagar
 
 ALTER TABLE ONLY public.fin_titulos_pagar
     ADD CONSTRAINT fin_titulos_pagar_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id);
+
+
+--
+-- Name: fin_titulos_receber fin_titulos_receber_categoria_id_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_titulos_receber
+    ADD CONSTRAINT fin_titulos_receber_categoria_id_loja_id_fkey FOREIGN KEY (categoria_id, loja_id) REFERENCES public.fin_categorias(id, loja_id);
+
+
+--
+-- Name: fin_titulos_receber fin_titulos_receber_conta_id_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_titulos_receber
+    ADD CONSTRAINT fin_titulos_receber_conta_id_loja_id_fkey FOREIGN KEY (conta_id, loja_id) REFERENCES public.fin_contas_correntes(id, loja_id);
+
+
+--
+-- Name: fin_titulos_receber fin_titulos_receber_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_titulos_receber
+    ADD CONSTRAINT fin_titulos_receber_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id);
+
+
+--
+-- Name: fin_transferencias fin_transferencias_conta_destino_id_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_transferencias
+    ADD CONSTRAINT fin_transferencias_conta_destino_id_loja_id_fkey FOREIGN KEY (conta_destino_id, loja_id) REFERENCES public.fin_contas_correntes(id, loja_id);
+
+
+--
+-- Name: fin_transferencias fin_transferencias_conta_origem_id_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_transferencias
+    ADD CONSTRAINT fin_transferencias_conta_origem_id_loja_id_fkey FOREIGN KEY (conta_origem_id, loja_id) REFERENCES public.fin_contas_correntes(id, loja_id);
+
+
+--
+-- Name: fin_transferencias fin_transferencias_estorno_entrada_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_transferencias
+    ADD CONSTRAINT fin_transferencias_estorno_entrada_id_fkey FOREIGN KEY (estorno_entrada_id) REFERENCES public.fin_lancamentos(id);
+
+
+--
+-- Name: fin_transferencias fin_transferencias_estorno_saida_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_transferencias
+    ADD CONSTRAINT fin_transferencias_estorno_saida_id_fkey FOREIGN KEY (estorno_saida_id) REFERENCES public.fin_lancamentos(id);
+
+
+--
+-- Name: fin_transferencias fin_transferencias_lanc_entrada_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_transferencias
+    ADD CONSTRAINT fin_transferencias_lanc_entrada_id_fkey FOREIGN KEY (lanc_entrada_id) REFERENCES public.fin_lancamentos(id);
+
+
+--
+-- Name: fin_transferencias fin_transferencias_lanc_saida_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_transferencias
+    ADD CONSTRAINT fin_transferencias_lanc_saida_id_fkey FOREIGN KEY (lanc_saida_id) REFERENCES public.fin_lancamentos(id);
+
+
+--
+-- Name: fin_transferencias fin_transferencias_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_transferencias
+    ADD CONSTRAINT fin_transferencias_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id);
 
 
 --
@@ -21797,6 +23541,19 @@ CREATE POLICY fin_categorias_select_por_loja ON public.fin_categorias FOR SELECT
 
 
 --
+-- Name: fin_config_loja; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.fin_config_loja ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: fin_config_loja fin_config_loja_select_por_loja; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY fin_config_loja_select_por_loja ON public.fin_config_loja FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
+
+
+--
 -- Name: fin_contas_correntes; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -21836,6 +23593,19 @@ CREATE POLICY fin_familia_categoria_select_por_loja ON public.fin_familia_catego
 
 
 --
+-- Name: fin_formas_recebimento; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.fin_formas_recebimento ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: fin_formas_recebimento fin_formas_recebimento_select_por_loja; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY fin_formas_recebimento_select_por_loja ON public.fin_formas_recebimento FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
+
+
+--
 -- Name: fin_lancamentos; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -21862,6 +23632,45 @@ CREATE POLICY fin_pagamentos_select_por_loja ON public.fin_pagamentos FOR SELECT
 
 
 --
+-- Name: fin_recebimentos; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.fin_recebimentos ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: fin_recebimentos fin_recebimentos_select_por_loja; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY fin_recebimentos_select_por_loja ON public.fin_recebimentos FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
+
+
+--
+-- Name: fin_recorrentes; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.fin_recorrentes ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: fin_recorrentes_ocorrencias; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.fin_recorrentes_ocorrencias ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: fin_recorrentes_ocorrencias fin_recorrentes_ocorrencias_select_por_loja; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY fin_recorrentes_ocorrencias_select_por_loja ON public.fin_recorrentes_ocorrencias FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
+
+
+--
+-- Name: fin_recorrentes fin_recorrentes_select_por_loja; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY fin_recorrentes_select_por_loja ON public.fin_recorrentes FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
+
+
+--
 -- Name: fin_titulos_pagar; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -21872,6 +23681,32 @@ ALTER TABLE public.fin_titulos_pagar ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY fin_titulos_pagar_select_por_loja ON public.fin_titulos_pagar FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
+
+
+--
+-- Name: fin_titulos_receber; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.fin_titulos_receber ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: fin_titulos_receber fin_titulos_receber_select_por_loja; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY fin_titulos_receber_select_por_loja ON public.fin_titulos_receber FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
+
+
+--
+-- Name: fin_transferencias; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.fin_transferencias ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: fin_transferencias fin_transferencias_select_por_loja; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY fin_transferencias_select_por_loja ON public.fin_transferencias FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
 
 
 --
@@ -23095,6 +24930,23 @@ GRANT ALL ON FUNCTION public._expandir_receita(p_loja bigint, p_produto bigint, 
 
 
 --
+-- Name: TABLE fin_contas_correntes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.fin_contas_correntes TO postgres;
+GRANT ALL ON TABLE public.fin_contas_correntes TO service_role;
+
+
+--
+-- Name: FUNCTION _fin_conta_para_lancar(p_loja bigint, p_conta bigint, p_data date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._fin_conta_para_lancar(p_loja bigint, p_conta bigint, p_data date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._fin_conta_para_lancar(p_loja bigint, p_conta bigint, p_data date) TO postgres;
+GRANT ALL ON FUNCTION public._fin_conta_para_lancar(p_loja bigint, p_conta bigint, p_data date) TO service_role;
+
+
+--
 -- Name: FUNCTION _fin_titulos_da_nota_gerar(p_loja bigint, p_nota bigint, p_user text, p_user_nome text, p_manual boolean); Type: ACL; Schema: public; Owner: -
 --
 
@@ -23709,6 +25561,24 @@ GRANT ALL ON FUNCTION public.ficha_tem_ciclo(p_loja bigint, p_produto bigint, p_
 
 
 --
+-- Name: FUNCTION fin_aprovacao_nivel(p_loja bigint, p_valor numeric); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_aprovacao_nivel(p_loja bigint, p_valor numeric) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_aprovacao_nivel(p_loja bigint, p_valor numeric) TO postgres;
+GRANT ALL ON FUNCTION public.fin_aprovacao_nivel(p_loja bigint, p_valor numeric) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_avulsos_transferencias_listar(p_loja bigint, p_de date, p_ate date, p_limite integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_avulsos_transferencias_listar(p_loja bigint, p_de date, p_ate date, p_limite integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_avulsos_transferencias_listar(p_loja bigint, p_de date, p_ate date, p_limite integer) TO postgres;
+GRANT ALL ON FUNCTION public.fin_avulsos_transferencias_listar(p_loja bigint, p_de date, p_ate date, p_limite integer) TO service_role;
+
+
+--
 -- Name: FUNCTION fin_categoria_da_nota(p_loja bigint, p_nota bigint); Type: ACL; Schema: public; Owner: -
 --
 
@@ -23736,6 +25606,41 @@ GRANT ALL ON FUNCTION public.fin_categorias_semear(p_loja bigint) TO service_rol
 
 
 --
+-- Name: TABLE fin_config_loja; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.fin_config_loja TO postgres;
+GRANT ALL ON TABLE public.fin_config_loja TO service_role;
+
+
+--
+-- Name: FUNCTION fin_config(p_loja bigint); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_config(p_loja bigint) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_config(p_loja bigint) TO postgres;
+GRANT ALL ON FUNCTION public.fin_config(p_loja bigint) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_config_ler(p_loja bigint); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_config_ler(p_loja bigint) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_config_ler(p_loja bigint) TO postgres;
+GRANT ALL ON FUNCTION public.fin_config_ler(p_loja bigint) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_config_salvar(p_loja bigint, p_dados jsonb, p_user text, p_user_nome text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_config_salvar(p_loja bigint, p_dados jsonb, p_user text, p_user_nome text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_config_salvar(p_loja bigint, p_dados jsonb, p_user text, p_user_nome text) TO postgres;
+GRANT ALL ON FUNCTION public.fin_config_salvar(p_loja bigint, p_dados jsonb, p_user text, p_user_nome text) TO service_role;
+
+
+--
 -- Name: FUNCTION fin_conta_salvar(p_loja bigint, p_id bigint, p_dados jsonb, p_user text, p_user_nome text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -23760,6 +25665,33 @@ GRANT ALL ON FUNCTION public.fin_contas_saldo(p_loja bigint) TO service_role;
 REVOKE ALL ON FUNCTION public.fin_cp_da_nota_ligado(p_loja bigint) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fin_cp_da_nota_ligado(p_loja bigint) TO postgres;
 GRANT ALL ON FUNCTION public.fin_cp_da_nota_ligado(p_loja bigint) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_cr_forma_do_pagamento(p_metodo text, p_bandeira text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_cr_forma_do_pagamento(p_metodo text, p_bandeira text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_cr_forma_do_pagamento(p_metodo text, p_bandeira text) TO postgres;
+GRANT ALL ON FUNCTION public.fin_cr_forma_do_pagamento(p_metodo text, p_bandeira text) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_cr_somar_dias(p_data date, p_dias integer, p_uteis boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_cr_somar_dias(p_data date, p_dias integer, p_uteis boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_cr_somar_dias(p_data date, p_dias integer, p_uteis boolean) TO postgres;
+GRANT ALL ON FUNCTION public.fin_cr_somar_dias(p_data date, p_dias integer, p_uteis boolean) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_cr_vendas_ligado(p_loja bigint); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_cr_vendas_ligado(p_loja bigint) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_cr_vendas_ligado(p_loja bigint) TO postgres;
+GRANT ALL ON FUNCTION public.fin_cr_vendas_ligado(p_loja bigint) TO service_role;
 
 
 --
@@ -23817,12 +25749,39 @@ GRANT ALL ON FUNCTION public.fin_familia_categoria_salvar(p_loja bigint, p_codig
 
 
 --
+-- Name: FUNCTION fin_forma_recebimento_salvar(p_loja bigint, p_forma text, p_dados jsonb, p_user text, p_user_nome text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_forma_recebimento_salvar(p_loja bigint, p_forma text, p_dados jsonb, p_user text, p_user_nome text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_forma_recebimento_salvar(p_loja bigint, p_forma text, p_dados jsonb, p_user text, p_user_nome text) TO postgres;
+GRANT ALL ON FUNCTION public.fin_forma_recebimento_salvar(p_loja bigint, p_forma text, p_dados jsonb, p_user text, p_user_nome text) TO service_role;
+
+
+--
 -- Name: FUNCTION fin_hoje(); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public.fin_hoje() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fin_hoje() TO postgres;
 GRANT ALL ON FUNCTION public.fin_hoje() TO service_role;
+
+
+--
+-- Name: FUNCTION fin_lancamento_avulso_estornar(p_loja bigint, p_lancamento bigint, p_motivo text, p_user text, p_user_nome text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_lancamento_avulso_estornar(p_loja bigint, p_lancamento bigint, p_motivo text, p_user text, p_user_nome text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_lancamento_avulso_estornar(p_loja bigint, p_lancamento bigint, p_motivo text, p_user text, p_user_nome text) TO postgres;
+GRANT ALL ON FUNCTION public.fin_lancamento_avulso_estornar(p_loja bigint, p_lancamento bigint, p_motivo text, p_user text, p_user_nome text) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_lancamento_avulso_registrar(p_loja bigint, p_dados jsonb, p_user text, p_user_nome text, p_chave text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_lancamento_avulso_registrar(p_loja bigint, p_dados jsonb, p_user text, p_user_nome text, p_chave text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_lancamento_avulso_registrar(p_loja bigint, p_dados jsonb, p_user text, p_user_nome text, p_chave text) TO postgres;
+GRANT ALL ON FUNCTION public.fin_lancamento_avulso_registrar(p_loja bigint, p_dados jsonb, p_user text, p_user_nome text, p_chave text) TO service_role;
 
 
 --
@@ -23889,6 +25848,78 @@ GRANT ALL ON FUNCTION public.fin_pendencias_nota_desfeita(p_loja bigint) TO serv
 
 
 --
+-- Name: FUNCTION fin_receber_vendas_gerar(p_loja bigint, p_de date, p_ate date, p_user text, p_user_nome text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_receber_vendas_gerar(p_loja bigint, p_de date, p_ate date, p_user text, p_user_nome text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_receber_vendas_gerar(p_loja bigint, p_de date, p_ate date, p_user text, p_user_nome text) TO postgres;
+GRANT ALL ON FUNCTION public.fin_receber_vendas_gerar(p_loja bigint, p_de date, p_ate date, p_user text, p_user_nome text) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_receber_vendas_previa(p_loja bigint, p_de date, p_ate date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_receber_vendas_previa(p_loja bigint, p_de date, p_ate date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_receber_vendas_previa(p_loja bigint, p_de date, p_ate date) TO postgres;
+GRANT ALL ON FUNCTION public.fin_receber_vendas_previa(p_loja bigint, p_de date, p_ate date) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_recebimento_estornar(p_loja bigint, p_recebimento bigint, p_motivo text, p_user text, p_user_nome text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_recebimento_estornar(p_loja bigint, p_recebimento bigint, p_motivo text, p_user text, p_user_nome text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_recebimento_estornar(p_loja bigint, p_recebimento bigint, p_motivo text, p_user text, p_user_nome text) TO postgres;
+GRANT ALL ON FUNCTION public.fin_recebimento_estornar(p_loja bigint, p_recebimento bigint, p_motivo text, p_user text, p_user_nome text) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_recebimento_registrar(p_loja bigint, p_titulo bigint, p_dados jsonb, p_user text, p_user_nome text, p_chave text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_recebimento_registrar(p_loja bigint, p_titulo bigint, p_dados jsonb, p_user text, p_user_nome text, p_chave text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_recebimento_registrar(p_loja bigint, p_titulo bigint, p_dados jsonb, p_user text, p_user_nome text, p_chave text) TO postgres;
+GRANT ALL ON FUNCTION public.fin_recebimento_registrar(p_loja bigint, p_titulo bigint, p_dados jsonb, p_user text, p_user_nome text, p_chave text) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_recorrente_datas(p_periodicidade text, p_dia integer, p_inicio date, p_fim date, p_de date, p_ate date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_recorrente_datas(p_periodicidade text, p_dia integer, p_inicio date, p_fim date, p_de date, p_ate date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_recorrente_datas(p_periodicidade text, p_dia integer, p_inicio date, p_fim date, p_de date, p_ate date) TO postgres;
+GRANT ALL ON FUNCTION public.fin_recorrente_datas(p_periodicidade text, p_dia integer, p_inicio date, p_fim date, p_de date, p_ate date) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_recorrente_salvar(p_loja bigint, p_id bigint, p_dados jsonb, p_user text, p_user_nome text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_recorrente_salvar(p_loja bigint, p_id bigint, p_dados jsonb, p_user text, p_user_nome text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_recorrente_salvar(p_loja bigint, p_id bigint, p_dados jsonb, p_user text, p_user_nome text) TO postgres;
+GRANT ALL ON FUNCTION public.fin_recorrente_salvar(p_loja bigint, p_id bigint, p_dados jsonb, p_user text, p_user_nome text) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_recorrentes_gerar(p_loja bigint, p_dias integer, p_hoje date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_recorrentes_gerar(p_loja bigint, p_dias integer, p_hoje date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_recorrentes_gerar(p_loja bigint, p_dias integer, p_hoje date) TO postgres;
+GRANT ALL ON FUNCTION public.fin_recorrentes_gerar(p_loja bigint, p_dias integer, p_hoje date) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_recorrentes_listar(p_loja bigint, p_hoje date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_recorrentes_listar(p_loja bigint, p_hoje date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_recorrentes_listar(p_loja bigint, p_hoje date) TO postgres;
+GRANT ALL ON FUNCTION public.fin_recorrentes_listar(p_loja bigint, p_hoje date) TO service_role;
+
+
+--
 -- Name: FUNCTION fin_registrar_evento(p_loja bigint, p_entidade text, p_id bigint, p_tipo text, p_detalhe jsonb, p_user text, p_user_nome text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -23916,6 +25947,15 @@ GRANT ALL ON FUNCTION public.fin_status_titulo(p_valor numeric, p_quitado numeri
 
 
 --
+-- Name: FUNCTION fin_titulo_aprovacao_decidir(p_loja bigint, p_id bigint, p_acao text, p_nivel_usuario integer, p_motivo text, p_user text, p_user_nome text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_titulo_aprovacao_decidir(p_loja bigint, p_id bigint, p_acao text, p_nivel_usuario integer, p_motivo text, p_user text, p_user_nome text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_titulo_aprovacao_decidir(p_loja bigint, p_id bigint, p_acao text, p_nivel_usuario integer, p_motivo text, p_user text, p_user_nome text) TO postgres;
+GRANT ALL ON FUNCTION public.fin_titulo_aprovacao_decidir(p_loja bigint, p_id bigint, p_acao text, p_nivel_usuario integer, p_motivo text, p_user text, p_user_nome text) TO service_role;
+
+
+--
 -- Name: FUNCTION fin_titulo_pagar_cancelar(p_loja bigint, p_id bigint, p_motivo text, p_user text, p_user_nome text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -23940,6 +25980,24 @@ GRANT ALL ON FUNCTION public.fin_titulo_pagar_detalhe(p_loja bigint, p_id bigint
 REVOKE ALL ON FUNCTION public.fin_titulo_pagar_salvar(p_loja bigint, p_id bigint, p_dados jsonb, p_user text, p_user_nome text, p_chave text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fin_titulo_pagar_salvar(p_loja bigint, p_id bigint, p_dados jsonb, p_user text, p_user_nome text, p_chave text) TO postgres;
 GRANT ALL ON FUNCTION public.fin_titulo_pagar_salvar(p_loja bigint, p_id bigint, p_dados jsonb, p_user text, p_user_nome text, p_chave text) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_titulo_valor_confirmar(p_loja bigint, p_id bigint, p_valor text, p_user text, p_user_nome text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_titulo_valor_confirmar(p_loja bigint, p_id bigint, p_valor text, p_user text, p_user_nome text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_titulo_valor_confirmar(p_loja bigint, p_id bigint, p_valor text, p_user text, p_user_nome text) TO postgres;
+GRANT ALL ON FUNCTION public.fin_titulo_valor_confirmar(p_loja bigint, p_id bigint, p_valor text, p_user text, p_user_nome text) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_titulos_aprovacao_listar(p_loja bigint, p_situacao text, p_limite integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_titulos_aprovacao_listar(p_loja bigint, p_situacao text, p_limite integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_titulos_aprovacao_listar(p_loja bigint, p_situacao text, p_limite integer) TO postgres;
+GRANT ALL ON FUNCTION public.fin_titulos_aprovacao_listar(p_loja bigint, p_situacao text, p_limite integer) TO service_role;
 
 
 --
@@ -23976,6 +26034,33 @@ GRANT ALL ON FUNCTION public.fin_titulos_da_nota_gerar_manual(p_loja bigint, p_n
 REVOKE ALL ON FUNCTION public.fin_titulos_pagar_listar(p_loja bigint, p_filtros jsonb, p_limite integer, p_offset integer, p_hoje date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fin_titulos_pagar_listar(p_loja bigint, p_filtros jsonb, p_limite integer, p_offset integer, p_hoje date) TO postgres;
 GRANT ALL ON FUNCTION public.fin_titulos_pagar_listar(p_loja bigint, p_filtros jsonb, p_limite integer, p_offset integer, p_hoje date) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_titulos_receber_listar(p_loja bigint, p_filtros jsonb, p_limite integer, p_offset integer, p_hoje date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_titulos_receber_listar(p_loja bigint, p_filtros jsonb, p_limite integer, p_offset integer, p_hoje date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_titulos_receber_listar(p_loja bigint, p_filtros jsonb, p_limite integer, p_offset integer, p_hoje date) TO postgres;
+GRANT ALL ON FUNCTION public.fin_titulos_receber_listar(p_loja bigint, p_filtros jsonb, p_limite integer, p_offset integer, p_hoje date) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_transferencia_estornar(p_loja bigint, p_id bigint, p_motivo text, p_user text, p_user_nome text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_transferencia_estornar(p_loja bigint, p_id bigint, p_motivo text, p_user text, p_user_nome text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_transferencia_estornar(p_loja bigint, p_id bigint, p_motivo text, p_user text, p_user_nome text) TO postgres;
+GRANT ALL ON FUNCTION public.fin_transferencia_estornar(p_loja bigint, p_id bigint, p_motivo text, p_user text, p_user_nome text) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_transferencia_registrar(p_loja bigint, p_dados jsonb, p_user text, p_user_nome text, p_chave text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_transferencia_registrar(p_loja bigint, p_dados jsonb, p_user text, p_user_nome text, p_chave text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_transferencia_registrar(p_loja bigint, p_dados jsonb, p_user text, p_user_nome text, p_chave text) TO postgres;
+GRANT ALL ON FUNCTION public.fin_transferencia_registrar(p_loja bigint, p_dados jsonb, p_user text, p_user_nome text, p_chave text) TO service_role;
 
 
 --
@@ -25346,12 +27431,57 @@ GRANT ALL ON FUNCTION public.trg_fin_imutavel() TO service_role;
 
 
 --
+-- Name: FUNCTION trg_fin_pagamento_exige_aprovacao(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.trg_fin_pagamento_exige_aprovacao() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.trg_fin_pagamento_exige_aprovacao() TO postgres;
+GRANT ALL ON FUNCTION public.trg_fin_pagamento_exige_aprovacao() TO service_role;
+
+
+--
 -- Name: FUNCTION trg_fin_pagamentos_guarda(); Type: ACL; Schema: public; Owner: -
 --
 
 GRANT ALL ON FUNCTION public.trg_fin_pagamentos_guarda() TO postgres;
 GRANT ALL ON FUNCTION public.trg_fin_pagamentos_guarda() TO authenticated;
 GRANT ALL ON FUNCTION public.trg_fin_pagamentos_guarda() TO service_role;
+
+
+--
+-- Name: FUNCTION trg_fin_recebimentos_guarda(); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.trg_fin_recebimentos_guarda() TO postgres;
+GRANT ALL ON FUNCTION public.trg_fin_recebimentos_guarda() TO authenticated;
+GRANT ALL ON FUNCTION public.trg_fin_recebimentos_guarda() TO service_role;
+
+
+--
+-- Name: FUNCTION trg_fin_titulo_aprovacao(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.trg_fin_titulo_aprovacao() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.trg_fin_titulo_aprovacao() TO postgres;
+GRANT ALL ON FUNCTION public.trg_fin_titulo_aprovacao() TO service_role;
+
+
+--
+-- Name: FUNCTION trg_fin_titulo_aprovacao_evento(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.trg_fin_titulo_aprovacao_evento() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.trg_fin_titulo_aprovacao_evento() TO postgres;
+GRANT ALL ON FUNCTION public.trg_fin_titulo_aprovacao_evento() TO service_role;
+
+
+--
+-- Name: FUNCTION trg_fin_transferencias_guarda(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.trg_fin_transferencias_guarda() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.trg_fin_transferencias_guarda() TO postgres;
+GRANT ALL ON FUNCTION public.trg_fin_transferencias_guarda() TO service_role;
 
 
 --
@@ -26371,14 +28501,6 @@ GRANT ALL ON SEQUENCE public.fin_categorias_id_seq TO service_role;
 
 
 --
--- Name: TABLE fin_contas_correntes; Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON TABLE public.fin_contas_correntes TO postgres;
-GRANT ALL ON TABLE public.fin_contas_correntes TO service_role;
-
-
---
 -- Name: SEQUENCE fin_contas_correntes_id_seq; Type: ACL; Schema: public; Owner: -
 --
 
@@ -26410,6 +28532,23 @@ GRANT ALL ON SEQUENCE public.fin_eventos_id_seq TO service_role;
 
 GRANT ALL ON TABLE public.fin_familia_categoria TO postgres;
 GRANT ALL ON TABLE public.fin_familia_categoria TO service_role;
+
+
+--
+-- Name: TABLE fin_formas_recebimento; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.fin_formas_recebimento TO postgres;
+GRANT ALL ON TABLE public.fin_formas_recebimento TO service_role;
+
+
+--
+-- Name: SEQUENCE fin_formas_recebimento_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON SEQUENCE public.fin_formas_recebimento_id_seq TO postgres;
+GRANT ALL ON SEQUENCE public.fin_formas_recebimento_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.fin_formas_recebimento_id_seq TO service_role;
 
 
 --
@@ -26447,6 +28586,57 @@ GRANT ALL ON SEQUENCE public.fin_pagamentos_id_seq TO service_role;
 
 
 --
+-- Name: TABLE fin_recebimentos; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.fin_recebimentos TO postgres;
+GRANT ALL ON TABLE public.fin_recebimentos TO service_role;
+
+
+--
+-- Name: SEQUENCE fin_recebimentos_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON SEQUENCE public.fin_recebimentos_id_seq TO postgres;
+GRANT ALL ON SEQUENCE public.fin_recebimentos_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.fin_recebimentos_id_seq TO service_role;
+
+
+--
+-- Name: TABLE fin_recorrentes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.fin_recorrentes TO postgres;
+GRANT ALL ON TABLE public.fin_recorrentes TO service_role;
+
+
+--
+-- Name: SEQUENCE fin_recorrentes_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON SEQUENCE public.fin_recorrentes_id_seq TO postgres;
+GRANT ALL ON SEQUENCE public.fin_recorrentes_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.fin_recorrentes_id_seq TO service_role;
+
+
+--
+-- Name: TABLE fin_recorrentes_ocorrencias; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.fin_recorrentes_ocorrencias TO postgres;
+GRANT ALL ON TABLE public.fin_recorrentes_ocorrencias TO service_role;
+
+
+--
+-- Name: SEQUENCE fin_recorrentes_ocorrencias_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON SEQUENCE public.fin_recorrentes_ocorrencias_id_seq TO postgres;
+GRANT ALL ON SEQUENCE public.fin_recorrentes_ocorrencias_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.fin_recorrentes_ocorrencias_id_seq TO service_role;
+
+
+--
 -- Name: TABLE fin_titulos_pagar; Type: ACL; Schema: public; Owner: -
 --
 
@@ -26461,6 +28651,40 @@ GRANT ALL ON TABLE public.fin_titulos_pagar TO service_role;
 GRANT ALL ON SEQUENCE public.fin_titulos_pagar_id_seq TO postgres;
 GRANT ALL ON SEQUENCE public.fin_titulos_pagar_id_seq TO authenticated;
 GRANT ALL ON SEQUENCE public.fin_titulos_pagar_id_seq TO service_role;
+
+
+--
+-- Name: TABLE fin_titulos_receber; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.fin_titulos_receber TO postgres;
+GRANT ALL ON TABLE public.fin_titulos_receber TO service_role;
+
+
+--
+-- Name: SEQUENCE fin_titulos_receber_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON SEQUENCE public.fin_titulos_receber_id_seq TO postgres;
+GRANT ALL ON SEQUENCE public.fin_titulos_receber_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.fin_titulos_receber_id_seq TO service_role;
+
+
+--
+-- Name: TABLE fin_transferencias; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.fin_transferencias TO postgres;
+GRANT ALL ON TABLE public.fin_transferencias TO service_role;
+
+
+--
+-- Name: SEQUENCE fin_transferencias_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON SEQUENCE public.fin_transferencias_id_seq TO postgres;
+GRANT ALL ON SEQUENCE public.fin_transferencias_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.fin_transferencias_id_seq TO service_role;
 
 
 --
