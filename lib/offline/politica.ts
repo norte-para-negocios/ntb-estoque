@@ -19,6 +19,8 @@
 // Contas a receber das vendas (05/11/2026, migration 380): financeiro-receber#* também ficam FORA, pelo mesmo motivo.
 // Fase F NF-e de saída (20/10/2026): nfe-saida#* e transferencia-loja#* ficam FORA de propósito: assinam com o certificado
 // e falam com a SEFAZ (ou gravam nas tabelas das migrations 260/261, fora de offline_tabelas). Só com internet.
+// Fase 5 (06/11/2026, migration 400): variacao-preco#salvarLimiteVariacaoPreco fica FORA (só dev; a coluna nova de
+// estoque_config só chega ao desktop depois do gerar-schema). Só com internet.
 export type ModoOffline = 'leitura' | 'local' | 'fila' | 'depende'
 
 const leitura = [

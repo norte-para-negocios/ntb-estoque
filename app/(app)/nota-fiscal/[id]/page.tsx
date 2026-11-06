@@ -24,6 +24,8 @@ import { ManifestacaoNF } from '@/components/nota-fiscal/ManifestacaoNF'
 import { FreteCteNF } from '@/components/nota-fiscal/FreteCteNF'
 import { HistoricoProcessamentoNF } from '@/components/nota-fiscal/HistoricoProcessamentoNF'
 import { carregarConferencia } from './dados-proprio'
+import { carregarVariacaoPreco, limiteVariacaoPreco } from '@/lib/estoque/consumo-perdas-loader'
+import { alertasDaLista, LIMITE_PADRAO_PCT, type ItemComAlerta } from '@/lib/compras/variacao-preco-puro'
 import { carregarPedidoDaNota } from './dados-pedido'
 import { PedidoDaNotaNF } from '@/components/nota-fiscal/PedidoDaNotaNF'
 import { DevolucaoFornecedorNF } from '@/components/nota-fiscal/DevolucaoFornecedorNF'
@@ -149,6 +151,16 @@ export default async function NotaFiscalItensPage({
     try { contasNota = await titulosDaNota(lojaId, Number(id)) } catch (e) { erroContasNota = e instanceof Error ? e.message : String(e) }
   }
   const podeGerarContas = !!contasNota && (await requirePermissao(lojaId, PERM_FIN.contasPagar))
+  // T5.4 (migration 400), só desenvolvedor: preço do item × última compra do produto, acima do limite da loja
+  let alertasPreco: ItemComAlerta[] | null = null
+  let erroAlertasPreco: string | null = null
+  let limitePreco = LIMITE_PADRAO_PCT
+  if (dev && proprio && conferencia?.compra) {
+    const [cfgPreco, varPreco] = await Promise.all([limiteVariacaoPreco(lojaId), carregarVariacaoPreco(lojaId, { compraId: conferencia.compra.id })])
+    limitePreco = cfgPreco.limite
+    erroAlertasPreco = varPreco.erro
+    alertasPreco = alertasDaLista(varPreco.linhas, limitePreco)
+  }
 
   function fmtData(d: string | null) {
     if (!d) return null
@@ -352,6 +364,14 @@ export default async function NotaFiscalItensPage({
       {/* Celular: itens, painel de entrada, mais informações. Computador: painel fixo à direita dos dois. */}
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 lg:col-start-1">
+          {(erroAlertasPreco || (alertasPreco && alertasPreco.length > 0)) && (
+            <div className="mb-3 rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] shadow-[var(--shadow-sm)]">
+              <p className="font-semibold text-text">Variação de preço acima de {limitePreco.toLocaleString('pt-BR')}% <span className="ml-1 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-text-muted">só dev</span></p>
+              {erroAlertasPreco
+                ? <p className="text-warn">{erroAlertasPreco}</p>
+                : <ul className="mt-1 space-y-0.5">{alertasPreco!.map((a) => <li key={a.itemId} className={a.alerta.sentido === 'subiu' ? 'text-err' : 'text-warn'}><span className="text-text">{a.descricao ?? a.produto}:</span> {a.alerta.texto}</li>)}</ul>}
+            </div>
+          )}
           {proprio && conferencia?.itens.length ? (
             <ConferenciaNF notaId={Number(id)} itens={conferencia.itens} status={conferencia.compra?.status ?? 'pendente'} locais={conferencia.locais}
               podeConferir={podeManifestar} alertas={conferencia.sefaz.alertas} extras={extrasProprio} />

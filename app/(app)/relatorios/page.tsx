@@ -8,7 +8,7 @@ import { getCurrentLojaId } from '@/lib/auth'
 import { TableProperties } from 'lucide-react'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import {
-  TrendingUp, BarChart3, ShoppingCart, ArrowDownUp, DollarSign, Scale, Percent, ShieldCheck, CalendarCheck, ArrowUpRight, Boxes, ClipboardX, Factory, FileBarChart, Target, Flag, ChartColumnDecreasing, Warehouse, Calculator, Truck, BellRing,
+  TrendingUp, BarChart3, ShoppingCart, ArrowDownUp, DollarSign, Scale, Percent, ShieldCheck, CalendarCheck, ArrowUpRight, Boxes, ClipboardX, Factory, FileBarChart, Target, Flag, ChartColumnDecreasing, Warehouse, Calculator, Truck, BellRing, Sigma, Trash2, ChartSpline,
 } from 'lucide-react'
 
 type Rel = {
@@ -83,6 +83,15 @@ export default async function RelatoriosPage() {
   const secoes = RELATORIOS.map(semOmie).map((sec) => (dev ? sec : { ...sec, itens: sec.itens.filter((i) => !aindaEmTeste(i.href)) })).map((sec) =>
     proprio && sec.grupo === 'Faturamento'
       ? { ...sec, itens: [{ href: '/relatorio-lucro', titulo: 'Lucro', icon: TrendingUp, descricao: 'Faturamento menos o custo das mercadorias vendidas, por produto, família, tipo, dia ou mês.', pergunta: 'Quanto sobrou de cada venda?' }, ...sec.itens] }
+      : sec
+  ).map((sec) =>
+    // Fase 5 (migration 400): só estoque próprio e só desenvolvedor (rotas em ROTAS_SO_DEV)
+    proprio && dev && sec.grupo === 'Compras e custo'
+      ? { ...sec, itens: [...sec.itens,
+          { href: '/relatorio-consumo', titulo: 'Consumo teórico × real', icon: Sigma, descricao: 'O que a ficha técnica mandou baixar contra o que saiu de verdade entre duas contagens, com o desvio em reais.', pergunta: 'Onde estou perdendo insumo?' },
+          { href: '/relatorio-perdas', titulo: 'Perdas e desperdício', icon: Trash2, descricao: 'Saídas sem venda nem produção, com a causa: vencimento, quebra, desperdício e diferença de inventário.', pergunta: 'Quanto joguei fora e por quê?' },
+          { href: '/relatorio-variacao-preco', titulo: 'Variação de preço nas notas', icon: ChartSpline, descricao: 'Itens de nota com preço muito diferente da compra anterior do mesmo produto.', pergunta: 'Algum fornecedor subiu o preço?' },
+        ] }
       : sec
   )
 

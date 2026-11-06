@@ -58,6 +58,7 @@ import * as m54 from '@/lib/actions/transferencia-loja'
 import * as m55 from '@/lib/actions/transferencia'
 import * as m56 from '@/lib/actions/usuario'
 import * as m57 from '@/lib/actions/validade-proprio'
+import * as m58 from '@/lib/actions/variacao-preco'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Acao = (...args: any[]) => Promise<unknown>
@@ -303,4 +304,5 @@ export const ACOES: Readonly<Record<string, Acao>> = Object.freeze({
   'validade-proprio#baixarLoteVencido': m57.baixarLoteVencido as Acao,
   'validade-proprio#salvarAlertaValidade': m57.salvarAlertaValidade as Acao,
   'validade-proprio#reconciliarLotes': m57.reconciliarLotes as Acao,
+  'variacao-preco#salvarLimiteVariacaoPreco': m58.salvarLimiteVariacaoPreco as Acao,
 })

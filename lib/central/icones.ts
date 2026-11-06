@@ -6,7 +6,7 @@ import {
   HandCoins, History, Hourglass, IdCard, Landmark, Layers, LayoutDashboard, Lightbulb, List, ListChecks, ListOrdered,
   ListPlus, ListTree, Logs, MonitorDown, Network, Package, PackageCheck, PackagePlus, PackageSearch, Percent, PiggyBank, Plus,
   Presentation, Printer, QrCode, Receipt, ReceiptText, RefreshCw, Repeat, Replace, Scale, ScanSearch, ScrollText, Search, Shapes,
-  ShieldCheck, ShoppingCart, Sigma, SlidersHorizontal, SquareKanban, Stethoscope, Store, Table2, Tags, Target, TrendingDown,
+  ShieldCheck, ShoppingCart, Sigma, SlidersHorizontal, SquareKanban, Stethoscope, Store, Table2, Tags, Target, Trash2, TrendingDown,
   TrendingUp, FileBarChart, Truck, Undo2, Upload, UserCog, UserSearch, Users, Vault, Wallet, Warehouse, Wrench,
   type LucideIcon,
 } from 'lucide-react'
@@ -118,6 +118,8 @@ export const ICONE_POR_ROTA: Record<string, Icone> = {
   '/sugestao-compra?ver=abaixo': [PackagePlus, 'relatorio'],
   '/relatorio-curva-abc': [ChartBarDecreasing, 'relatorio'],
   '/relatorio-cmv': [Calculator, 'relatorio'],
+  '/relatorio-consumo': [Sigma, 'relatorio'],
+  '/relatorio-perdas': [Trash2, 'relatorio'],
   '/relatorio-movimentacao': [ChartColumnStacked, 'relatorio'],
   // Compras
   '/pedido-compra/novo': [ShoppingCart, 'novo'],
@@ -137,6 +139,7 @@ export const ICONE_POR_ROTA: Record<string, Icone> = {
   '/fornecedor/importar': [FileSpreadsheet, 'importar'],
   '/compras-cadastros': [UserCog, 'marca'],
   '/relatorio-compras': [ChartBar, 'relatorio'],
+  '/relatorio-variacao-preco': [ChartSpline, 'relatorio'],
   '/relatorio-produtos-fornecedor': [PackageSearch, 'relatorio'],
   // Produção
   '/ordem-producao': [Factory, 'marca'],

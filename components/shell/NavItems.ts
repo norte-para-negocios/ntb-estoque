@@ -40,6 +40,9 @@ import {
   Percent,
   TrendingUp,
   FileBarChart,
+  Sigma,
+  Trash2,
+  ChartSpline,
 } from 'lucide-react'
 
 export type NavItem = {
@@ -93,6 +96,10 @@ export const NAV_ITEMS: NavItem[] = [
   // DRE e fluxo de caixa (Fase 4 passo 5, migration 390), também só dev (rota-mãe /financeiro em ROTAS_SO_DEV).
   { href: '/financeiro/fluxo-caixa', label: 'Fluxo de caixa', icon: TrendingUp, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
   { href: '/financeiro/dre', label: 'DRE', icon: FileBarChart, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
+  // Fase 5 (T5.3/T5.4, migration 400): relatórios de estoque próprio, só dev (rotas em ROTAS_SO_DEV).
+  { href: '/relatorio-consumo', label: 'Consumo teórico × real', icon: Sigma, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
+  { href: '/relatorio-perdas', label: 'Perdas e desperdício', icon: Trash2, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
+  { href: '/relatorio-variacao-preco', label: 'Variação de preço nas notas', icon: ChartSpline, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
   { href: '/nota-fiscal', label: 'Notas Fiscais', icon: FileText, group: 'Operação' },
   { href: '/ordem-producao', label: 'Ordens de Produção', icon: Factory, group: 'Operação' },
   { href: '/transferencia', label: 'Transferências', icon: ArrowLeftRight, group: 'Operação' },

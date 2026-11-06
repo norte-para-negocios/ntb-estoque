@@ -19,6 +19,10 @@ export const ROTAS_SO_DEV = [
   '/financeiro',
   // Relatórios dinâmicos estilo Omie (tabela dinâmica por cubo): só desenvolvedor até conferir os números com o Omie.
   '/relatorios/dinamico',
+  // Fase 5 (T5.3/T5.4, migration 400): consumo teórico × real, perdas com causa e variação de preço na nota. Só estoque próprio.
+  '/relatorio-consumo',
+  '/relatorio-perdas',
+  '/relatorio-variacao-preco',
 ] as const
 
 export async function ehDesenvolvedor(): Promise<boolean> {

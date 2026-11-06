@@ -110,6 +110,9 @@ export const MODULOS: ModuloCentral[] = [
       { label: 'Fichas que usam o insumo', href: '/estoque/fichas', desc: 'Onde cada insumo é consumido' },
       { label: 'Quem mexeu', href: '/estoque/quem-mexeu', desc: 'Quem alterou o estoque e quando' },
       { label: 'Sincronização Vendas', href: '/sync-catalogo', desc: 'Catálogo enviado ao Norte Vendas' },
+      // Fase 5 (migration 400), só dev: herdam a regra do item de menu (superAdmin, estoque próprio)
+      { label: 'Consumo teórico × real', href: '/relatorio-consumo', desc: 'Ficha × vendas contra as contagens, com o desvio em R$', soEstoqueProprio: true },
+      { label: 'Perdas e desperdício', href: '/relatorio-perdas', desc: 'Vencimento, quebra, desperdício e inventário', soEstoqueProprio: true },
     ],
     secoes: [
       {
@@ -158,6 +161,7 @@ export const MODULOS: ModuloCentral[] = [
       { label: 'Sugestão de compra', href: '/sugestao-compra', desc: 'O que comprar agora' },
       { label: 'Tarefas de compras', href: '/tarefas-compras', desc: 'Pendências do comprador' },
       { label: 'Pedidos de compra', href: '/pedido-compra', desc: 'O que foi pedido e ainda não chegou' },
+      { label: 'Variação de preço nas notas', href: '/relatorio-variacao-preco', desc: 'Preço da nota × última compra, acima do limite', soEstoqueProprio: true },
       { label: 'Requisições de compra', href: '/requisicao-compra', desc: 'Pedidos internos de reposição' },
       { label: 'Etapas do recebimento', href: '/nota-fiscal/etapas', desc: 'Conferência e entrada da mercadoria', soEstoqueProprio: true },
       { label: 'Devoluções ao fornecedor', href: '/devolucao-fornecedor', desc: 'Mercadoria devolvida e nota de devolução' },
