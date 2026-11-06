@@ -36,6 +36,8 @@ import {
   Receipt,
   Landmark,
   type LucideIcon,
+  HandCoins,
+  Percent,
 } from 'lucide-react'
 
 export type NavItem = {
@@ -83,6 +85,9 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/financeiro/aprovacoes', label: 'Aprovação de pagamentos', icon: Receipt, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
   { href: '/financeiro/recorrentes', label: 'Contas recorrentes', icon: Receipt, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
   { href: '/financeiro/lancamentos', label: 'Lançamentos e transferências', icon: Landmark, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
+  // Contas a receber das vendas (migration 380), também só dev (rota-mãe /financeiro em ROTAS_SO_DEV).
+  { href: '/financeiro/contas-receber', label: 'Contas a receber', icon: HandCoins, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
+  { href: '/financeiro/formas-recebimento', label: 'Taxas e prazos de recebimento', icon: Percent, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
   { href: '/nota-fiscal', label: 'Notas Fiscais', icon: FileText, group: 'Operação' },
   { href: '/ordem-producao', label: 'Ordens de Produção', icon: Factory, group: 'Operação' },
   { href: '/transferencia', label: 'Transferências', icon: ArrowLeftRight, group: 'Operação' },

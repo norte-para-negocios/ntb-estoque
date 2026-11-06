@@ -163,6 +163,8 @@ export const ICONE_POR_ROTA: Record<string, Icone> = {
   '/financeiro/aprovacoes': [BadgeCheck, 'alerta'],
   '/financeiro/recorrentes': [CalendarClock, 'marca'],
   '/financeiro/lancamentos': [ArrowLeftRight, 'marca'],
+  '/financeiro/contas-receber': [HandCoins, 'marca'],
+  '/financeiro/formas-recebimento': [Percent, 'marca'],
   '/relatorio-mensal': [Presentation, 'relatorio'],
   '/faturamento': [BadgeDollarSign, 'relatorio'],
   '/relatorio-faturamento': [FileSpreadsheet, 'relatorio'],

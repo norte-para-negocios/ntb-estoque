@@ -225,6 +225,8 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
       { nome: 'Financeiro - Configurar aprovacao', label: 'Ligar a aprovação e definir as faixas de valor' },
       { nome: 'Financeiro - Contas recorrentes', label: 'Cadastrar contas recorrentes (aluguel, energia…)' },
       { nome: 'Financeiro - Lancamentos e transferencias', label: 'Lançamento avulso e transferência entre contas (com estorno)' },
+      { nome: 'Financeiro - Contas a receber', label: 'Ver contas a receber das vendas e cadastrar taxas e prazos' },
+      { nome: 'Financeiro - Contas a receber - Receber', label: 'Registrar e estornar recebimentos' },
     ],
   },
   {
@@ -265,6 +267,8 @@ export const MENU_PERMISSAO: Record<string, string> = {
   '/financeiro/aprovacoes': 'Financeiro - Aprovar pagamento',
   '/financeiro/recorrentes': 'Financeiro - Contas recorrentes',
   '/financeiro/lancamentos': 'Financeiro - Lancamentos e transferencias',
+  '/financeiro/contas-receber': 'Financeiro - Contas a receber',
+  '/financeiro/formas-recebimento': 'Financeiro - Contas a receber',
   '/nota-fiscal': 'Notas Fiscais',
   '/ordem-producao': 'Ordens de Producao',
   '/transferencia': 'Transferencias - Ver',

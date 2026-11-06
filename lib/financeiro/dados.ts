@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { exigirDev } from '@/lib/recursos-dev'
 import * as q from './consultas'
+import * as rc from './receber-consultas'
 
 // Leitura do financeiro (migrations 285/286) para as telas. Sempre pelo servidor, com o service role, DEPOIS de checar:
 // desenvolvedor, loja de estoque próprio e permissão. Nenhum cliente acessa as tabelas fin_* direto.
@@ -22,6 +23,9 @@ export const PERM = {
   configurarAprovacao: 'Financeiro - Configurar aprovacao',
   recorrentes: 'Financeiro - Contas recorrentes',
   lancamentos: 'Financeiro - Lancamentos e transferencias',
+  // 380: contas a receber das vendas do Norte Vendas (ver e configurar / dar baixa)
+  contasReceber: 'Financeiro - Contas a receber',
+  receber: 'Financeiro - Contas a receber - Receber',
 } as const
 
 /** Porta de entrada de toda página do financeiro: 404 para quem não é dev, loja não-própria ou sem permissão. */
@@ -30,7 +34,8 @@ export async function acessoFinanceiro(permissao: string): Promise<{ lojaId: num
   const lojaId = await getCurrentLojaId()
   if ((await modoDaLoja(lojaId)) !== 'proprio') notFound()
   if (!(await requirePermissao(lojaId, permissao))) notFound()
-  const podePagar = permissao === PERM.contasPagar ? await requirePermissao(lojaId, PERM.pagar) : false
+  const podePagar = permissao === PERM.contasPagar ? await requirePermissao(lojaId, PERM.pagar)
+    : permissao === PERM.contasReceber ? await requirePermissao(lojaId, PERM.receber) : false
   return { lojaId, podePagar }
 }
 
@@ -70,6 +75,12 @@ export async function nivelAprovacaoUsuario(lojaId: number): Promise<0 | 1 | 2> 
   if (await requirePermissao(lojaId, PERM.aprovarAlto)) return 2
   return (await requirePermissao(lojaId, PERM.aprovar)) ? 1 : 0
 }
+// Contas a receber das vendas (migration 380): cadastro das formas, títulos e a chave da loja.
+export type { FormaCadastro, TituloReceber, TotaisReceber, FiltrosReceber } from './receber-consultas'
+export const listarFormasRecebimento = (lojaId: number) => rc.listarFormasRecebimento(createServiceClient(), lojaId)
+export const listarTitulosReceber = (lojaId: number, filtros: rc.FiltrosReceber, hoje: string, limite: number, offset: number) =>
+  rc.listarTitulosReceber(createServiceClient(), lojaId, filtros, hoje, limite, offset)
+export const chaveReceberVendas = (lojaId: number) => rc.chaveLigada(createServiceClient(), lojaId)
 
 /** Lojas de estoque próprio (ativas) em que o desenvolvedor tem a permissão: a tela "Notas sem conta a pagar" olha todas. */
 export async function lojasPropriasComPermissao(permissao: string): Promise<{ id: number; nome: string }[]> {

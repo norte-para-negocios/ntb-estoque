@@ -242,7 +242,8 @@ export const MODULOS: ModuloCentral[] = [
       { label: 'Contas recorrentes', href: '/financeiro/recorrentes', desc: 'Aluguel, energia: contas que se repetem', soEstoqueProprio: true },
       { label: 'Lançamentos e transferências', href: '/financeiro/lancamentos', desc: 'Despesa ou receita avulsa e transferência entre contas', soEstoqueProprio: true },
       breve('Resumo do caixa', 'Caixa de hoje e vencimentos'),
-      breve('Contas a receber', 'Cartões e convênios'),
+      { label: 'Contas a receber', href: '/financeiro/contas-receber', desc: 'Vendas do Norte Vendas por forma de pagamento', soEstoqueProprio: true },
+      { label: 'Taxas e prazos de recebimento', href: '/financeiro/formas-recebimento', desc: 'Adquirente, taxa e prazo de cada forma', soEstoqueProprio: true },
     ],
     secoes: [
       {

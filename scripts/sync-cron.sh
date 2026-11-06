@@ -88,6 +88,10 @@ if [ "$bloco" -eq 4 ]; then hit /api/cron/sync-familias; fi
 if [ "$bloco" -eq 1 ] || [ "$bloco" -eq 4 ]; then hit /api/cron/gerar-notificacoes; fi
 # Reenvia ao Contabo o faturamento das lojas de estoque proprio que nao chegou no fechamento (so local, sem Omie).
 if [ "$bloco" -eq 5 ]; then hit /api/cron/sync-fechamentos-frio; fi
+# Contas a receber das vendas do Norte Vendas (migration 380, Fase 4 passo 3): so lojas de estoque proprio com
+# lojas.fin_cr_vendas_ativo ligada (nunca a 4). Um titulo por dia x forma nos ultimos 7 dias (FIN_CR_DIAS); so o banco.
+# 1x por hora (bloco 5, depois do reenvio do faturamento).
+if [ "$bloco" -eq 5 ]; then hit /api/cron/gerar-receber-vendas; fi
 
 # Catalogo unificado Vendas <-> Estoque (migration 141): so age em lojas modo 'proprio' (liga a loja ao Vendas,
 # reconcilia os catalogos e entrega o outbox). Roda a cada ciclo; sem loja 'proprio' responde 200 sem fazer nada.
