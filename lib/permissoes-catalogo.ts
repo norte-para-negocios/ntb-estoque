@@ -219,6 +219,8 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
       { nome: 'Financeiro - Contas correntes', label: 'Ver e cadastrar contas correntes e extrato' },
       { nome: 'Financeiro - Categorias', label: 'Cadastrar categorias financeiras (DRE)' },
       { nome: 'Financeiro - Decidir nota desfeita', label: 'Decidir sobre conta já paga de nota desfeita (estornar ou manter)' },
+      { nome: 'Financeiro - Contas a receber', label: 'Ver contas a receber das vendas e cadastrar taxas e prazos' },
+      { nome: 'Financeiro - Contas a receber - Receber', label: 'Registrar e estornar recebimentos' },
     ],
   },
   {
@@ -256,6 +258,8 @@ export const MENU_PERMISSAO: Record<string, string> = {
   '/financeiro/familias': 'Financeiro - Categorias',
   '/financeiro/notas-sem-conta': 'Financeiro - Contas a pagar',
   '/financeiro/notas-desfeitas': 'Financeiro - Decidir nota desfeita',
+  '/financeiro/contas-receber': 'Financeiro - Contas a receber',
+  '/financeiro/formas-recebimento': 'Financeiro - Contas a receber',
   '/nota-fiscal': 'Notas Fiscais',
   '/ordem-producao': 'Ordens de Producao',
   '/transferencia': 'Transferencias - Ver',

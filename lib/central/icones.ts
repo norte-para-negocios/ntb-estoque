@@ -160,6 +160,8 @@ export const ICONE_POR_ROTA: Record<string, Icone> = {
   '/financeiro/notas-sem-conta': [FileExclamationPoint, 'alerta'],
   '/financeiro/notas-desfeitas': [FileX, 'alerta'],
   '/financeiro/familias': [Tags, 'marca'],
+  '/financeiro/contas-receber': [HandCoins, 'marca'],
+  '/financeiro/formas-recebimento': [Percent, 'marca'],
   '/relatorio-mensal': [Presentation, 'relatorio'],
   '/faturamento': [BadgeDollarSign, 'relatorio'],
   '/relatorio-faturamento': [FileSpreadsheet, 'relatorio'],

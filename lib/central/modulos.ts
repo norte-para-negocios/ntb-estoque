@@ -239,7 +239,8 @@ export const MODULOS: ModuloCentral[] = [
       { label: 'Notas desfeitas com conta paga', href: '/financeiro/notas-desfeitas', desc: 'O gerente decide: estornar ou manter', soEstoqueProprio: true },
       { label: 'Categoria por família', href: '/financeiro/familias', desc: 'Família do produto → categoria', soEstoqueProprio: true },
       breve('Resumo do caixa', 'Caixa de hoje e vencimentos'),
-      breve('Contas a receber', 'Cartões e convênios'),
+      { label: 'Contas a receber', href: '/financeiro/contas-receber', desc: 'Vendas do Norte Vendas por forma de pagamento', soEstoqueProprio: true },
+      { label: 'Taxas e prazos de recebimento', href: '/financeiro/formas-recebimento', desc: 'Adquirente, taxa e prazo de cada forma', soEstoqueProprio: true },
       breve('Aprovação de pagamentos', 'Aguardando o dono'),
     ],
     secoes: [
