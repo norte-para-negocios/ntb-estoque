@@ -5,6 +5,7 @@ import { modoDaLoja } from '@/lib/estoque/ledger'
 import { exigirDev } from '@/lib/recursos-dev'
 import * as q from './consultas'
 import * as rc from './receber-consultas'
+import * as rl from './relatorios-consultas'
 
 // Leitura do financeiro (migrations 285/286) para as telas. Sempre pelo servidor, com o service role, DEPOIS de checar:
 // desenvolvedor, loja de estoque próprio e permissão. Nenhum cliente acessa as tabelas fin_* direto.
@@ -86,6 +87,23 @@ export const chaveReceberVendas = (lojaId: number) => rc.chaveLigada(createServi
 export async function lojasPropriasComPermissao(permissao: string): Promise<{ id: number; nome: string }[]> {
   await exigirDev()
   const { data, error } = await createServiceClient().from('lojas').select('id, nome').eq('modo_estoque', 'proprio').eq('ativo', true).order('id')
+  if (error) throw new Error(`Não foi possível carregar as lojas: ${error.message}`)
+  const out: { id: number; nome: string }[] = []
+  for (const l of (data ?? []) as { id: number; nome: string }[]) if (await requirePermissao(l.id, permissao)) out.push({ id: Number(l.id), nome: String(l.nome) })
+  return out
+}
+
+// DRE e fluxo de caixa (Fase 4 passo 5): só leitura; regras em dre-puro.ts e fluxo-caixa-puro.ts.
+export const entradaDreLoja = (lojaId: number, meses: string[]) => rl.lerEntradaDreLoja(createServiceClient(), lojaId, meses)
+export const vendasPorProdutoMes = (lojaId: number, mes: string) => rl.vendasPorProduto(createServiceClient(), lojaId, mes)
+export const entradaFluxo = (lojaId: number, de: string, ate: string, hoje: string, por: 'dia' | 'semana' | 'mes') =>
+  rl.lerEntradaFluxo(createServiceClient(), lojaId, de, ate, hoje, por)
+
+/** Lojas da DRE consolidada: estoque próprio, ativas, reais (loja de teste fica fora) e com a permissão do desenvolvedor. */
+export async function lojasDaConsolidada(permissao: string): Promise<{ id: number; nome: string }[]> {
+  await exigirDev()
+  const { data, error } = await createServiceClient().from('lojas').select('id, nome').eq('modo_estoque', 'proprio').eq('ativo', true)
+    .eq('is_test', false).order('id')
   if (error) throw new Error(`Não foi possível carregar as lojas: ${error.message}`)
   const out: { id: number; nome: string }[] = []
   for (const l of (data ?? []) as { id: number; nome: string }[]) if (await requirePermissao(l.id, permissao)) out.push({ id: Number(l.id), nome: String(l.nome) })

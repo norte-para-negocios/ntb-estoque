@@ -38,10 +38,11 @@ export const OPCOES_SITUACAO: { value: string; label: string }[] = [
 
 export const GRUPOS_DRE: { value: string; label: string }[] = [
   { value: 'receita_bruta', label: 'Receita bruta' },
-  { value: 'deducoes', label: 'Deduções (impostos sobre vendas)' },
+  { value: 'deducoes', label: 'Deduções (impostos sobre vendas e taxas de cartão)' },
   { value: 'cmv', label: 'Custo das mercadorias (CMV)' },
   { value: 'despesa_operacional', label: 'Despesas operacionais' },
   { value: 'despesa_pessoal', label: 'Despesas com pessoal' },
+  { value: 'despesa_ocupacao', label: 'Ocupação (aluguel, energia, água, gás)' },
   { value: 'despesa_administrativa', label: 'Despesas administrativas' },
   { value: 'despesa_financeira', label: 'Despesas financeiras' },
   { value: 'receita_financeira', label: 'Receitas financeiras' },

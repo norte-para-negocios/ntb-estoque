@@ -1,6 +1,8 @@
--- Teste da migration 340 (conta a pagar gerada pela nota de entrada). Roda na loja 19 "ZZ NORTE ERP LAB" (proprio, is_test)
--- e numa loja Omie criada aqui mesmo, TUDO dentro de BEGIN … ROLLBACK (nada fica gravado). Rodar com
--- scripts/testes-sql/340_rodar.sh (aplica a 340 sem o begin/commit dela dentro da mesma transação e desfaz no fim).
+-- Teste da migration 340 (conta a pagar gerada pela nota de entrada), na regra NOVA da 360 (categoria pela família de
+-- maior valor, sem categoria padrão; sem duplicata = à vista; desfazer não olha a chave). Roda na loja 19 "ZZ NORTE ERP
+-- LAB" (proprio, is_test) e numa loja Omie criada aqui mesmo, TUDO dentro de BEGIN … ROLLBACK (nada fica gravado). Rodar
+-- com scripts/testes-sql/340_rodar.sh, que roda contra as funções que já estão no banco (340 e 360 aplicadas): reaplicar
+-- a 340 dentro da transação trocaria as funções da 360 pelas antigas e o teste passaria testando código morto.
 -- Usa o caminho real: gravar_nota_sefaz → registrar_compra_sefaz → lancar_compra ("Confirmar entrada") → estornar_compra
 -- ("Desfazer entrada") → sefaz_marcar_cancelada. Espera: NOTICE "340 CONTA A PAGAR DA NOTA OK".
 -- NUNCA rodar em loja real; nada aqui fala com Omie nem com a SEFAZ.
@@ -13,6 +15,7 @@ declare
   L constant bigint := 19; LOC constant bigint := 8000000000019; PROD constant bigint := 8000000000258;
   CNPJ constant text := '99340000000191';
   CH1 constant text := '29261199340000019155001' || lpad('340001', 21, '0');
+  FAM constant bigint := 8000000000257; -- família "Atacado" do produto de teste
   r jsonb; v_nota bigint; v_comp bigint; v_n int; v_forn bigint; v_cat bigint; v_conta bigint; v_t1 bigint; x record;
 begin
   assert (select modo_estoque = 'proprio' and is_test from lojas where id = L), 'loja 19 tem de ser a loja-laboratório própria';
@@ -20,6 +23,10 @@ begin
   assert (select fin_cp_da_nota_ativo from lojas where id = L), 'a 340 liga a chave na loja 19';
   assert not exists (select 1 from lojas where fin_cp_da_nota_ativo and (not is_test or id <> L)), 'nenhuma outra loja ligada (ODARA e reais desligadas)';
   assert not (select fin_cp_da_nota_ativo from lojas where id = 15), 'ODARA desligada';
+  assert (select codigo_familia from produtos where loja_id = L and codigo_produto = PROD) = FAM, 'produto de teste na família Atacado';
+  -- 360: sem categoria padrão. A conta leva a categoria ligada à família de maior valor (aqui, Atacado → insumos).
+  select id into v_cat from fin_categorias where loja_id = L and padrao = 'cmv_insumos';
+  perform fin_familia_categoria_salvar(L, FAM, v_cat, 'u-teste', 'Teste 340');
 
   -- ========== 1) nota com 3 duplicatas (cobr/dup), confirmada pela tela
   r := gravar_nota_sefaz(L, jsonb_build_object('chave', CH1, 'numero', '000340', 'serie', '1', 'modelo', '55', 'emissao', '2026-11-03',
@@ -43,10 +50,11 @@ begin
   if v_n <> 3 then raise notice 'DEBUG % | %', r, (select jsonb_agg(detalhe) from fin_eventos where loja_id = L and entidade = 'nota_entrada' and entidade_id = v_nota); end if;
   assert v_n = 3, '3 duplicatas = 3 contas a pagar, veio ' || v_n;
   select id into v_forn from fornecedores where loja_id = L and cnpj_cpf = CNPJ;
-  select id into v_cat from fin_categorias where loja_id = L and padrao = 'cmv_revenda';
   for x in select * from fin_titulos_pagar where loja_id = L and origem_tipo = 'nota_entrada' and origem_id = v_nota order by parcela loop
     assert x.valor = 100 and x.total_parcelas = 3 and x.fornecedor_id = v_forn and x.categoria_id = v_cat and x.documento = 'NF 340'
-       and x.data_emissao = '2026-11-03' and x.data_competencia = '2026-11-01'
+       and x.data_emissao = '2026-11-03'
+       -- 360: competência = mês da ENTRADA no estoque (não da emissão)
+       and x.data_competencia = date_trunc('month', fin_data_entrada_da_nota(L, v_nota))::date
        and x.chave_idempotencia = 'nota_entrada:' || v_nota || ':0:' || x.parcela, 'dados da parcela ' || x.parcela || ': ' || row_to_json(x)::text;
   end loop;
   assert (select array_agg(data_vencimento order by parcela) from fin_titulos_pagar where loja_id = L and origem_id = v_nota and origem_tipo = 'nota_entrada')
@@ -111,7 +119,7 @@ begin
   v_comp := (r->>'compra_id')::bigint;
   r := lancar_compra(jsonb_build_object('loja_id', L, 'id', v_comp, 'itens', '[]'::jsonb), LOC, null);
   select * into t from fin_titulos_pagar where loja_id = L and origem_tipo = 'nota_entrada' and origem_id = v_nota;
-  assert t.valor = 512.40 and t.parcela = 1 and t.total_parcelas = 1 and t.data_vencimento = '2026-11-02' and t.observacao like '%sem duplicata%',
+  assert t.valor = 512.40 and t.parcela = 1 and t.total_parcelas = 1 and t.data_vencimento = '2026-11-02' and t.observacao like '%à vista%',
     'sem duplicata: ' || row_to_json(t)::text;
 
   -- ========== 5) cancelada na SEFAZ: a conta aberta sai
@@ -152,7 +160,9 @@ begin
   exception when sqlstate '22023' then null; end;
 end $$;
 
--- ========== 10) loja própria SEM a chave (loja 19 com a chave desligada aqui dentro): não gera nem estorna nada
+-- ========== 10) loja própria SEM a chave (loja 19 com a chave desligada aqui dentro): a entrada não gera conta sozinha
+-- (o gatilho e o "Gerar" automático respeitam a chave). Desde a 360 o DESFAZER não olha a chave (conta gerada à mão em
+-- loja desligada não pode ficar órfã; coberto no teste da 360): aqui, desfazer uma nota sem conta não mexe em nada.
 do $$
 declare
   L constant bigint := 19; LOC constant bigint := 8000000000019; PROD constant bigint := 8000000000258;
@@ -172,14 +182,12 @@ begin
   v_comp := (r->>'compra_id')::bigint;
   r := lancar_compra(jsonb_build_object('loja_id', L, 'id', v_comp, 'itens', '[]'::jsonb), LOC, null);
   assert r->>'status' = 'lancada', 'entrada segue normal sem a chave: ' || r::text;
+  assert not exists (select 1 from fin_titulos_pagar where loja_id = L and origem_tipo = 'nota_entrada' and origem_id = v_nota), 'sem a chave o gatilho não gera';
   r := fin_titulos_da_nota_gerar(L, v_nota);
-  assert (r->>'gerados')::int = 0 and r->>'motivo' like '%não está ligada%', '"Gerar agora" também respeita a chave: ' || r::text;
-  -- estorno com a chave desligada: as contas abertas da nota 1 (gerada com a chave ligada) NÃO são tocadas
-  r := fin_titulos_da_nota_estornar(L, (select v::bigint from _t340 where k = 'nota1'));
-  assert (r->>'desligado')::boolean and (r->>'cancelados')::int = 0, 'estorno respeita a chave: ' || r::text;
+  assert (r->>'gerados')::int = 0 and r->>'motivo' like '%não está ligada%', 'o gerar automático também respeita a chave: ' || r::text;
   r := estornar_compra(v_comp, null);
   assert (select count(*) from fin_titulos_pagar where loja_id = L) = v_tit, 'sem a chave: nenhuma conta criada ou mexida';
-  assert (select count(*) from fin_eventos where loja_id = L) = v_ev, 'sem a chave: nenhum evento';
+  assert (select count(*) from fin_eventos where loja_id = L) = v_ev, 'desfazer nota sem conta: nenhum evento';
   update lojas set fin_cp_da_nota_ativo = true where id = L;
 end $$;
 

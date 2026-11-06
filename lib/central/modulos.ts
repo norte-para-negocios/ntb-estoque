@@ -244,6 +244,8 @@ export const MODULOS: ModuloCentral[] = [
       breve('Resumo do caixa', 'Caixa de hoje e vencimentos'),
       { label: 'Contas a receber', href: '/financeiro/contas-receber', desc: 'Vendas do Norte Vendas por forma de pagamento', soEstoqueProprio: true },
       { label: 'Taxas e prazos de recebimento', href: '/financeiro/formas-recebimento', desc: 'Adquirente, taxa e prazo de cada forma', soEstoqueProprio: true },
+      { label: 'Fluxo de caixa', href: '/financeiro/fluxo-caixa', desc: 'Entrou, saiu e o previsto; saldo por conta', soEstoqueProprio: true },
+      { label: 'DRE', href: '/financeiro/dre', desc: 'Resultado por mês, por loja e consolidado', soEstoqueProprio: true },
     ],
     secoes: [
       {
@@ -277,8 +279,6 @@ export const MODULOS: ModuloCentral[] = [
           rel('Meta de faturamento', '/relatorio-meta'),
           breve('Contas a pagar em aberto'),
           breve('Pagamentos realizados'),
-          breve('Fluxo de caixa'),
-          breve('DRE'),
         ],
       },
     ],

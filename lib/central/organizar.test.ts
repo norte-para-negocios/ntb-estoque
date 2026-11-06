@@ -57,7 +57,7 @@ test('todo "Novo" e todo "Incluir" abre um formulário de verdade', () => {
 
 test('Finanças: o que não existe vai para a gaveta, nunca para as listas', () => {
   const o = org('financas')
-  assert.ok(o.embreve.length >= 9)
+  assert.ok(o.embreve.length >= 7) // Fluxo de caixa e DRE saíram da gaveta (Fase 4 passo 5)
   for (const i of [...o.novos, ...o.telas, ...o.relatorios, ...o.cadastros.flatMap((s) => s.itens)]) {
     assert.ok(!i.emBreve && i.href, `${i.label} está desabilitado numa lista`)
   }

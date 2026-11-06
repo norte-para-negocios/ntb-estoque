@@ -7,7 +7,7 @@ import {
   ListPlus, ListTree, Logs, MonitorDown, Network, Package, PackageCheck, PackagePlus, PackageSearch, Percent, PiggyBank, Plus,
   Presentation, Printer, QrCode, Receipt, ReceiptText, RefreshCw, Repeat, Replace, Scale, ScanSearch, ScrollText, Search, Shapes,
   ShieldCheck, ShoppingCart, Sigma, SlidersHorizontal, SquareKanban, Stethoscope, Store, Table2, Tags, Target, TrendingDown,
-  TrendingUp, Truck, Undo2, Upload, UserCog, UserSearch, Users, Vault, Wallet, Warehouse, Wrench,
+  TrendingUp, FileBarChart, Truck, Undo2, Upload, UserCog, UserSearch, Users, Vault, Wallet, Warehouse, Wrench,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -165,6 +165,8 @@ export const ICONE_POR_ROTA: Record<string, Icone> = {
   '/financeiro/lancamentos': [ArrowLeftRight, 'marca'],
   '/financeiro/contas-receber': [HandCoins, 'marca'],
   '/financeiro/formas-recebimento': [Percent, 'marca'],
+  '/financeiro/fluxo-caixa': [TrendingUp, 'marca'],
+  '/financeiro/dre': [FileBarChart, 'marca'],
   '/relatorio-mensal': [Presentation, 'relatorio'],
   '/faturamento': [BadgeDollarSign, 'relatorio'],
   '/relatorio-faturamento': [FileSpreadsheet, 'relatorio'],
