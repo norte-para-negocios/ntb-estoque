@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { BotaoImprimir } from '@/components/relatorios/BotaoImprimir'
 import { Download, FileBarChart } from 'lucide-react'
 import { getCurrentLojaId } from '@/lib/auth'
 import { acessoFinanceiro, vendasPorProdutoMes, PERM } from '@/lib/financeiro/dados'
@@ -36,10 +37,11 @@ export default async function DrePage({ searchParams }: { searchParams: Promise<
   return (
     <div className="space-y-4">
       <PageHeader title="DRE" icon={FileBarChart}
-        actions={!erro ? <a href={`/financeiro/dre/export?${new URLSearchParams({ de: meses[0] ?? de, ate, ...(consolidada ? { escopo: 'consolidada' } : {}) })}`} className={btnClass('outline')}><Download className="size-4" /> Exportar Excel</a> : undefined}
+        actions={<>{!erro ? <a href={`/financeiro/dre/export?${new URLSearchParams({ de: meses[0] ?? de, ate, ...(consolidada ? { escopo: 'consolidada' } : {}) })}`} className={btnClass('outline')}><Download className="size-4" /> Exportar Excel</a> : undefined}<BotaoImprimir /></>}
         description="Resultado por mês de competência: vendas e custo do estoque, deduções e as despesas lançadas no financeiro. Clique em qualquer número para ver de onde ele vem." />
 
-      <form method="get" className="grid gap-3 rounded-[var(--r-lg)] bg-surface p-4 text-[13px] u-card sm:grid-cols-4">
+      <p className="hidden text-[13px] text-text-muted print:block">Período: {mesBR(`${meses[0] ?? de}-01`)} a {mesBR(`${ate}-01`)}{consolidada ? ` · consolidada: ${lojas.map((l) => l.nome).join(', ')}` : ''}</p>
+      <form method="get" className="print:hidden grid gap-3 rounded-[var(--r-lg)] bg-surface p-4 text-[13px] u-card sm:grid-cols-4">
         <label className="space-y-1"><span>De</span><input type="month" name="de" defaultValue={meses[0] ?? de} max={mesAtual} className={campo} /></label>
         <label className="space-y-1"><span>Até</span><input type="month" name="ate" defaultValue={ate} max={mesAtual} className={campo} /></label>
         <label className="space-y-1"><span>Lojas</span>

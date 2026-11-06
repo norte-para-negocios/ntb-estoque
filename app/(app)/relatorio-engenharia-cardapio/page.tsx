@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { BotaoImprimir } from '@/components/relatorios/BotaoImprimir'
 import { notFound } from 'next/navigation'
 import { Download, LayoutGrid } from 'lucide-react'
 import { btnClass } from '@/components/ui-kit/Button'
@@ -52,11 +53,12 @@ export default async function EngenhariaCardapioPage({ searchParams }: { searchP
   return (
     <div className="space-y-4">
       <PageHeader title="Engenharia de cardápio" icon={LayoutGrid} voltarHref="/relatorios"
-        actions={!erro && r.itens.length > 0 ? <a href={`/relatorio-engenharia-cardapio/export?${new URLSearchParams({ ini: p.ini, fim: p.fim, ...(familia ? { familia } : {}) })}`} className={btnClass('outline')}><Download className="size-4" /> Exportar Excel</a> : undefined}
+        actions={<>{!erro && r.itens.length > 0 ? <a href={`/relatorio-engenharia-cardapio/export?${new URLSearchParams({ ini: p.ini, fim: p.fim, ...(familia ? { familia } : {}) })}`} className={btnClass('outline')}><Download className="size-4" /> Exportar Excel</a> : undefined}<BotaoImprimir /></>}
         description="Cada prato vendido no período, pela quantidade que sai e pelo lucro que deixa em cada unidade." />
       <PeriodoBar basePath="/relatorio-engenharia-cardapio" params={base} ini={p.ini} fim={p.fim} hoje={hoje} />
+      <p className="hidden text-[13px] text-text-muted print:block">Período: {p.ini.split('-').reverse().join('/')} a {p.fim.split('-').reverse().join('/')}</p>
       {familias.length > 1 && (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5 print:hidden">
           <span className="mr-1 text-[13px] text-text-muted">Família:</span>
           <Link href={href({ familia: '', ver: '' })} className={chip(familia == null)}>Todas</Link>
           {familias.map((f) => <Link key={f} href={href({ familia: f, ver: '' })} className={chip(familia === f)}>{f}</Link>)}
@@ -98,7 +100,7 @@ export default async function EngenhariaCardapioPage({ searchParams }: { searchP
             <CartaoResumo titulo="Lucro dos pratos" valor={<Money value={r.totalLucro} />} />
             <CartaoResumo titulo="Fora da conta" valor={r.semCusto.length.toLocaleString('pt-BR')} sub="vendidos sem custo" />
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5 print:hidden">
             <Link href={href({ ver: '' })} className={chip(ver == null)}>Todos</Link>
             {CLASSES.map((c) => <Link key={c.classe} href={href({ ver: c.classe })} className={chip(ver === c.classe)}>{c.titulo}</Link>)}
           </div>

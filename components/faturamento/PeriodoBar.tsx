@@ -20,7 +20,7 @@ export function PeriodoBar({ basePath, params, ini, fim, hoje }: { basePath: str
   const irMes = (m: string) => href({ mes: m, ini: '', fim: '' })
   const outros = Object.entries(params).filter(([k, v]) => v && !['ini', 'fim', 'mes'].includes(k))
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2 print:hidden">
       <div className="flex items-center gap-1 rounded-full bg-surface-2 p-0.5">
         <Link href={irMes(mesVizinho(mesRef, -1))} aria-label="Mês anterior" className="flex size-8 items-center justify-center rounded-full text-text-muted hover:bg-[var(--border)] hover:text-text"><ChevronLeft className="size-4" /></Link>
         <span className="min-w-[8.5rem] px-1 text-center text-[13px] font-semibold text-text">{mesUnico ? nomeMes(mesRef) : `${fmt(ini)} a ${fmt(fim)}`}</span>

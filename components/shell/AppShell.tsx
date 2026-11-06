@@ -88,9 +88,9 @@ export function AppShell({
 
   return (
     <div className="flex min-h-screen bg-bg">
-      <Sidebar isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} estoqueProprio={estoqueProprio} temEstoque={temEstoque} pedidosOmie={pedidosOmie} lojaSelector={lojaSelector} userMenu={userMenu} />
+      <div className="contents print:hidden"><Sidebar isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} estoqueProprio={estoqueProprio} temEstoque={temEstoque} pedidosOmie={pedidosOmie} lojaSelector={lojaSelector} userMenu={userMenu} /></div>
       <div className="flex-1 min-w-0 flex flex-col">
-        <MobileNav isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} estoqueProprio={estoqueProprio} temEstoque={temEstoque} pedidosOmie={pedidosOmie} lojaSelector={lojaSelector} userMenu={userMenu} onBuscar={() => setBuscaAberta(true)} />
+        <div className="contents print:hidden"><MobileNav isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} estoqueProprio={estoqueProprio} temEstoque={temEstoque} pedidosOmie={pedidosOmie} lojaSelector={lojaSelector} userMenu={userMenu} onBuscar={() => setBuscaAberta(true)} /></div>
         {/* overflow-x-clip (NAO -hidden): clip corta overflow horizontal sem
             virar container de scroll. -hidden faria o overflow-y computar pra
             auto, tornando o <main> um scroll container SEM altura fixa -> o
@@ -100,7 +100,7 @@ export function AppShell({
         <main className="flex-1 min-w-0 overflow-x-clip pb-20 lg:pb-0">
           {/* Central (só dev): usa a largura toda da tela, sem a coluna estreita das demais telas. */}
           <div className={`mx-auto w-full px-4 lg:px-8 py-6 ${(pathname === '/central' || pathname.startsWith('/central/')) ? 'max-w-[1560px]' : 'max-w-6xl'}`}>
-            <div className="mb-2 hidden items-center justify-end gap-2 lg:flex">
+            <div className="mb-2 hidden items-center justify-end gap-2 lg:flex print:!hidden">
               <Sininho tela="desktop" />
               {/* Celular: a busca fica na barra superior (MobileNav). Desktop: botao completo com texto e atalho de teclado */}
               <button
@@ -121,7 +121,7 @@ export function AppShell({
                 conta do stagger das linhas (A4), entao a pagina nao da um slide
                 grande que brigaria com ele. Tom Linear/Vercel: a pagina troca,
                 nao "voa". */}
-            <BannerSync />
+            <div className="print:hidden"><BannerSync /></div>
             <div
               key={pathname}
               className="animate-in fade-in slide-in-from-bottom-[8px]"

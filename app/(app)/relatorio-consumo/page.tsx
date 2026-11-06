@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { BotaoImprimir } from '@/components/relatorios/BotaoImprimir'
 import { notFound } from 'next/navigation'
 import { Download, Scale } from 'lucide-react'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
@@ -61,9 +62,10 @@ export default async function ConsumoPage({ searchParams }: { searchParams: Prom
     <div className="space-y-4">
       <PageHeader title="Consumo teórico × real" icon={Scale} voltarHref="/relatorios"
         description="Quanto a ficha técnica mandou baixar (vendas e produção) contra o que saiu de verdade entre duas contagens de estoque. A diferença em reais é o desvio."
-        actions={<a href={exportHref} className={btnClass('outline')}><Download className="size-4" /> Exportar Excel</a>} />
+        actions={<>{<a href={exportHref} className={btnClass('outline')}><Download className="size-4" /> Exportar Excel</a>}<BotaoImprimir /></>} />
       <PeriodoBar basePath="/relatorio-consumo" params={base} ini={p.ini} fim={p.fim} hoje={hoje} />
-      <div className="flex flex-wrap items-center gap-1.5">
+      <p className="hidden text-[13px] text-text-muted print:block">Período: {p.ini.split('-').reverse().join('/')} a {p.fim.split('-').reverse().join('/')}</p>
+      <div className="flex flex-wrap items-center gap-1.5 print:hidden">
         <Link href={href({ local: '' })} className={chip(local == null)}>Todos os locais</Link>
         {cad.locais.map((l) => <Link key={l.codigo} href={href({ local: String(l.codigo) })} className={chip(local === l.codigo)}>{l.descricao}</Link>)}
       </div>
@@ -109,7 +111,7 @@ export default async function ConsumoPage({ searchParams }: { searchParams: Prom
             </section>
           )}
 
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5 print:hidden">
             <Link href={href({ ver: '' })} className={chip(ver === 'com')}>Com contagem ({resumo.comContagem})</Link>
             <Link href={href({ ver: 'sem' })} className={chip(ver === 'sem')}>Sem contagem ({resumo.semContagem})</Link>
           </div>

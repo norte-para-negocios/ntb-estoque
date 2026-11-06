@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { BotaoImprimir } from '@/components/relatorios/BotaoImprimir'
 import { notFound } from 'next/navigation'
 import { Download, Trash2 } from 'lucide-react'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
@@ -49,8 +50,9 @@ export default async function PerdasPage({ searchParams }: { searchParams: Promi
     <div className="space-y-4">
       <PageHeader title="Perdas e desperdício" icon={Trash2} voltarHref="/relatorios"
         description="Tudo que saiu do estoque sem ser vendido nem produzido, com a causa: vencimento, quebra, desperdício e diferença de inventário."
-        actions={<a href={exportHref} className={btnClass('outline')}><Download className="size-4" /> Exportar Excel</a>} />
+        actions={<>{<a href={exportHref} className={btnClass('outline')}><Download className="size-4" /> Exportar Excel</a>}<BotaoImprimir /></>} />
       <PeriodoBar basePath="/relatorio-perdas" params={base} ini={p.ini} fim={p.fim} hoje={hoje} />
+      <p className="hidden text-[13px] text-text-muted print:block">Período: {p.ini.split('-').reverse().join('/')} a {p.fim.split('-').reverse().join('/')}</p>
       {p.cortado && <p className="text-[13px] text-text-muted">Período limitado a 366 dias.</p>}
       {avisos.map((a) => <p key={a} className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">{a}</p>)}
 
@@ -65,7 +67,7 @@ export default async function PerdasPage({ searchParams }: { searchParams: Promi
             <CartaoResumo titulo="Correções de dados" valor={<Money value={r.totalCorrecoes} />} sub="Não somam nas perdas" />
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5 print:hidden">
             <Link href={href({ causa: '' })} className={chip(causa == null)}>Todas</Link>
             {r.porCausa.map((c) => <Link key={c.causa} href={href({ causa: c.causa })} className={chip(causa === c.causa)}>{ROTULO_CAUSA[c.causa]} · {c.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Link>)}
           </div>

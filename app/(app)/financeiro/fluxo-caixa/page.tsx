@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { BotaoImprimir } from '@/components/relatorios/BotaoImprimir'
 import { Download, TrendingUp } from 'lucide-react'
 import { acessoFinanceiro, PERM } from '@/lib/financeiro/dados'
 import { carregarFluxo, LIMITE_FLUXO } from '@/lib/financeiro/fluxo-carregar'
@@ -27,10 +28,11 @@ export default async function FluxoCaixaPage({ searchParams }: { searchParams: P
   return (
     <div className="space-y-4">
       <PageHeader title="Fluxo de caixa" icon={TrendingUp}
-        actions={fluxo ? <a href={`/financeiro/fluxo-caixa/export?${new URLSearchParams({ de, ate, por })}`} className={btnClass('outline')}><Download className="size-4" /> Exportar Excel</a> : undefined}
+        actions={<>{fluxo ? <a href={`/financeiro/fluxo-caixa/export?${new URLSearchParams({ de, ate, por })}`} className={btnClass('outline')}><Download className="size-4" /> Exportar Excel</a> : undefined}<BotaoImprimir /></>}
         description="O que entrou e saiu das contas até hoje e o que está previsto daqui para frente: contas a pagar, vendas a receber e contas recorrentes. Clique num valor para ver o que o forma." />
 
-      <form method="get" className="grid gap-3 rounded-[var(--r-lg)] bg-surface p-4 text-[13px] u-card sm:grid-cols-4">
+      <p className="hidden text-[13px] text-text-muted print:block">Período: {dataBR(de)} a {dataBR(ate)} · por {por}</p>
+      <form method="get" className="print:hidden grid gap-3 rounded-[var(--r-lg)] bg-surface p-4 text-[13px] u-card sm:grid-cols-4">
         <label className="space-y-1"><span>De</span><input type="date" name="de" defaultValue={de} className={campo} /></label>
         <label className="space-y-1"><span>Até</span><input type="date" name="ate" defaultValue={ate} className={campo} /></label>
         <label className="space-y-1"><span>Ver por</span>

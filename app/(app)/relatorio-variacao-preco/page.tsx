@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { BotaoImprimir } from '@/components/relatorios/BotaoImprimir'
 import { notFound } from 'next/navigation'
 import { Download, TrendingUp } from 'lucide-react'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
@@ -49,9 +50,10 @@ export default async function VariacaoPrecoPage({ searchParams }: { searchParams
     <div className="space-y-4">
       <PageHeader title="Variação de preço nas notas" icon={TrendingUp} voltarHref="/relatorios"
         description="Itens de nota cujo preço por unidade mudou além do limite da loja em relação à compra anterior do mesmo produto."
-        actions={<a href={exportHref} className={btnClass('outline')}><Download className="size-4" /> Exportar Excel</a>} />
+        actions={<>{<a href={exportHref} className={btnClass('outline')}><Download className="size-4" /> Exportar Excel</a>}<BotaoImprimir /></>} />
       <PeriodoBar basePath="/relatorio-variacao-preco" params={base} ini={p.ini} fim={p.fim} hoje={hoje} />
-      <LimiteVariacaoPreco atual={cfg.limite} />
+      <p className="hidden text-[13px] text-text-muted print:block">Período: {p.ini.split('-').reverse().join('/')} a {p.fim.split('-').reverse().join('/')}</p>
+      <div className="print:hidden"><LimiteVariacaoPreco atual={cfg.limite} /></div>
       {cfg.aviso && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">{cfg.aviso}</p>}
       <p className="text-[13px] text-text-muted">Preço por unidade de estoque = valor dos produtos menos o desconto, dividido pela quantidade recebida. Sem compra anterior, compara com o custo médio.</p>
 
@@ -66,7 +68,7 @@ export default async function VariacaoPrecoPage({ searchParams }: { searchParams
             <CartaoResumo titulo="Subiram" valor={subiram.toLocaleString('pt-BR')} />
             <CartaoResumo titulo="Caíram" valor={(todos.length - subiram).toLocaleString('pt-BR')} sub="Confira a unidade da nota" />
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5 print:hidden">
             <Link href={href({ ver: '' })} className={chip(ver == null)}>Todos</Link>
             <Link href={href({ ver: 'subiu' })} className={chip(ver === 'subiu')}>Subiram</Link>
             <Link href={href({ ver: 'caiu' })} className={chip(ver === 'caiu')}>Caíram</Link>
