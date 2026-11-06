@@ -26,8 +26,10 @@ function fmtPct(v: number | null): string {
   return v == null ? '-' : `${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
 }
 
-function rodape(slide: PptxGenJS.Slide, loja: string, mesLabel: string, numero: number): void {
-  slide.addText(`NTB Gestão de Estoque  •  ${loja}  •  ${mesLabel}`, {
+// Loja do Omie mantém o texto de sempre (o relatório que a consultoria já envia); loja de estoque próprio
+// é "Norte Estoque" e nunca fala em Omie.
+function rodape(slide: PptxGenJS.Slide, loja: string, mesLabel: string, numero: number, marca: string): void {
+  slide.addText(`${marca}  •  ${loja}  •  ${mesLabel}`, {
     x: 0.4, y: H - 0.4, w: W - 1.2, h: 0.3, fontSize: 9, color: '888888',
   })
   slide.addText(String(numero), { x: W - 0.7, y: H - 0.4, w: 0.4, h: 0.3, fontSize: 9, color: '888888', align: 'right' })
@@ -140,6 +142,9 @@ export function graficoBarraMensal(
 
 export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<Buffer> {
   const pptx = new PptxGenJS()
+  const proprio = dados.proprio
+  const marca = proprio ? 'Norte Estoque' : 'NTB Gestão de Estoque'
+  const sistema = proprio ? 'o sistema' : 'Omie'
   pptx.defineLayout({ name: 'NTB_16_9', width: W, height: H })
   pptx.layout = 'NTB_16_9'
   const loja = dados.loja.nome
@@ -151,7 +156,7 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
   {
     const slide = pptx.addSlide()
     slide.background = { color: NAVY }
-    slide.addText('NTB Gestão de Estoque', { x: 0, y: 2.6, w: W, h: 0.7, fontSize: 30, bold: true, color: 'FFFFFF', align: 'center' })
+    slide.addText(marca, { x: 0, y: 2.6, w: W, h: 0.7, fontSize: 30, bold: true, color: 'FFFFFF', align: 'center' })
     slide.addText(`Relatório Gerencial — ${mesLabel}`, { x: 0, y: 3.35, w: W, h: 0.5, fontSize: 18, color: 'B7C6D6', align: 'center' })
     slide.addText(`Cliente: ${loja}`, { x: 0, y: 3.95, w: W, h: 0.4, fontSize: 14, color: 'FFFFFF', align: 'center' })
   }
@@ -172,7 +177,7 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
     kpiBox(slide, 3.5, 4.55, 2.9, fmtMoeda(g.faturamentoAno), `Total Geral (${periodoLabel})`)
     kpiBox(slide, 6.6, 4.55, 2.9, fmtPct(g.pctComprasFatMes), `Compras/Fat. — ${mesLabel.split(' de ')[0]}`)
     kpiBox(slide, 9.7, 4.55, 2.9, fmtPct(g.pctComprasFatMediaAno), 'Média do Período')
-    rodape(slide, loja, mesLabel, n)
+    rodape(slide, loja, mesLabel, n, marca)
   }
   n++
 
@@ -182,7 +187,7 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
     tituloSlide(slide, 'Dashboard — Vendas por Produto', `Venda PDV · total ${periodoLabel} · Produto Acabado (top 10)`)
     graficoBarraRanking(slide, dados.vendasAcabado.mais, LARANJA, { x: 0.4, y: 1.25, w: 6.1, h: 5.4, titulo: 'Mais Vendidos — Produto Acabado' })
     graficoBarraRanking(slide, dados.vendasRevenda.menos, NAVY_CLARO, { x: 6.8, y: 1.25, w: 6.1, h: 5.4, titulo: 'Menos Vendidos — Mercadoria p/ Revenda' })
-    rodape(slide, loja, mesLabel, n)
+    rodape(slide, loja, mesLabel, n, marca)
   }
   n++
 
@@ -192,7 +197,7 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
     tituloSlide(slide, 'Dashboard — Vendas por Produto (continuação)', `Venda PDV · total ${periodoLabel} · Mercadoria p/ Revenda (top 10)`)
     graficoBarraRanking(slide, dados.vendasRevenda.mais, LARANJA, { x: 0.4, y: 1.25, w: 6.1, h: 5.4, titulo: 'Mais Vendidos — Mercadoria p/ Revenda' })
     graficoBarraRanking(slide, dados.vendasAcabado.menos, NAVY_CLARO, { x: 6.8, y: 1.25, w: 6.1, h: 5.4, titulo: 'Menos Vendidos — Produto Acabado' })
-    rodape(slide, loja, mesLabel, n)
+    rodape(slide, loja, mesLabel, n, marca)
   }
   n++
 
@@ -202,14 +207,14 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
     tituloSlide(slide, 'Dashboard — Família de Produto e Fornecedores', `Total ${periodoLabel}`)
     graficoBarraRanking(slide, dados.familiaTop10, LARANJA, { x: 0.4, y: 1.25, w: 6.1, h: 5.4, titulo: 'Faturamento por Família (top 10)' })
     graficoBarraRanking(slide, dados.fornecedorTop10, NAVY_CLARO, { x: 6.8, y: 1.25, w: 6.1, h: 5.4, titulo: 'Compras por Fornecedor (top 10)' })
-    rodape(slide, loja, mesLabel, n)
+    rodape(slide, loja, mesLabel, n, marca)
   }
   n++
 
   // --- Slide 6: Compras e Perdas ---
   {
     const slide = pptx.addSlide()
-    tituloSlide(slide, 'Dashboard — Compras e Perdas', `${periodoLabel} · notas confirmadas · valor de estoque, como no Omie`)
+    tituloSlide(slide, 'Dashboard — Compras e Perdas', `${periodoLabel} · notas confirmadas · valor de estoque${proprio ? '' : ', como no Omie'}`)
     const cp = dados.comprasPerdas
     graficoLinha(slide, cp.serieEntradaNf, { x: 0.4, y: 1.15, w: 6.1, h: 3.1, titulo: 'Entrada de Notas Fiscais por Tipo' })
     graficoLinha(
@@ -234,7 +239,7 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
       color: cp.perdaMateriaPrimaPctMes == null ? '888888' : excedeuMP ? 'B5342A' : '3A7A3E',
       italic: true,
     })
-    rodape(slide, loja, mesLabel, n)
+    rodape(slide, loja, mesLabel, n, marca)
   }
   n++
 
@@ -244,7 +249,7 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
     tituloSlide(
       slide,
       'Dashboard — Baixas de Estoque: Revenda vs. Matéria-Prima',
-      `Consumo de Ordem de Produção · ${periodoLabel} · top 5 de cada tipo · valorizado ao custo atual`
+      `Consumo de Ordem de Produção · ${periodoLabel} · top 5 de cada tipo · ${proprio ? 'valorizado pelo custo de cada baixa' : 'valorizado ao custo atual'}`
     )
     const b = dados.baixasEstoque
     graficoBarraRanking(slide, b.revendaTop5, LARANJA, { x: 0.4, y: 1.25, w: 6.1, h: 4.6, titulo: 'Material de Revenda' })
@@ -262,7 +267,7 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
     }
     if (b.insumosSemCusto > 0) {
       avisos.push(
-        `${avisos.length ? 'Além disso, ' : ''}${b.insumosSemCusto} insumo(s) sem custo conhecido (sem CMC na foto de estoque) não entraram no valor.`
+        `${avisos.length ? 'Além disso, ' : ''}${b.insumosSemCusto} insumo(s) sem custo conhecido ${proprio ? '(baixa com custo zero)' : '(sem CMC na foto de estoque)'} não entraram no valor.`
       )
     }
     if (avisos.length) {
@@ -276,20 +281,20 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
         italic: true,
       })
     }
-    rodape(slide, loja, mesLabel, n)
+    rodape(slide, loja, mesLabel, n, marca)
   }
   n++
 
   // --- Slides 8-9: Pontos de Melhoria e Recomendações (texto fixo) ---
   const pontosMelhoria: [string, string[]][] = [
     ['1. Padronização e Precisão dos Inventários', [
-      'Inventários realizados diretamente pelo NTB garantem contagem padronizada, eliminando divergências entre físico e Omie.',
+      `Inventários realizados diretamente pelo ${proprio ? 'Norte Estoque' : 'NTB'} garantem contagem padronizada, eliminando divergências entre físico e ${sistema}.`,
       'Redução de erros manuais e inconsistências de estoque.',
       'Histórico de inventários acessível e rastreável, facilitando auditorias internas.',
       'Inventários mais rápidos, inclusive via celular, permitindo execução por qualquer responsável.',
     ]],
     ['2. Transferências de Estoque com Rastreabilidade Total', [
-      'Transferências registradas diretamente no NTB evitam perdas, desvios e lançamentos incorretos.',
+      `Transferências registradas diretamente no ${proprio ? 'Norte Estoque' : 'NTB'} evitam perdas, desvios e lançamentos incorretos.`,
       'Cada movimentação passa a ter origem, destino e responsável, fortalecendo a governança.',
       'Redução de movimentos manuais indevidos, que antes geravam distorções nos relatórios.',
       'A rastreabilidade melhora a tomada de decisão do administrativo de compras.',
@@ -298,10 +303,10 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
       'Impressão de etiquetas padronizadas reduz erros de identificação de produtos.',
       'Facilita inventários, conferências e transferências.',
       'Aumenta a velocidade de separação e organização do estoque.',
-      'Contribui para reduzir divergências entre estoque físico e Omie.',
+      `Contribui para reduzir divergências entre estoque físico e ${sistema}.`,
     ]],
     ['4. Auditoria Interna Contínua (não apenas pontual)', [
-      'Com o NTB exibindo origem, consumo e movimentos manuais, a auditoria passa a ser semanal e automática.',
+      `Com o ${proprio ? 'Norte Estoque' : 'NTB'} exibindo origem, consumo e movimentos manuais, a auditoria passa a ser semanal e automática.`,
       'Identificação rápida de produtos com custo acima do limite.',
       'Detecção de movimentos manuais suspeitos ou inconsistentes.',
       'Correção imediata de erros que antes só eram percebidos no fechamento do mês.',
@@ -335,7 +340,7 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
 
   function slideDePontos(subtitulo: string, blocos: [string, string[]][]): void {
     const slide = pptx.addSlide()
-    tituloSlide(slide, 'Pontos de Melhoria e Recomendações — Norte Estoque + Omie', subtitulo)
+    tituloSlide(slide, `Pontos de Melhoria e Recomendações — Norte Estoque${proprio ? '' : ' + Omie'}`, subtitulo)
     const colW = 6.1
     blocos.forEach(([titulo, itens], i) => {
       const col = i % 2
@@ -347,7 +352,7 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
         x, y: y + 0.4, w: colW, h: 2.35, valign: 'top',
       })
     })
-    rodape(slide, loja, mesLabel, n)
+    rodape(slide, loja, mesLabel, n, marca)
     n++
   }
   slideDePontos('1/2', pontosMelhoria)
@@ -391,7 +396,7 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
         x, y: y + 0.4, w: colW, h: 2.35, valign: 'top',
       })
     })
-    rodape(slide, loja, mesLabel, n)
+    rodape(slide, loja, mesLabel, n, marca)
   }
 
   const saida = await pptx.write({ outputType: 'nodebuffer' })

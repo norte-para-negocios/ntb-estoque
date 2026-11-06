@@ -10,6 +10,10 @@ import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import { labelTipoItem } from '@/lib/constants-omie'
 import { descreverCFOP } from '@/lib/cfop'
 import { gerarBaixasDeOrdemProducao } from './baixa-op'
+import { modoDaLoja } from '@/lib/estoque/ledger'
+import { carregarPerdas } from '@/lib/estoque/consumo-perdas-loader'
+import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
+import { baixasDeProducao, perdasPorMesETipo } from './relatorio-mensal-proprio-puro'
 import {
   type MatrizRow,
   type RankingItem,
@@ -43,6 +47,8 @@ export type SerieMensal = { meses: string[]; series: { nome: string; valores: nu
 
 export type RelatorioMensal = {
   loja: { id: number; nome: string }
+  /** Loja de estoque próprio: perdas e baixas vêm do nosso estoque e o texto não fala em Omie. */
+  proprio: boolean
   ano: number
   mes: number
   mesLabel: string // "Julho de 2026"
@@ -126,6 +132,7 @@ function serieDeMatriz(rows: MatrizRow[], mesesChart: string[], topN: number): S
 
 export async function carregarRelatorioMensal(lojaId: number, ano: number, mes: number): Promise<RelatorioMensal> {
   const supabase = createServiceClient()
+  const proprio = (await modoDaLoja(lojaId)) === 'proprio'
 
   const { data: loja } = await supabase.from('lojas').select('id, nome_fantasia').eq('id', lojaId).single()
   const nomeLoja = (loja as { nome_fantasia: string } | null)?.nome_fantasia ?? `Loja ${lojaId}`
@@ -191,7 +198,7 @@ export async function carregarRelatorioMensal(lojaId: number, ano: number, mes: 
     buscarTipoPorDescricao(supabase, lojaId),
     // relatorio_rejeitos_por_tipo não devolve quebra por mês (só agregado
     // do range pedido) -- uma chamada por mês do gráfico pra montar a série.
-    Promise.all(
+    proprio ? Promise.resolve([] as { chave: string; rows: RejeitoRow[] }[]) : Promise.all(
       mesesChart.map((chave) => {
         const anoM = Number(chave.slice(0, 4))
         const mesM = Number(chave.slice(5, 7))
@@ -254,6 +261,14 @@ export async function carregarRelatorioMensal(lojaId: number, ano: number, mes: 
     percMPPorMes.set(chave, fatAcabado > 0 && mp ? (Number(mp.valor_total ?? 0) / fatAcabado) * 100 : null)
     percRevendaPorMes.set(chave, fatRevenda > 0 && rev ? (Number(rev.valor_total ?? 0) / fatRevenda) * 100 : null)
   }
+  if (proprio) {
+    const { perdasMes, fatAcabado, fatRevenda } = await perdasDoEstoqueProprio(lojaId, dataIniAno, dataFimGrafico, faturamentoAcabadoPorMes, faturamentoRevendaPorMes)
+    for (const chave of mesesChart) {
+      const p = perdasMes.get(chave)
+      percMPPorMes.set(chave, fatAcabado(chave) > 0 && p ? (p.mp / fatAcabado(chave)) * 100 : null)
+      percRevendaPorMes.set(chave, fatRevenda(chave) > 0 && p ? (p.revenda / fatRevenda(chave)) * 100 : null)
+    }
+  }
   const seriePerda = {
     meses: mesesChart.map((m) => MESES_PT_CURTO[Number(m.slice(5, 7)) - 1]),
     percMateriaPrima: mesesChart.map((m) => percMPPorMes.get(m) ?? null),
@@ -261,16 +276,24 @@ export async function carregarRelatorioMensal(lojaId: number, ano: number, mes: 
   }
 
   // --- Baixas de Estoque (slide 7) ---
-  const { linhas: baixasOp, opsSemEstrutura, totalOps, insumosSemCusto } = await gerarBaixasDeOrdemProducao(lojaId, dataIniAno, dataFimGrafico)
-  const revendaBaixaMapa = new Map<string, number>()
-  const mpBaixaMapa = new Map<string, number>()
-  for (const linha of baixasOp) {
-    if (linha.tipo_sped.startsWith('00-')) revendaBaixaMapa.set(linha.produto, (revendaBaixaMapa.get(linha.produto) ?? 0) + linha.valor)
-    else if (linha.tipo_sped.startsWith('01-')) mpBaixaMapa.set(linha.produto, (mpBaixaMapa.get(linha.produto) ?? 0) + linha.valor)
+  let revendaBaixaMapa = new Map<string, number>()
+  let mpBaixaMapa = new Map<string, number>()
+  let opsSemEstrutura = 0, totalOps = 0, insumosSemCusto = 0
+  if (proprio) {
+    const b = await baixasDoEstoqueProprio(lojaId, dataIniAno, dataFimGrafico)
+    revendaBaixaMapa = b.revenda; mpBaixaMapa = b.materiaPrima; insumosSemCusto = b.insumosSemCusto
+  } else {
+    const op = await gerarBaixasDeOrdemProducao(lojaId, dataIniAno, dataFimGrafico)
+    opsSemEstrutura = op.opsSemEstrutura; totalOps = op.totalOps; insumosSemCusto = op.insumosSemCusto
+    for (const linha of op.linhas) {
+      if (linha.tipo_sped.startsWith('00-')) revendaBaixaMapa.set(linha.produto, (revendaBaixaMapa.get(linha.produto) ?? 0) + linha.valor)
+      else if (linha.tipo_sped.startsWith('01-')) mpBaixaMapa.set(linha.produto, (mpBaixaMapa.get(linha.produto) ?? 0) + linha.valor)
+    }
   }
 
   return {
     loja: { id: lojaId, nome: nomeLoja },
+    proprio,
     ano,
     mes,
     mesLabel: `${MESES_PT[mes - 1]} de ${ano}`,
@@ -312,4 +335,55 @@ export async function carregarRelatorioMensal(lojaId: number, ano: number, mes: 
       insumosSemCusto,
     },
   }
+}
+
+// --- Loja de estoque próprio: perdas e baixas pelo ledger (estoque_movimentos_efetivo) ---
+
+async function produtosDaLoja(lojaId: number) {
+  const sb = createServiceClient()
+  let erro: string | null = null
+  const prods = await buscarTodasLinhas<{ codigo_produto: number; descricao: string | null; tipo_item: string | null }>((from, to) =>
+    sb.from('produtos').select('codigo_produto, descricao, tipo_item').eq('loja_id', lojaId).order('codigo_produto').range(from, to),
+    undefined, (e) => { erro = e.message })
+  if (erro) throw new Error(`Não foi possível ler os produtos: ${erro}`)
+  return {
+    tipoDe: new Map(prods.map((p) => [Number(p.codigo_produto), p.tipo_item ?? ''])),
+    nomeDe: new Map(prods.map((p) => [Number(p.codigo_produto), p.descricao ?? String(p.codigo_produto)])),
+  }
+}
+
+async function perdasDoEstoqueProprio(
+  lojaId: number, ini: string, fim: string, fatAcabadoMes: Map<string, number>, fatRevendaMes: Map<string, number>,
+) {
+  const avisos: string[] = []
+  const [r, { tipoDe }] = await Promise.all([carregarPerdas(lojaId, ini, fim, avisos), produtosDaLoja(lojaId)])
+  if (avisos.length) throw new Error(avisos.join(' '))
+  return {
+    perdasMes: perdasPorMesETipo(r.linhas, tipoDe),
+    fatAcabado: (m: string) => fatAcabadoMes.get(m) ?? 0,
+    fatRevenda: (m: string) => fatRevendaMes.get(m) ?? 0,
+  }
+}
+
+async function baixasDoEstoqueProprio(lojaId: number, ini: string, fim: string) {
+  const sb = createServiceClient()
+  let erro: string | null = null
+  const [movs, estornos, cad] = await Promise.all([
+    buscarTodasLinhas<{ id: number; codigo_produto: number; quantidade: number; custo_unitario: number | null }>((from, to) =>
+      sb.from('estoque_movimentos_efetivo').select('id, codigo_produto, quantidade, custo_unitario')
+        .eq('loja_id', lojaId).eq('origem', 'PRODUCAO').lt('quantidade', 0).gte('data_ref', ini).lte('data_ref', fim)
+        .order('id').range(from, to),
+      undefined, (e) => { erro = e.message }),
+    buscarTodasLinhas<{ reverses_id: number }>((from, to) =>
+      sb.from('estoque_movimentos').select('reverses_id').eq('loja_id', lojaId).eq('tipo', 'EST').not('reverses_id', 'is', null).gte('data_ref', ini)
+        .order('id').range(from, to),
+      undefined, (e) => { erro = e.message }),
+    produtosDaLoja(lojaId),
+  ])
+  if (erro) throw new Error(`Não foi possível ler as baixas de produção: ${erro}`)
+  const desfeitos = new Set(estornos.map((e) => Number(e.reverses_id)))
+  return baixasDeProducao(
+    movs.filter((m) => !desfeitos.has(Number(m.id))).map((m) => ({ codigo_produto: Number(m.codigo_produto), quantidade: Number(m.quantidade), custo_unitario: m.custo_unitario == null ? null : Number(m.custo_unitario) })),
+    cad.tipoDe, cad.nomeDe,
+  )
 }
