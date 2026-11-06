@@ -56,7 +56,7 @@ export default async function EngenhariaCardapioPage({ searchParams }: { searchP
         actions={<>{!erro && r.itens.length > 0 ? <a href={`/relatorio-engenharia-cardapio/export?${new URLSearchParams({ ini: p.ini, fim: p.fim, ...(familia ? { familia } : {}) })}`} className={btnClass('outline')}><Download className="size-4" /> Exportar Excel</a> : undefined}<BotaoImprimir /></>}
         description="Cada prato vendido no período, pela quantidade que sai e pelo lucro que deixa em cada unidade." />
       <PeriodoBar basePath="/relatorio-engenharia-cardapio" params={base} ini={p.ini} fim={p.fim} hoje={hoje} />
-      <p className="hidden text-[13px] text-text-muted print:block">Período: {p.ini.split('-').reverse().join('/')} a {p.fim.split('-').reverse().join('/')}</p>
+      <p className="hidden text-[13px] text-text-muted print:block">Período: {p.ini.split('-').reverse().join('/')} a {p.fim.split('-').reverse().join('/')}{familia ? ` · família ${familia}` : ' · todas as famílias'}</p>
       {familias.length > 1 && (
         <div className="flex flex-wrap items-center gap-1.5 print:hidden">
           <span className="mr-1 text-[13px] text-text-muted">Família:</span>

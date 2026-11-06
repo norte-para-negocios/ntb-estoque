@@ -540,13 +540,13 @@ html:not(.dark) .sidebar-blue.sidebar-contraste {
    fundo branco, sem sombra, cores preservadas e tabela sem corte de linha entre páginas. */
 @media print {
   @page { size: A4 landscape; margin: 10mm; }
-  html, body { background: #fff !important; }
+  html, body, .bg-bg { background: #fff !important; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; box-shadow: none !important; }
   main { padding: 0 !important; }
   main > div { max-width: none !important; padding: 0 !important; }
   .animate-in { animation: none !important; }
   table { font-size: 11px; }
-  tr, .u-card { break-inside: avoid; }
+  tr { break-inside: avoid; }
   thead { display: table-header-group; }
   details > *:not(summary) { display: block !important; }
   a { color: inherit !important; text-decoration: none !important; }
