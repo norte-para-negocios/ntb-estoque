@@ -75,6 +75,10 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/financeiro/contas-correntes', label: 'Contas correntes', icon: Landmark, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
   { href: '/financeiro/extrato', label: 'Extrato', icon: ScrollText, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
   { href: '/financeiro/categorias', label: 'Categorias financeiras', icon: Tags, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
+  // Decisões do dono de 05/11 (migration 360), também só dev (rota-mãe /financeiro em ROTAS_SO_DEV).
+  { href: '/financeiro/familias', label: 'Categoria por família', icon: Tags, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
+  { href: '/financeiro/notas-sem-conta', label: 'Notas sem conta a pagar', icon: Receipt, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
+  { href: '/financeiro/notas-desfeitas', label: 'Notas desfeitas com conta paga', icon: Receipt, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
   { href: '/nota-fiscal', label: 'Notas Fiscais', icon: FileText, group: 'Operação' },
   { href: '/ordem-producao', label: 'Ordens de Produção', icon: Factory, group: 'Operação' },
   { href: '/transferencia', label: 'Transferências', icon: ArrowLeftRight, group: 'Operação' },

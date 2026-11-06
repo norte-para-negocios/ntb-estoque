@@ -7,7 +7,7 @@ import { RefreshCw } from 'lucide-react'
 import { btnClass } from '@/components/ui-kit/Button'
 import { gerarContasPagarDaNota } from '@/lib/actions/financeiro'
 
-/** "Gerar agora": refaz a conta a pagar da nota quando a geração automática falhou (só desenvolvedor). */
+/** "Gerar agora" (só desenvolvedor): gera à mão a conta a pagar da nota (falha da automática, ou loja com a geração automática desligada). */
 export function GerarContasNotaBotao({ notaId }: { notaId: number }) {
   const [pendente, start] = useTransition()
   const router = useRouter()

@@ -235,6 +235,9 @@ export const MODULOS: ModuloCentral[] = [
     telas: [
       { label: 'Contas a pagar', href: '/financeiro/contas-pagar', desc: 'Em aberto e atrasadas', soEstoqueProprio: true, principal: true },
       { label: 'Extrato', href: '/financeiro/extrato', desc: 'Entradas e saídas das contas', soEstoqueProprio: true },
+      { label: 'Notas sem conta a pagar', href: '/financeiro/notas-sem-conta', desc: 'Notas confirmadas sem conta gerada', soEstoqueProprio: true },
+      { label: 'Notas desfeitas com conta paga', href: '/financeiro/notas-desfeitas', desc: 'O gerente decide: estornar ou manter', soEstoqueProprio: true },
+      { label: 'Categoria por família', href: '/financeiro/familias', desc: 'Família do produto → categoria', soEstoqueProprio: true },
       breve('Resumo do caixa', 'Caixa de hoje e vencimentos'),
       breve('Contas a receber', 'Cartões e convênios'),
       breve('Aprovação de pagamentos', 'Aguardando o dono'),

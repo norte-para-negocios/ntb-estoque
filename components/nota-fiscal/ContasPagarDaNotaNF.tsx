@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { CircleAlert } from 'lucide-react'
 import type { TituloNota } from '@/lib/financeiro/consultas'
-import { planoParcelasDaNota, resumoTitulosDaNota } from '@/lib/financeiro/titulos-da-nota-puro'
+import { planoParcelasDaNota, resumoTitulosDaNota, rotuloCategoria } from '@/lib/financeiro/titulos-da-nota-puro'
 import { situacaoTitulo } from '@/lib/financeiro/titulo-puro'
 import { SituacaoSelo } from '@/components/financeiro/comum'
 import { GerarContasNotaBotao } from './GerarContasNotaBotao'
@@ -35,6 +35,7 @@ export function ContasPagarDaNotaNF({ notaId, titulos, falha, statusCompra, full
               <Link href={`/financeiro/contas-pagar/${t.id}`} className="font-medium text-text hover:underline">Nº {t.numero}</Link>
               <span className="text-text-muted">Parcela {t.parcela}/{t.total_parcelas}</span>
               <span className="num text-text-muted">vence {dmy(t.data_vencimento)}</span>
+              <span className="text-text-muted">{rotuloCategoria(t.categoria_nome)}</span>
               <span className="num ml-auto font-semibold text-text">{brl(t.valor)}</span>
               <SituacaoSelo situacao={situacaoTitulo(t.status, t.data_vencimento, hoje)} />
             </li>
@@ -44,7 +45,7 @@ export function ContasPagarDaNotaNF({ notaId, titulos, falha, statusCompra, full
         <p className="text-[13px] text-text-muted">
           Ao confirmar a entrada, {plano.parcelas.length === 1 ? 'será gerada 1 conta a pagar' : `serão geradas ${plano.parcelas.length} contas a pagar`}:{' '}
           {plano.parcelas.map((p) => `${brl(p.valorCent / 100)} em ${dmy(p.vencimento)}`).join(' · ')}
-          {plano.regra === 'sem_duplicata' && ' (a nota não traz duplicatas: vence na emissão)'}.
+          {plano.regra === 'sem_duplicata' && ' (a nota não traz duplicatas: à vista, vence na emissão)'}.
         </p>
       ) : !r.aviso ? (
         <p className="text-[13px] text-text-muted">Sem conta a pagar para esta nota.</p>

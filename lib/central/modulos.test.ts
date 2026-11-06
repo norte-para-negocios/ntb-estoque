@@ -93,6 +93,9 @@ test('Finanças: itens reais só de estoque próprio e só dev; o resto segue "e
       '/financeiro/contas-pagar',
       '/financeiro/contas-pagar/nova',
       '/financeiro/extrato',
+      '/financeiro/familias',
+      '/financeiro/notas-desfeitas',
+      '/financeiro/notas-sem-conta',
     ]
   )
   for (const i of reais) {

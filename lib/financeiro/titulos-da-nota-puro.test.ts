@@ -1,6 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { avisoAoDesfazer, dataDaDuplicata, origemDoTitulo, planoParcelasDaNota, resumoTitulosDaNota, type TituloDaNota } from './titulos-da-nota-puro.ts'
+import {
+  avisoAoDesfazer, categoriaDaNota, competenciaDaNota, dataDaDuplicata, origemDoTitulo, planoParcelasDaNota, resumoTitulosDaNota,
+  rotuloCategoria, selecaoParaGerar, type TituloDaNota,
+} from './titulos-da-nota-puro.ts'
 import { lerNfe } from '../estoque/nfe-xml.ts'
 import { cabecalhoDaNota } from '../estoque/nf-sefaz-mapa.ts'
 
@@ -33,7 +36,7 @@ test('nota com 3 duplicatas: uma parcela por duplicata, na ordem do XML, com ven
   assert.equal(p.diferencaCent, 0)
 })
 
-test('nota sem duplicatas: uma conta só, no total da nota, vencendo na emissão (regra pendente do dono)', () => {
+test('nota sem duplicatas: à vista, uma conta só no total da nota vencendo na emissão (decidido pelo dono em 05/11)', () => {
   const p = planoParcelasDaNota({}, 512.4, '2026-11-03', '2026-11-05')
   assert.equal(p.regra, 'sem_duplicata')
   assert.deepEqual(p.parcelas, [{ parcela: 1, totalParcelas: 1, vencimento: '2026-11-03', valorCent: 51240 }])
@@ -118,4 +121,68 @@ test('origemDoTitulo: título da nota liga à nota; manual não tem link', () =>
   assert.deepEqual(origemDoTitulo('nota_entrada', 42, 'NF 340'), { rotulo: 'Nota de entrada NF 340', href: '/nota-fiscal/42' })
   assert.deepEqual(origemDoTitulo('manual', null), { rotulo: 'Lançado à mão', href: null })
   assert.deepEqual(origemDoTitulo('nota_entrada', null), { rotulo: 'nota_entrada', href: null })
+})
+
+// ---------------------------------------------------------------------- decisões do dono de 05/11 (migration 360)
+
+test('categoriaDaNota: categoria da família de MAIOR VALOR dos itens (mapa família → categoria da loja)', () => {
+  const mapa = new Map([[10, 501], [20, 502]])
+  const r = categoriaDaNota([
+    { codigoFamilia: 10, valor: 100 }, { codigoFamilia: 20, valor: 80 }, { codigoFamilia: 20, valor: 30 },
+  ], mapa)
+  assert.deepEqual(r, { categoriaId: 502, codigoFamilia: 20, motivo: 'mapeada' }) // família 20 soma 110 > 100
+})
+
+test('categoriaDaNota: família predominante SEM categoria = sem categoria (não usa a 2ª família nem inventa padrão)', () => {
+  const mapa = new Map([[10, 501]])
+  assert.deepEqual(categoriaDaNota([{ codigoFamilia: 10, valor: 10 }, { codigoFamilia: 30, valor: 90 }], mapa),
+    { categoriaId: null, codigoFamilia: 30, motivo: 'familia_sem_categoria' })
+  // nenhuma família mapeada
+  assert.equal(categoriaDaNota([{ codigoFamilia: 10, valor: 10 }], new Map()).categoriaId, null)
+})
+
+test('categoriaDaNota: produto sem família conta como grupo próprio; se for o maior, fica sem categoria', () => {
+  const mapa = new Map([[10, 501]])
+  assert.deepEqual(categoriaDaNota([{ codigoFamilia: null, valor: 60 }, { codigoFamilia: 10, valor: 40 }], mapa),
+    { categoriaId: null, codigoFamilia: null, motivo: 'sem_familia' })
+})
+
+test('categoriaDaNota: item que não gera conta a pagar fica fora; sem itens = sem categoria', () => {
+  const mapa = new Map([[10, 501], [20, 502]])
+  assert.equal(categoriaDaNota([{ codigoFamilia: 20, valor: 999, geraContaPagar: false }, { codigoFamilia: 10, valor: 1 }], mapa).categoriaId, 501)
+  assert.deepEqual(categoriaDaNota([], mapa), { categoriaId: null, codigoFamilia: null, motivo: 'sem_itens' })
+})
+
+test('categoriaDaNota: empate em valor = família de menor código (o banco usa a mesma ordem); centavos sem erro de ponto flutuante', () => {
+  const mapa = new Map([[10, 501], [20, 502]])
+  assert.equal(categoriaDaNota([{ codigoFamilia: 20, valor: 0.1 + 0.2 }, { codigoFamilia: 10, valor: 0.3 }], mapa).categoriaId, 501)
+  // empate entre família e "sem família": a família ganha
+  assert.equal(categoriaDaNota([{ codigoFamilia: null, valor: 50 }, { codigoFamilia: 20, valor: 50 }], mapa).categoriaId, 502)
+})
+
+test('competenciaDaNota: mês da ENTRADA da nota (não da emissão); sem entrada, emissão; sem nada, vencimento', () => {
+  assert.equal(competenciaDaNota('2026-11-02', '2026-10-30', '2026-11-20'), '2026-11-01')
+  assert.equal(competenciaDaNota(null, '2026-10-30', '2026-11-20'), '2026-10-01')
+  assert.equal(competenciaDaNota(null, null, '2026-12-05'), '2026-12-01')
+  assert.equal(competenciaDaNota('lixo', '2026-10-30', '2026-11-20'), '2026-10-01')
+})
+
+test('rotuloCategoria: conta sem categoria aparece como "A definir"', () => {
+  assert.equal(rotuloCategoria(null), 'A definir')
+  assert.equal(rotuloCategoria('  '), 'A definir')
+  assert.equal(rotuloCategoria('Bebidas'), 'Bebidas')
+})
+
+test('selecaoParaGerar: só ids válidos, sem repetir, com teto; acima do teto avisa', () => {
+  assert.deepEqual(selecaoParaGerar([3, 3, '4', 0, -1, 'x', 5.5], 50), { ids: [3, 4], erro: null })
+  assert.deepEqual(selecaoParaGerar([], 50), { ids: [], erro: 'Selecione pelo menos uma nota.' })
+  const r = selecaoParaGerar([1, 2, 3], 2)
+  assert.deepEqual(r.ids, [])
+  assert.match(r.erro ?? '', /no máximo 2/)
+})
+
+test('avisos de parcela paga em nota desfeita apontam para a decisão do gerente', () => {
+  const pago: TituloDaNota = { id: 1, numero: 7, parcela: 1, total_parcelas: 1, valor: 50, valor_quitado: 50, data_vencimento: '2026-11-10', status: 'pago' }
+  assert.match(resumoTitulosDaNota([pago], 'pendente', null).aviso ?? '', /gerente/)
+  assert.match(avisoAoDesfazer({ com_pagamento: 1 }) ?? '', /gerente/)
 })
