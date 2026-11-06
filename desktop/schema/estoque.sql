@@ -8028,7 +8028,8 @@ begin
       on conflict (loja_id, prefixo) do update set ultimo = estoque_codigo_seq.ultimo + 1
       returning ultimo into v_n;
     v_cod := v_pref || lpad(v_n::text, 3, '0');
-    exit when not exists (select 1 from produtos where loja_id = p_loja and codigo = v_cod);
+    exit when not exists (select 1 from produtos where loja_id = p_loja and codigo = v_cod)
+          and not exists (select 1 from produto_codigos_usados where loja_id = p_loja and codigo = v_cod);
   end loop;
   return v_cod;
 end $$;
@@ -11227,6 +11228,29 @@ end $$;
 
 
 --
+-- Name: trg_produtos_codigo_lapide(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.trg_produtos_codigo_lapide() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_modo text; v_dono bigint;
+begin
+  select modo_estoque into v_modo from lojas where id = new.loja_id;
+  if v_modo is distinct from 'proprio' or nullif(btrim(new.codigo), '') is null then return new; end if;
+  select codigo_produto into v_dono from produto_codigos_usados where loja_id = new.loja_id and codigo = new.codigo;
+  if v_dono is not null and v_dono <> new.codigo_produto then
+    raise exception 'O código % já foi usado por outro produto desta loja e não pode ser reaproveitado', new.codigo
+      using errcode = '23505';
+  end if;
+  insert into produto_codigos_usados (loja_id, codigo, codigo_produto) values (new.loja_id, new.codigo, new.codigo_produto)
+  on conflict (loja_id, codigo) do nothing;
+  return new;
+end $$;
+
+
+--
 -- Name: trg_produtos_codigo_proprio(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -11272,6 +11296,27 @@ begin
   if new.eh_mae and (tg_op = 'INSERT' or old.eh_mae is distinct from true)
      and exists (select 1 from estoque_movimentos where loja_id = new.loja_id and codigo_produto = new.codigo_produto) then
     raise exception 'O produto já tem movimentos de estoque e não pode virar mãe' using errcode = '23514';
+  end if;
+  return new;
+end $$;
+
+
+--
+-- Name: trg_produtos_unidade_travada(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.trg_produtos_unidade_travada() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_modo text;
+begin
+  if nullif(btrim(old.unidade), '') is null or new.unidade is not distinct from old.unidade then return new; end if;
+  select modo_estoque into v_modo from lojas where id = new.loja_id;
+  if v_modo is distinct from 'proprio' then return new; end if;
+  if exists (select 1 from estoque_movimentos where loja_id = new.loja_id and codigo_produto = new.codigo_produto) then
+    raise exception 'A unidade de % não pode mudar (de % para %): o produto já tem movimento de estoque. Crie um produto novo com a unidade certa.',
+      coalesce(new.descricao, new.codigo), old.unidade, new.unidade using errcode = '23514';
   end if;
   return new;
 end $$;
@@ -16107,6 +16152,25 @@ ALTER SEQUENCE public.previsao_venda_id_seq OWNED BY public.previsao_venda.id;
 
 
 --
+-- Name: produto_codigos_usados; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.produto_codigos_usados (
+    loja_id bigint NOT NULL,
+    codigo text NOT NULL,
+    codigo_produto bigint NOT NULL,
+    criado_em timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE produto_codigos_usados; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.produto_codigos_usados IS 'Fase 6: códigos de produto já usados por loja de estoque próprio. Nunca apagar: é o que impede reaproveitar um código.';
+
+
+--
 -- Name: produto_compra_param; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -18809,6 +18873,14 @@ ALTER TABLE ONLY public.previsao_venda
 
 
 --
+-- Name: produto_codigos_usados produto_codigos_usados_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.produto_codigos_usados
+    ADD CONSTRAINT produto_codigos_usados_pkey PRIMARY KEY (loja_id, codigo);
+
+
+--
 -- Name: produto_compra_param produto_compra_param_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -21381,6 +21453,13 @@ CREATE TRIGGER pedidos_compra_periodo BEFORE INSERT OR UPDATE ON public.pedidos_
 
 
 --
+-- Name: produtos produtos_codigo_lapide; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER produtos_codigo_lapide BEFORE INSERT OR UPDATE OF codigo ON public.produtos FOR EACH ROW EXECUTE FUNCTION public.trg_produtos_codigo_lapide();
+
+
+--
 -- Name: produtos produtos_codigo_proprio; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -21399,6 +21478,13 @@ CREATE TRIGGER produtos_mae_variacao BEFORE INSERT OR UPDATE OF eh_mae, produto_
 --
 
 CREATE TRIGGER produtos_sync_outbox AFTER INSERT OR DELETE OR UPDATE ON public.produtos FOR EACH ROW EXECUTE FUNCTION public.trg_sync_outbox_catalogo();
+
+
+--
+-- Name: produtos produtos_unidade_travada; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER produtos_unidade_travada BEFORE UPDATE OF unidade ON public.produtos FOR EACH ROW EXECUTE FUNCTION public.trg_produtos_unidade_travada();
 
 
 --
@@ -24872,6 +24958,12 @@ CREATE POLICY previsao_venda_select_por_loja ON public.previsao_venda FOR SELECT
 
 
 --
+-- Name: produto_codigos_usados; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.produto_codigos_usados ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: produto_compra_param; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -28022,6 +28114,15 @@ GRANT ALL ON FUNCTION public.trg_pedidos_compra_periodo() TO service_role;
 
 
 --
+-- Name: FUNCTION trg_produtos_codigo_lapide(); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.trg_produtos_codigo_lapide() TO postgres;
+GRANT ALL ON FUNCTION public.trg_produtos_codigo_lapide() TO authenticated;
+GRANT ALL ON FUNCTION public.trg_produtos_codigo_lapide() TO service_role;
+
+
+--
 -- Name: FUNCTION trg_produtos_codigo_proprio(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -28037,6 +28138,15 @@ GRANT ALL ON FUNCTION public.trg_produtos_codigo_proprio() TO service_role;
 GRANT ALL ON FUNCTION public.trg_produtos_mae_variacao() TO postgres;
 GRANT ALL ON FUNCTION public.trg_produtos_mae_variacao() TO authenticated;
 GRANT ALL ON FUNCTION public.trg_produtos_mae_variacao() TO service_role;
+
+
+--
+-- Name: FUNCTION trg_produtos_unidade_travada(); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.trg_produtos_unidade_travada() TO postgres;
+GRANT ALL ON FUNCTION public.trg_produtos_unidade_travada() TO authenticated;
+GRANT ALL ON FUNCTION public.trg_produtos_unidade_travada() TO service_role;
 
 
 --
@@ -30565,6 +30675,14 @@ GRANT ALL ON TABLE public.previsao_venda TO service_role;
 
 GRANT ALL ON SEQUENCE public.previsao_venda_id_seq TO authenticated;
 GRANT ALL ON SEQUENCE public.previsao_venda_id_seq TO service_role;
+
+
+--
+-- Name: TABLE produto_codigos_usados; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.produto_codigos_usados TO postgres;
+GRANT ALL ON TABLE public.produto_codigos_usados TO service_role;
 
 
 --
