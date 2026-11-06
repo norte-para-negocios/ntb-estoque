@@ -1,9 +1,9 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { Scale } from 'lucide-react'
+import { Download, Scale } from 'lucide-react'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
 import { hojeBahiaISO } from '@/lib/data-bahia'
-import { lerPeriodo } from '@/lib/faturamento-periodo'
+import { btnClass } from '@/components/ui-kit/Button'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
@@ -12,9 +12,10 @@ import { PeriodoBar } from '@/components/faturamento/PeriodoBar'
 import { CartaoResumo } from '@/components/faturamento/CartaoResumo'
 import { carregarCadastro, carregarConsumo } from '@/lib/estoque/consumo-perdas-loader'
 import { estadoTelaConsumo, maioresDesvios, resumoConsumo, textoSemContagem, type LinhaConsumo } from '@/lib/estoque/consumo-real-puro'
+import { lerFiltroConsumo, linhasDaVisao, type SpConsumo } from './filtro'
 
 // T5.3 (Fase 5), só desenvolvedor: consumo teórico (ficha × vendas + OP) × real (inventários), por insumo e local.
-type Sp = { ini?: string; fim?: string; mes?: string; local?: string; ver?: string }
+type Sp = SpConsumo
 
 const LIMITE = 500
 const fmtQtd = (n: number | null) => (n == null ? '—' : n.toLocaleString('pt-BR', { maximumFractionDigits: 3 }))
@@ -26,9 +27,7 @@ export default async function ConsumoPage({ searchParams }: { searchParams: Prom
   if ((await modoDaLoja(lojaId)) !== 'proprio') notFound()
   const sp = await searchParams
   const hoje = hojeBahiaISO()
-  const p = lerPeriodo(sp, hoje, 366)
-  const local = sp.local && /^\d+$/.test(sp.local) ? Number(sp.local) : null
-  const ver = sp.ver === 'sem' ? 'sem' : 'com'
+  const { p, local, ver } = lerFiltroConsumo(sp, hoje)
   const avisos: string[] = []
   const [cad, d] = await Promise.all([carregarCadastro(lojaId, avisos), carregarConsumo(lojaId, p.ini, p.fim, local)])
   const estado = estadoTelaConsumo(d.linhas, d.erro)
@@ -36,7 +35,7 @@ export default async function ConsumoPage({ searchParams }: { searchParams: Prom
   const top = maioresDesvios(d.linhas, 10)
   const nomeLocal = new Map(cad.locais.map((l) => [l.codigo, l.descricao]))
   const prod = (l: LinhaConsumo) => cad.produtos.get(l.produto)
-  const lista = d.linhas.filter((l) => (ver === 'sem' ? l.situacao !== 'ok' : l.situacao === 'ok'))
+  const lista = linhasDaVisao(d.linhas, ver)
 
   const base: Record<string, string> = { ini: p.ini, fim: p.fim, local: local ? String(local) : '', ver: ver === 'sem' ? 'sem' : '' }
   const href = (over: Record<string, string>) => {
@@ -44,6 +43,7 @@ export default async function ConsumoPage({ searchParams }: { searchParams: Prom
     for (const [k, v] of Object.entries({ ...base, ...over })) if (v) q.set(k, v)
     return `/relatorio-consumo${q.size ? `?${q}` : ''}`
   }
+  const exportHref = href({}).replace('/relatorio-consumo', '/relatorio-consumo/export')
   const chipBase = 'inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold u-motion u-press-sm'
   const chip = (ativo: boolean) => `${chipBase} ${ativo ? 'bg-brand-fill text-white' : 'bg-surface-2 text-text-muted hover:bg-[var(--border)] hover:text-text'}`
   const th = 'whitespace-nowrap px-3 py-2 text-[13px] font-semibold text-text-muted'
@@ -60,7 +60,8 @@ export default async function ConsumoPage({ searchParams }: { searchParams: Prom
   return (
     <div className="space-y-4">
       <PageHeader title="Consumo teórico × real" icon={Scale} voltarHref="/relatorios"
-        description="Quanto a ficha técnica mandou baixar (vendas e produção) contra o que saiu de verdade entre duas contagens de estoque. A diferença em reais é o desvio." />
+        description="Quanto a ficha técnica mandou baixar (vendas e produção) contra o que saiu de verdade entre duas contagens de estoque. A diferença em reais é o desvio."
+        actions={<a href={exportHref} className={btnClass('outline')}><Download className="size-4" /> Exportar Excel</a>} />
       <PeriodoBar basePath="/relatorio-consumo" params={base} ini={p.ini} fim={p.fim} hoje={hoje} />
       <div className="flex flex-wrap items-center gap-1.5">
         <Link href={href({ local: '' })} className={chip(local == null)}>Todos os locais</Link>

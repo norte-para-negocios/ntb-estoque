@@ -1,8 +1,8 @@
 import Link from 'next/link'
-import { TrendingUp } from 'lucide-react'
-import { hojeBahiaISO } from '@/lib/data-bahia'
-import { acessoFinanceiro, entradaFluxo, PERM } from '@/lib/financeiro/dados'
-import { montarFluxo, origensDoPeriodo, rotuloPeriodo, type Agrupar, type Fluxo } from '@/lib/financeiro/fluxo-caixa-puro'
+import { Download, TrendingUp } from 'lucide-react'
+import { acessoFinanceiro, PERM } from '@/lib/financeiro/dados'
+import { carregarFluxo, LIMITE_FLUXO } from '@/lib/financeiro/fluxo-carregar'
+import { origensDoPeriodo, rotuloPeriodo } from '@/lib/financeiro/fluxo-caixa-puro'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { Money } from '@/components/ui-kit/Money'
 import { btnClass } from '@/components/ui-kit/Button'
@@ -12,39 +12,12 @@ import { campo, dataBR } from '@/components/financeiro/comum'
 // projetado por conta corrente. Só desenvolvedor (rota-mãe /financeiro em ROTAS_SO_DEV), só loja de estoque próprio,
 // permissão 'Financeiro - Contas correntes'. Cada célula abre os lançamentos/contas que a formam (?periodo=&tipo=).
 type Sp = { de?: string; ate?: string; por?: string; periodo?: string; tipo?: string }
-const LIMITE: Record<Agrupar, number> = { dia: 92, semana: 400, mes: 731 }
-
-const somaDias = (iso: string, n: number) => {
-  const d = new Date(`${iso}T00:00:00Z`)
-  d.setUTCDate(d.getUTCDate() + n)
-  return d.toISOString().slice(0, 10)
-}
-const diasEntre = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000)
+const LIMITE = LIMITE_FLUXO
 
 export default async function FluxoCaixaPage({ searchParams }: { searchParams: Promise<Sp> }) {
   const { lojaId } = await acessoFinanceiro(PERM.contasCorrentes)
   const sp = await searchParams
-  const hoje = hojeBahiaISO()
-  const data = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null)
-  const por: Agrupar = sp.por === 'dia' || sp.por === 'mes' ? sp.por : 'semana'
-  const de = data(sp.de) ?? `${hoje.slice(0, 7)}-01`
-  let ate = data(sp.ate) ?? somaDias(hoje, 30)
-  let cortado = false
-  if (ate < de) ate = de
-  if (diasEntre(de, ate) > LIMITE[por]) { ate = somaDias(de, LIMITE[por]); cortado = true }
-
-  let erro: string | null = null
-  let fluxo: Fluxo | null = null
-  let avisos: string[] = []
-  const inicio = Date.now()
-  try {
-    const r = await entradaFluxo(lojaId, de, ate, hoje, por)
-    fluxo = montarFluxo(r.entrada)
-    avisos = [...r.avisos, ...fluxo.avisos]
-  } catch (e) {
-    erro = e instanceof Error ? e.message : 'Não foi possível montar o fluxo de caixa.'
-  }
-  console.info(`financeiro/fluxo-caixa: loja ${lojaId} ${de}..${ate} por ${por} em ${Date.now() - inicio} ms`)
+  const { por, de, ate, cortado, erro, fluxo, avisos } = await carregarFluxo(lojaId, sp)
 
   const link = (extra: Record<string, string>) => `/financeiro/fluxo-caixa?${new URLSearchParams({ de, ate, por, ...extra })}`
   const celula = (v: number, periodo: string, tipo: 'realizado' | 'previsto') =>
@@ -54,6 +27,7 @@ export default async function FluxoCaixaPage({ searchParams }: { searchParams: P
   return (
     <div className="space-y-4">
       <PageHeader title="Fluxo de caixa" icon={TrendingUp}
+        actions={fluxo ? <a href={`/financeiro/fluxo-caixa/export?${new URLSearchParams({ de, ate, por })}`} className={btnClass('outline')}><Download className="size-4" /> Exportar Excel</a> : undefined}
         description="O que entrou e saiu das contas até hoje e o que está previsto daqui para frente: contas a pagar, vendas a receber e contas recorrentes. Clique num valor para ver o que o forma." />
 
       <form method="get" className="grid gap-3 rounded-[var(--r-lg)] bg-surface p-4 text-[13px] u-card sm:grid-cols-4">

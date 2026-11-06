@@ -1,25 +1,23 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { LayoutGrid } from 'lucide-react'
+import { Download, LayoutGrid } from 'lucide-react'
+import { btnClass } from '@/components/ui-kit/Button'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
 import { exigirDev } from '@/lib/recursos-dev'
 import { hojeBahiaISO } from '@/lib/data-bahia'
 import { lerPeriodo } from '@/lib/faturamento-periodo'
 import { modoDaLoja } from '@/lib/estoque/ledger'
-import { createServiceClient } from '@/lib/supabase/server'
-import { rpcTodos } from '@/lib/supabase/rpc-todos'
-import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
 import { PeriodoBar } from '@/components/faturamento/PeriodoBar'
 import { CartaoResumo } from '@/components/faturamento/CartaoResumo'
-import { CLASSES, engenhariaCardapio, type ClasseCardapio, type LinhaVendida } from '@/lib/relatorios/engenharia-cardapio-puro'
+import { CLASSES, type ClasseCardapio } from '@/lib/relatorios/engenharia-cardapio-puro'
+import { carregarEngenharia } from '@/lib/relatorios/engenharia-cardapio-loader'
 
 // Fase 8, só desenvolvedor: matriz popularidade × margem dos pratos vendidos (base: lucro_proprio por produto).
 type Sp = { ini?: string; fim?: string; mes?: string; ver?: string; familia?: string }
 
-const n = (v: unknown) => Number(v) || 0
 const fmtQtd = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })
 const fmtPct = (v: number | null) => (v == null ? '—' : `${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`)
 const COR: Record<ClasseCardapio, string> = {
@@ -36,26 +34,7 @@ export default async function EngenhariaCardapioPage({ searchParams }: { searchP
   const p = lerPeriodo(sp, hoje, 366)
   const ver = CLASSES.some((c) => c.classe === sp.ver) ? (sp.ver as ClasseCardapio) : null
 
-  let erro: string | null = null
-  const supabase = createServiceClient()
-  const [linhas, prods] = await Promise.all([
-    rpcTodos<Record<string, unknown>>(supabase, 'lucro_proprio',
-      { p_loja: lojaId, p_ini: p.ini, p_fim: p.fim, p_dim: 'produto' }, (e) => { erro = e.message }),
-    buscarTodasLinhas<{ descricao: string | null; descricao_familia: string | null }>((from, to) =>
-      supabase.from('produtos').select('descricao, descricao_familia').eq('loja_id', lojaId).order('codigo_produto').range(from, to)),
-  ])
-  // O método compara pratos da mesma categoria (cerveja com cerveja, prato com prato): filtro por família.
-  // lucro_proprio devolve a descrição do produto como rótulo; a família vem do cadastro pela mesma descrição.
-  const familiaDe = new Map<string, string>()
-  for (const x of prods ?? []) if (x.descricao) familiaDe.set(x.descricao, x.descricao_familia?.trim() || 'Sem família')
-  const todas = ((linhas ?? []) as Record<string, unknown>[]).map((x): LinhaVendida & { familia: string } => ({
-    rotulo: String(x.rotulo ?? ''), quantidade: n(x.quantidade), faturamento: n(x.faturamento), cmv: n(x.cmv),
-    itens_sem_baixa: n(x.itens_sem_baixa), itens_sem_custo: n(x.itens_sem_custo),
-    familia: familiaDe.get(String(x.rotulo ?? '')) ?? 'Sem família',
-  }))
-  const familias = [...new Set(todas.map((x) => x.familia))].sort((a, b) => a.localeCompare(b, 'pt-BR'))
-  const familia = sp.familia && familias.includes(sp.familia) ? sp.familia : null
-  const r = engenhariaCardapio(todas.filter((x) => !familia || x.familia === familia))
+  const { erro, familias, familia, r } = await carregarEngenharia(lojaId, p.ini, p.fim, sp.familia)
   const lista = ver ? r.itens.filter((i) => i.classe === ver) : r.itens
   const conta = (c: ClasseCardapio) => r.itens.filter((i) => i.classe === c)
 
@@ -73,6 +52,7 @@ export default async function EngenhariaCardapioPage({ searchParams }: { searchP
   return (
     <div className="space-y-4">
       <PageHeader title="Engenharia de cardápio" icon={LayoutGrid} voltarHref="/relatorios"
+        actions={!erro && r.itens.length > 0 ? <a href={`/relatorio-engenharia-cardapio/export?${new URLSearchParams({ ini: p.ini, fim: p.fim, ...(familia ? { familia } : {}) })}`} className={btnClass('outline')}><Download className="size-4" /> Exportar Excel</a> : undefined}
         description="Cada prato vendido no período, pela quantidade que sai e pelo lucro que deixa em cada unidade." />
       <PeriodoBar basePath="/relatorio-engenharia-cardapio" params={base} ini={p.ini} fim={p.fim} hoje={hoje} />
       {familias.length > 1 && (

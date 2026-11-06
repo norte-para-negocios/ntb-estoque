@@ -1,9 +1,9 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { TrendingUp } from 'lucide-react'
+import { Download, TrendingUp } from 'lucide-react'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
 import { hojeBahiaISO } from '@/lib/data-bahia'
-import { lerPeriodo } from '@/lib/faturamento-periodo'
+import { btnClass } from '@/components/ui-kit/Button'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
@@ -13,9 +13,10 @@ import { CartaoResumo } from '@/components/faturamento/CartaoResumo'
 import { LimiteVariacaoPreco } from '@/components/relatorios/LimiteVariacaoPreco'
 import { carregarVariacaoPreco, limiteVariacaoPreco } from '@/lib/estoque/consumo-perdas-loader'
 import { alertasDaLista } from '@/lib/compras/variacao-preco-puro'
+import { lerFiltroVariacao, type SpVariacao } from './filtro'
 
 // T5.4 (Fase 5), só desenvolvedor: itens de nota cujo preço mudou mais que o limite da loja contra a última compra.
-type Sp = { ini?: string; fim?: string; mes?: string; ver?: string }
+type Sp = SpVariacao
 
 const fmtData = (iso: string) => { const [y, m, d] = iso.slice(0, 10).split('-'); return `${d}/${m}/${y}` }
 const fmtPct = (n: number) => `${n > 0 ? '+' : ''}${n.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
@@ -26,8 +27,7 @@ export default async function VariacaoPrecoPage({ searchParams }: { searchParams
   if ((await modoDaLoja(lojaId)) !== 'proprio') notFound()
   const sp = await searchParams
   const hoje = hojeBahiaISO()
-  const p = lerPeriodo(sp, hoje, 366)
-  const ver = sp.ver === 'subiu' || sp.ver === 'caiu' ? sp.ver : null
+  const { p, ver } = lerFiltroVariacao(sp, hoje)
   const [cfg, d] = await Promise.all([limiteVariacaoPreco(lojaId), carregarVariacaoPreco(lojaId, { ini: p.ini, fim: p.fim })])
   const todos = alertasDaLista(d.linhas, cfg.limite)
   const alertas = ver ? todos.filter((a) => a.alerta.sentido === ver) : todos
@@ -40,6 +40,7 @@ export default async function VariacaoPrecoPage({ searchParams }: { searchParams
     for (const [k, v] of Object.entries({ ...base, ...over })) if (v) q.set(k, v)
     return `/relatorio-variacao-preco${q.size ? `?${q}` : ''}`
   }
+  const exportHref = href({}).replace('/relatorio-variacao-preco', '/relatorio-variacao-preco/export')
   const chipBase = 'inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold u-motion u-press-sm'
   const chip = (ativo: boolean) => `${chipBase} ${ativo ? 'bg-brand-fill text-white' : 'bg-surface-2 text-text-muted hover:bg-[var(--border)] hover:text-text'}`
   const th = 'whitespace-nowrap px-3 py-2 text-[13px] font-semibold text-text-muted'
@@ -47,7 +48,8 @@ export default async function VariacaoPrecoPage({ searchParams }: { searchParams
   return (
     <div className="space-y-4">
       <PageHeader title="Variação de preço nas notas" icon={TrendingUp} voltarHref="/relatorios"
-        description="Itens de nota cujo preço por unidade mudou além do limite da loja em relação à compra anterior do mesmo produto." />
+        description="Itens de nota cujo preço por unidade mudou além do limite da loja em relação à compra anterior do mesmo produto."
+        actions={<a href={exportHref} className={btnClass('outline')}><Download className="size-4" /> Exportar Excel</a>} />
       <PeriodoBar basePath="/relatorio-variacao-preco" params={base} ini={p.ini} fim={p.fim} hoje={hoje} />
       <LimiteVariacaoPreco atual={cfg.limite} />
       {cfg.aviso && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">{cfg.aviso}</p>}

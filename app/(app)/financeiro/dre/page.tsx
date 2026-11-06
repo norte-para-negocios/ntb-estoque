@@ -1,10 +1,10 @@
 import Link from 'next/link'
-import { FileBarChart } from 'lucide-react'
-import { hojeBahiaISO } from '@/lib/data-bahia'
+import { Download, FileBarChart } from 'lucide-react'
 import { getCurrentLojaId } from '@/lib/auth'
-import { acessoFinanceiro, entradaDreLoja, lojasDaConsolidada, vendasPorProdutoMes, PERM } from '@/lib/financeiro/dados'
+import { acessoFinanceiro, vendasPorProdutoMes, PERM } from '@/lib/financeiro/dados'
+import { carregarDre, MAX_MESES_DRE, okMes } from '@/lib/financeiro/dre-carregar'
 import {
-  fimDoMes, linhasVendasPorProduto, mesesEntre, montarDre, origensDaLinha, ROTULO_LINHA, type CodigoFora, type CodigoLinha, type EntradaDre, type Mes,
+  fimDoMes, linhasVendasPorProduto, montarDre, origensDaLinha, ROTULO_LINHA, type CodigoFora, type CodigoLinha, type EntradaDre, type Mes,
 } from '@/lib/financeiro/dre-puro'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { Money } from '@/components/ui-kit/Money'
@@ -14,43 +14,13 @@ import { campo, dataBR, mesBR } from '@/components/financeiro/comum'
 // Fase 4 passo 5: DRE por competência, por loja e consolidada. Só desenvolvedor (rota-mãe /financeiro em ROTAS_SO_DEV),
 // só loja de estoque próprio, permissão 'Financeiro - Contas correntes'. Todo número abre as linhas de origem (?linha=&mes=).
 type Sp = { de?: string; ate?: string; escopo?: string; linha?: string; mes?: string }
-const MAX_MESES = 12
+const MAX_MESES = MAX_MESES_DRE
 const FORA: CodigoFora[] = ['fora_compras_estoque', 'fora_investimento', 'fora_sem_categoria']
-
-function mesAntes(mes: Mes, n: number): Mes {
-  const [a, m] = mes.split('-').map(Number)
-  const d = new Date(Date.UTC(a, m - 1 - n, 1))
-  return d.toISOString().slice(0, 7)
-}
 
 export default async function DrePage({ searchParams }: { searchParams: Promise<Sp> }) {
   const { lojaId } = await acessoFinanceiro(PERM.contasCorrentes)
   const sp = await searchParams
-  const mesAtual = hojeBahiaISO().slice(0, 7)
-  const okMes = (v?: string) => (v && /^\d{4}-\d{2}$/.test(v) ? v : null)
-  const ate = okMes(sp.ate) ?? mesAtual
-  const de = okMes(sp.de) ?? mesAntes(ate, 1)
-  const meses = mesesEntre(de <= ate ? de : ate, ate, MAX_MESES)
-  const consolidada = sp.escopo === 'consolidada'
-  const lojas = consolidada ? await lojasDaConsolidada(PERM.contasCorrentes) : [{ id: lojaId, nome: '' }]
-
-  let erro: string | null = null
-  const avisosLeitura: string[] = []
-  const ent: EntradaDre = { meses, categorias: [], vendas: [], taxasCartao: [], titulos: [], lancamentos: [], nomesLojas: {} }
-  const inicio = Date.now()
-  try {
-    const lidas = await Promise.all(lojas.map((l) => entradaDreLoja(l.id, meses)))
-    lidas.forEach((r, i) => {
-      ent.categorias.push(...r.entrada.categorias); ent.vendas.push(...r.entrada.vendas); ent.taxasCartao.push(...r.entrada.taxasCartao)
-      ent.titulos.push(...r.entrada.titulos); ent.lancamentos.push(...r.entrada.lancamentos)
-      ent.nomesLojas![lojas[i].id] = lojas[i].nome || `Loja ${lojas[i].id}`
-      avisosLeitura.push(...r.avisos.map((a) => (consolidada ? `${lojas[i].nome}: ${a}` : a)))
-    })
-  } catch (e) {
-    erro = e instanceof Error ? e.message : 'Não foi possível montar a DRE.'
-  }
-  const dre = montarDre(ent)
-  console.info(`financeiro/dre: ${consolidada ? 'consolidada' : `loja ${lojaId}`} ${meses.length} mes(es) em ${Date.now() - inicio} ms`)
+  const { mesAtual, ate, de, meses, consolidada, lojas, ent, dre, erro, avisosLeitura } = await carregarDre(lojaId, sp)
   const totalReceita = dre.linhas.find((l) => l.codigo === 'receita_bruta')?.total ?? 0
 
   const base = (extra: Record<string, string | null>) => {
@@ -66,6 +36,7 @@ export default async function DrePage({ searchParams }: { searchParams: Promise<
   return (
     <div className="space-y-4">
       <PageHeader title="DRE" icon={FileBarChart}
+        actions={!erro ? <a href={`/financeiro/dre/export?${new URLSearchParams({ de: meses[0] ?? de, ate, ...(consolidada ? { escopo: 'consolidada' } : {}) })}`} className={btnClass('outline')}><Download className="size-4" /> Exportar Excel</a> : undefined}
         description="Resultado por mês de competência: vendas e custo do estoque, deduções e as despesas lançadas no financeiro. Clique em qualquer número para ver de onde ele vem." />
 
       <form method="get" className="grid gap-3 rounded-[var(--r-lg)] bg-surface p-4 text-[13px] u-card sm:grid-cols-4">

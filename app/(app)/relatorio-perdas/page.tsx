@@ -1,9 +1,9 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { Trash2 } from 'lucide-react'
+import { Download, Trash2 } from 'lucide-react'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
 import { hojeBahiaISO } from '@/lib/data-bahia'
-import { lerPeriodo } from '@/lib/faturamento-periodo'
+import { btnClass } from '@/components/ui-kit/Button'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
@@ -11,13 +11,13 @@ import { Money } from '@/components/ui-kit/Money'
 import { PeriodoBar } from '@/components/faturamento/PeriodoBar'
 import { CartaoResumo } from '@/components/faturamento/CartaoResumo'
 import { carregarCadastro, carregarPerdas } from '@/lib/estoque/consumo-perdas-loader'
-import { ROTULO_CAUSA, type CausaPerda } from '@/lib/estoque/perdas-puro'
+import { ROTULO_CAUSA } from '@/lib/estoque/perdas-puro'
+import { lerFiltroPerdas, type SpPerdas } from './filtro'
 
 // T5.4 (Fase 5), só desenvolvedor: perdas e desperdício com causa (ajuste manual com motivo, lote vencido, quebra, inventário).
-type Sp = { ini?: string; fim?: string; mes?: string; causa?: string }
+type Sp = SpPerdas
 
 const LIMITE = 500
-const CAUSAS = Object.keys(ROTULO_CAUSA) as CausaPerda[]
 const fmtQtd = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
 const fmtData = (iso: string) => { const [y, m, d] = iso.slice(0, 10).split('-'); return `${d}/${m}/${y}` }
 
@@ -27,8 +27,7 @@ export default async function PerdasPage({ searchParams }: { searchParams: Promi
   if ((await modoDaLoja(lojaId)) !== 'proprio') notFound()
   const sp = await searchParams
   const hoje = hojeBahiaISO()
-  const p = lerPeriodo(sp, hoje, 366)
-  const causa = CAUSAS.includes(sp.causa as CausaPerda) ? (sp.causa as CausaPerda) : null
+  const { p, causa } = lerFiltroPerdas(sp, hoje)
   const avisos: string[] = []
   const [cad, r] = await Promise.all([carregarCadastro(lojaId, avisos), carregarPerdas(lojaId, p.ini, p.fim, avisos)])
   const nomeLocal = new Map(cad.locais.map((l) => [l.codigo, l.descricao]))
@@ -41,6 +40,7 @@ export default async function PerdasPage({ searchParams }: { searchParams: Promi
     for (const [k, v] of Object.entries({ ...base, ...over })) if (v) q.set(k, v)
     return `/relatorio-perdas${q.size ? `?${q}` : ''}`
   }
+  const exportHref = href({}).replace('/relatorio-perdas', '/relatorio-perdas/export')
   const chipBase = 'inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold u-motion u-press-sm'
   const chip = (ativo: boolean) => `${chipBase} ${ativo ? 'bg-brand-fill text-white' : 'bg-surface-2 text-text-muted hover:bg-[var(--border)] hover:text-text'}`
   const th = 'whitespace-nowrap px-3 py-2 text-[13px] font-semibold text-text-muted'
@@ -48,7 +48,8 @@ export default async function PerdasPage({ searchParams }: { searchParams: Promi
   return (
     <div className="space-y-4">
       <PageHeader title="Perdas e desperdício" icon={Trash2} voltarHref="/relatorios"
-        description="Tudo que saiu do estoque sem ser vendido nem produzido, com a causa: vencimento, quebra, desperdício e diferença de inventário." />
+        description="Tudo que saiu do estoque sem ser vendido nem produzido, com a causa: vencimento, quebra, desperdício e diferença de inventário."
+        actions={<a href={exportHref} className={btnClass('outline')}><Download className="size-4" /> Exportar Excel</a>} />
       <PeriodoBar basePath="/relatorio-perdas" params={base} ini={p.ini} fim={p.fim} hoje={hoje} />
       {p.cortado && <p className="text-[13px] text-text-muted">Período limitado a 366 dias.</p>}
       {avisos.map((a) => <p key={a} className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">{a}</p>)}
