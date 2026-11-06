@@ -1,6 +1,6 @@
 {
   "name": "ntb-estoque-desktop",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "private": true,
   "description": "Norte Estoque — app desktop (Windows) que funciona sem internet",
   "main": "electron/main.js",

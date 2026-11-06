@@ -16941,7 +16941,13 @@ CREATE TABLE public.vendas_proprio (
 --
 
 CREATE VIEW public.vendas_proprio_cmv WITH (security_invoker='true') AS
- WITH movs AS (
+ WITH vendas AS (
+         SELECT v.id,
+            v.loja_id,
+            v.pedido_ref,
+            split_part(v.pedido_ref, '|'::text, 1) AS chave
+           FROM public.vendas_proprio v
+        ), movs AS (
          SELECT v.id AS venda_id,
             v.loja_id,
                 CASE
@@ -16951,8 +16957,22 @@ CREATE VIEW public.vendas_proprio_cmv WITH (security_invoker='true') AS
             m_1.id,
             m_1.quantidade,
             m_1.custo_unitario
-           FROM (public.vendas_proprio v
+           FROM (vendas v
+             JOIN public.estoque_movimentos_efetivo m_1 ON (((m_1.loja_id = v.loja_id) AND (m_1.origem = 'VENDA'::text) AND (split_part(m_1.ref, '|'::text, 1) = v.chave) AND ((m_1.ref = v.pedido_ref) OR (m_1.ref ~~ (v.pedido_ref || '|%'::text))))))
+          WHERE (v.pedido_ref !~ '[%_\\]'::text)
+        UNION ALL
+         SELECT v.id AS venda_id,
+            v.loja_id,
+                CASE
+                    WHEN (m_1.ref = v.pedido_ref) THEN m_1.codigo_produto
+                    ELSE (NULLIF(split_part(m_1.ref, '|'::text, 2), ''::text))::bigint
+                END AS produto_vendido,
+            m_1.id,
+            m_1.quantidade,
+            m_1.custo_unitario
+           FROM (vendas v
              JOIN public.estoque_movimentos_efetivo m_1 ON (((m_1.loja_id = v.loja_id) AND (m_1.origem = 'VENDA'::text) AND ((m_1.ref = v.pedido_ref) OR (m_1.ref ~~ (v.pedido_ref || '|%'::text))))))
+          WHERE (v.pedido_ref ~ '[%_\\]'::text)
         ), est AS (
          SELECT estoque_movimentos.reverses_id,
             sum((estoque_movimentos.quantidade * COALESCE(estoque_movimentos.custo_unitario, (0)::numeric))) AS valor
