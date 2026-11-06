@@ -169,7 +169,7 @@ export function ModalAjuste({ produto, locais, saldos, localInicial, ...g }: { p
   const { pending, enviar } = useEnvio(() => { setOpen(false); setValor(''); setMotivo(''); setPerda(false) })
   const atual = saldos.find((s) => s.codigoLocal === local)?.saldo ?? 0
   // loja Omie: o servidor do Omie lê o texto como sempre; estoque próprio: ponto = milhar (lib/num-br.ts)
-  const n = g.destino === 'omie' ? Number(valor.replace(',', '.')) : (parseNumBR(valor) ?? NaN)
+  const n = g.destino === 'omie' ? Number(valor.replace(',', '.')) : (parseNumBR(valor, { milhar: true }) ?? NaN)
   const previa = valor !== '' && Number.isFinite(n) ? (modo === 'contagem' ? n - atual : n) : null
 
   const omie = g.destino === 'omie'

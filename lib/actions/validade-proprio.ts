@@ -32,7 +32,7 @@ export async function baixarLoteVencido(dados: { loteId: number; quantidade: num
   const __d = viaDesktop('validade-proprio#baixarLoteVencido', baixarLoteVencido, [dados]); if (__d) return __d as never
   const ctx = await contexto('Movimentacoes - Criar')
   if ('error' in ctx) return ctx
-  const quantidade = lerNumeroBR(dados.quantidade) ?? 0 // ponto = milhar, vírgula = decimal
+  const quantidade = lerNumeroBR(dados.quantidade, { milhar: true }) ?? 0 // ponto = milhar, vírgula = decimal
   if (Number.isNaN(quantidade)) return { error: `Quantidade: ${MSG_NUMERO_BR}` }
   if (!Number.isFinite(quantidade) || quantidade <= 0) return { error: 'Informe uma quantidade maior que zero.' }
   const motivo = dados.motivo?.trim() ?? ''

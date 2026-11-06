@@ -10,6 +10,7 @@ import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { formatNumBR, parseNumBR } from '@/lib/num-br'
 import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
+import { useEstoqueProprio } from '@/components/estoque-proprio/ModoEstoque'
 
 const inputClass =
   'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none transition-colors max-sm:text-base placeholder:text-text-muted focus:ring-2 focus:ring-brand/40'
@@ -38,14 +39,16 @@ export function EditarProdutoForm({
   familias: { codigo: number; descricao: string }[]
 }) {
   const [open, setOpen] = useState(false)
+  // 05/11/2026: estoque próprio lê "1.500" como 1500; loja Omie segue a regra antiga (lib/num-br.ts)
+  const proprio = useEstoqueProprio()
   const [descricao, setDescricao] = useState(produto.descricao ?? '')
   // codigo_familia 0 no Omie = "sem familia": inicia como vazio para o select casar.
   const [familia, setFamilia] = useState(produto.codigoFamilia ? String(produto.codigoFamilia) : '')
   const [tipo, setTipo] = useState(produto.tipoItem ?? '')
   const [unidade, setUnidade] = useState(produto.unidade ?? '')
   const [ncm, setNcm] = useState(produto.ncm ?? '')
-  const [valor, setValor] = useState(produto.valorUnitario != null ? formatNumBR(produto.valorUnitario) : '')
-  const [minimo, setMinimo] = useState(produto.estoqueMinimo != null ? formatNumBR(produto.estoqueMinimo) : '')
+  const [valor, setValor] = useState(produto.valorUnitario != null ? (proprio ? formatNumBR(produto.valorUnitario) : String(produto.valorUnitario)) : '')
+  const [minimo, setMinimo] = useState(produto.estoqueMinimo != null ? (proprio ? formatNumBR(produto.estoqueMinimo) : String(produto.estoqueMinimo)) : '')
   const [pdv, setPdv] = useState(produto.pdv)
   const [inativo, setInativo] = useState(produto.inativo)
   const [pending, startTransition] = useTransition()
@@ -65,12 +68,12 @@ export function EditarProdutoForm({
       toast.error('O NCM deve ter 8 dígitos (ou deixe em branco)')
       return
     }
-    const valNum = parseNumBR(valor)
+    const valNum = parseNumBR(valor, { milhar: proprio })
     if (valNum != null && (Number.isNaN(valNum) || valNum < 0)) {
       toast.error('Preço de venda inválido')
       return
     }
-    const minNum = parseNumBR(minimo)
+    const minNum = parseNumBR(minimo, { milhar: proprio })
     if (minNum != null && (Number.isNaN(minNum) || minNum < 0)) {
       toast.error('Estoque mínimo inválido')
       return

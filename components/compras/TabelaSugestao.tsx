@@ -37,7 +37,7 @@ export function TabelaSugestao({ linhas, diasAnalise, diasEstimativa, base, pode
   const marcar = podeCriarPedido || podeCriarRequisicao
   const selecionaveis = useMemo(() => linhas.filter((l) => l.acao === 'comprar' && l.sugestao > 0), [linhas])
   const qtdDe = (l: LinhaSugestao) => {
-    const v = parseNumBR(qtd[l.codigoProduto] ?? '') ?? 0
+    const v = modo === 'proprio' ? (parseNumBR(qtd[l.codigoProduto] ?? '', { milhar: true }) ?? 0) : Number((qtd[l.codigoProduto] ?? '').replace(',', '.'))
     return qtd[l.codigoProduto] != null && Number.isFinite(v) ? v : l.sugestao
   }
   const escolhidas = selecionaveis.filter((l) => sel[l.codigoProduto] && qtdDe(l) > 0)

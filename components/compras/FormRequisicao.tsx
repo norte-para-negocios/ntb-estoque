@@ -13,7 +13,7 @@ import { salvarRequisicao, type RequisicaoForm } from '@/lib/actions/requisicao-
 const campo = 'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-2.5 py-1.5 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40'
 const rotulo = 'mb-1 block text-[11px] font-medium text-text-muted'
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-const numBR = (s: string) => parseNumBR(String(s)) ?? 0 // ponto = milhar, vírgula = decimal (lib/num-br.ts)
+const numBR = (s: string) => parseNumBR(String(s), { milhar: true }) ?? 0 // ponto = milhar, vírgula = decimal (lib/num-br.ts)
 const txt = (n: number | null | undefined) => (n == null ? '' : String(n).replace('.', ','))
 
 type Linha = { chave: string; produto: ProdutoBusca | null; unidade: string; fator: string; quantidade: string; preco: string; fornecedor: string; fornecedorNome: string }

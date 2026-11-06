@@ -11,7 +11,7 @@ export function lerQuantidade(texto: string | number | null | undefined): number
   if (texto == null) return null
   if (typeof texto === 'number') return Number.isFinite(texto) && texto >= 0 ? texto : null
   // Regra única do sistema (lib/num-br.ts, decisão de 05/11/2026): ponto = milhar, vírgula = decimal.
-  const n = parseNumBR(texto)
+  const n = parseNumBR(texto, { milhar: true })
   return n != null && Number.isFinite(n) && n >= 0 ? n : null
 }
 

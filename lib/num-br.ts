@@ -1,17 +1,26 @@
-// Número DIGITADO em pt-BR (quantidade, custo, preço, mínimo). Regra única do sistema, decidida pelo dono e pelo
-// Ramon em 05/11/2026: ponto é só separador de milhar e vírgula é decimal.
-//   "1.500" = 1500 · "1.234,5" = 1234,5 · "1,5" = 1,5 · "1500" = 1500 · "3," = 3 (ainda digitando)
+// Número DIGITADO em pt-BR (quantidade, custo, preço, mínimo).
+//
+// Estoque próprio ({ milhar: true }, decisão do dono e do Ramon em 05/11/2026): ponto é só separador de milhar e vírgula
+// é decimal. "1.500" = 1500 · "1.234,5" = 1234,5 · "1,5" = 1,5 · "1500" = 1500 · "3," = 3 (ainda digitando).
 // Ponto que não pode ser milhar (casas depois do ponto ≠ 3, ou grupo que começa com 0: "3.400000", "1.5", "0.125") é
-// valor de máquina com ponto decimal e segue como decimal (compatível com o que o banco e o String(numero) devolvem).
-// Formato quebrado ("1,234.5", "1.23,4", "1e3") = NaN: quem chama mostra MSG_NUMERO_BR, nunca vira outro número calado.
-// Vazio = null (o chamador decide se é válido).
+// valor de máquina com ponto decimal e segue como decimal. Formato quebrado ("1,234.5", "1e3") = NaN: quem chama mostra
+// MSG_NUMERO_BR.
+//
+// Loja Omie (padrão, sem a opção): regra ANTIGA, sem mudança (decisão de 05/11/2026: loja Omie não muda) — com vírgula,
+// tira os pontos e a vírgula vira ponto; sem vírgula, Number(texto) ("1.500" = 1,5). Vazio = null nos dois.
 export const MSG_NUMERO_BR = 'Número inválido: use vírgula para decimal (1,5) e ponto só para milhar (1.500).'
+export type OpcoesNumBR = { /** true = regra do estoque próprio (ponto = milhar). Padrão: regra antiga (loja Omie). */ milhar?: boolean }
 
 const RE_INTEIRO_OU_VIRGULA = /^-?(\d+,?\d*|,\d+)$/
 const RE_MILHAR = /^-?[1-9]\d{0,2}(\.\d{3})+(,\d*)?$/
 const RE_PONTO_DECIMAL = /^-?\d+\.\d+$/
 
-export function parseNumBR(v: string): number | null {
+export function parseNumBR(v: string, opcoes?: OpcoesNumBR): number | null {
+  if (!opcoes?.milhar) {
+    const t = String(v ?? '').trim()
+    if (t === '') return null
+    return Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t)
+  }
   const t = String(v ?? '').replace(/[\s\u00a0]/g, '')
   if (t === '') return null
   if (RE_MILHAR.test(t)) return Number(t.replace(/\./g, '').replace(',', '.'))
@@ -21,10 +30,10 @@ export function parseNumBR(v: string): number | null {
 }
 
 /** Para server actions: número passa direto; texto segue `parseNumBR`; vazio/nulo = null; inválido = NaN. */
-export function lerNumeroBR(v: unknown): number | null {
+export function lerNumeroBR(v: unknown, opcoes?: OpcoesNumBR): number | null {
   if (v == null) return null
   if (typeof v === 'number') return v
-  return parseNumBR(String(v))
+  return parseNumBR(String(v), opcoes)
 }
 
 // Number/null (ou string numerica vinda do banco, ex.: "3.400000") -> texto pt-BR

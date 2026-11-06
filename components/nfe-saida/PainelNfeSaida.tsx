@@ -145,7 +145,7 @@ function DialogoEmitir({ origem, origemId, rotulo, tpAmb }: { origem: 'devolucao
   const [esp, setEsp] = useState('')
   const [pesoB, setPesoB] = useState('')
   const [obs, setObs] = useState('')
-  const n = (s: string) => parseNumBR(s) || null
+  const n = (s: string) => parseNumBR(s, { milhar: true }) || null
 
   function abrir() {
     setAberto(true); setErro(null); setFaltas(null)

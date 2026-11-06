@@ -5,6 +5,7 @@ import { Minus, Plus } from 'lucide-react'
 import { setQuantidadeNFItem } from '@/lib/actions/nota-fiscal'
 import { formatNumBR, MSG_NUMERO_BR, parseNumBR } from '@/lib/num-br'
 import { toast } from 'sonner'
+import { useEstoqueProprio } from '@/components/estoque-proprio/ModoEstoque'
 
 export function QuantidadeInput({
   itemId,
@@ -13,12 +14,14 @@ export function QuantidadeInput({
   itemId: number
   valorInicial: number | null
 }) {
-  const [valor, setValor] = useState<string>(valorInicial != null ? formatNumBR(valorInicial) : '')
+  // 05/11/2026: estoque próprio lê "1.500" como 1500; loja Omie segue a regra antiga (lib/num-br.ts)
+  const proprio = useEstoqueProprio()
+  const [valor, setValor] = useState<string>(valorInicial != null ? (proprio ? formatNumBR(valorInicial) : String(valorInicial)) : '')
   const valorSalvo = useRef(valor)
   const [pending, startTransition] = useTransition()
 
   function salvar(v: string) {
-    const num = parseNumBR(v)
+    const num = parseNumBR(v, { milhar: proprio })
     if (num != null && (Number.isNaN(num) || num < 0)) {
       toast.error('Quantidade inválida', { description: MSG_NUMERO_BR })
       return
@@ -37,9 +40,9 @@ export function QuantidadeInput({
   }
 
   function ajustar(delta: number) {
-    const atual = parseNumBR(valor) ?? 0
+    const atual = parseNumBR(valor, { milhar: proprio }) ?? 0
     const novo = Math.max(0, (Number.isNaN(atual) ? 0 : atual) + delta)
-    const str = formatNumBR(novo)
+    const str = proprio ? formatNumBR(novo) : String(novo)
     setValor(str)
     salvar(str)
   }

@@ -18,7 +18,7 @@ export type VersaoLinha = { id: number; versao: number; ativa: boolean; rendimen
 type Linha = { chave: number; insumo: string; qtd: string; fc: string; perda: string }
 
 const campo = 'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-2.5 py-1.5 text-sm text-text outline-none max-sm:text-base focus:ring-2 focus:ring-brand/40 num'
-const num = (v: string) => parseNumBR(String(v)) ?? 0 // ponto = milhar, vírgula = decimal (lib/num-br.ts)
+const num = (v: string) => parseNumBR(String(v), { milhar: true }) ?? 0 // ponto = milhar, vírgula = decimal (lib/num-br.ts)
 
 export function EditorFicha({
   produto, rendimentoInicial, itensIniciais, expandirInicial, ativaAtual, versaoAtual, insumos, outrasFichas, versoes, podeEditar,

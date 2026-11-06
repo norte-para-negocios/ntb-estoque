@@ -99,9 +99,9 @@ export function CriarOPProdutos({
     setItens((prev) =>
       prev.map((i) => {
         if (i.produto.codigo_produto !== cod) return i
-        const parsed = parseNumBR(i.quantidade)
+        const parsed = parseNumBR(i.quantidade, { milhar: proprio })
         const atual = parsed != null && !Number.isNaN(parsed) ? parsed : 0
-        return { ...i, quantidade: formatNumBR(Math.max(0, atual + delta)) }
+        return { ...i, quantidade: proprio ? formatNumBR(Math.max(0, atual + delta)) : String(Math.max(0, atual + delta)) }
       })
     )
   }
@@ -121,7 +121,7 @@ export function CriarOPProdutos({
     }
     const itensValidos = itens.map((i) => ({
       nCodProduto: i.produto.codigo_produto,
-      quantidade: parseNumBR(i.quantidade) || 0,
+      quantidade: parseNumBR(i.quantidade, { milhar: proprio }) || 0,
       validadeDias: Number(i.validadeDias) || null,
     }))
     if (itensValidos.some((i) => i.quantidade <= 0)) {

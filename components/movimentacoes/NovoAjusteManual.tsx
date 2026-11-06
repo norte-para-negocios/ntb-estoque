@@ -57,7 +57,7 @@ export function NovoAjusteManual({ locais, produto: produtoFixo, produtos, propr
 
   function criar() {
     // estoque próprio: regra única de número digitado (ponto = milhar); loja Omie segue como era
-    const qtd = proprio ? (parseNumBR(quantidade) ?? 0) : Number(quantidade.replace(',', '.'))
+    const qtd = proprio ? (parseNumBR(quantidade, { milhar: true }) ?? 0) : Number(quantidade.replace(',', '.'))
     if (!produto) {
       toast.error('Escolha o produto')
       return

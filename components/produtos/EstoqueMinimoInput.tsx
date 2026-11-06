@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from 'react'
 import { setEstoqueMinimo } from '@/lib/actions/produto-minimo'
 import { formatNumBR, parseNumBR } from '@/lib/num-br'
 import { toast } from 'sonner'
+import { useEstoqueProprio } from '@/components/estoque-proprio/ModoEstoque'
 
 export function EstoqueMinimoInput({
   produtoId,
@@ -17,8 +18,10 @@ export function EstoqueMinimoInput({
   podeEditar?: boolean // sem permissao de Editar produto, o campo fica somente-leitura
 }) {
   // Mostra o valor EFETIVO preenchido: override manual tem prioridade; senao o do Omie.
+  // 05/11/2026: estoque próprio lê "1.500" como 1500; loja Omie segue a regra antiga (lib/num-br.ts)
+  const proprio = useEstoqueProprio()
   const efetivo = valorManual != null ? valorManual : valorOmie
-  const inicial = efetivo != null ? formatNumBR(efetivo) : ''
+  const inicial = efetivo != null ? (proprio ? formatNumBR(efetivo) : String(efetivo)) : ''
   const [valor, setValor] = useState(inicial)
   const salvoRef = useRef(inicial)
   const [pending, startTransition] = useTransition()
@@ -26,7 +29,7 @@ export function EstoqueMinimoInput({
   function salvar() {
     const atual = valor.trim()
     if (atual === salvoRef.current) return // nao mudou: nao grava override redundante
-    const num = parseNumBR(atual)
+    const num = parseNumBR(atual, { milhar: proprio })
     if (num != null && (Number.isNaN(num) || num < 0)) {
       toast.error('Valor inválido')
       setValor(salvoRef.current)

@@ -120,20 +120,20 @@ export function EstruturaProduto({
   function salvar() {
     const itens: ItemEstruturaInput[] = []
     for (const l of linhas) {
-      const q = parseNumBR(l.quantidade)
+      const q = parseNumBR(l.quantidade, { milhar: proprio })
       if (q == null || !Number.isFinite(q) || q <= 0) {
         toast.error('Quantidade inválida', { description: l.descricao })
         return
       }
-      const perda = l.perda ? parseNumBR(l.perda) ?? 0 : 0
-      const fator = proprio && l.fator ? parseNumBR(l.fator) ?? 1 : 1
+      const perda = l.perda ? parseNumBR(l.perda, { milhar: proprio }) ?? 0 : 0
+      const fator = proprio && l.fator ? parseNumBR(l.fator, { milhar: proprio }) ?? 1 : 1
       if (proprio && !(fator > 0)) {
         toast.error('Fator de correção inválido', { description: l.descricao })
         return
       }
       itens.push({ idMalha: l.idMalha, idProdMalha: l.idProdMalha, codigo: l.codigo, descricao: l.descricao, quantidade: q, perda, fatorCorrecao: proprio ? fator : undefined })
     }
-    const rend = proprio ? parseNumBR(rendimento) ?? 1 : undefined
+    const rend = proprio ? parseNumBR(rendimento, { milhar: proprio }) ?? 1 : undefined
     if (proprio && !(rend! > 0)) {
       toast.error('Rendimento inválido')
       return
@@ -278,7 +278,7 @@ export function EstruturaProduto({
                                   className="num w-20 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 py-1 text-right text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
                                 />
                               ) : (
-                                <span className="num font-medium text-text">{fmtQt(parseNumBR(l.quantidade) ?? 0)}</span>
+                                <span className="num font-medium text-text">{fmtQt(parseNumBR(l.quantidade, { milhar: proprio }) ?? 0)}</span>
                               )}
                             </td>
                             <td className="px-3 py-2 text-text-muted">{l.unidade}</td>
@@ -293,7 +293,7 @@ export function EstruturaProduto({
                                     className="num w-16 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 py-1 text-right text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
                                   />
                                 ) : (
-                                  <span className="num text-text-muted">{l.fator ? fmtQt(parseNumBR(l.fator) ?? 1) : '1'}</span>
+                                  <span className="num text-text-muted">{l.fator ? fmtQt(parseNumBR(l.fator, { milhar: proprio }) ?? 1) : '1'}</span>
                                 )}
                               </td>
                             )}
@@ -307,12 +307,12 @@ export function EstruturaProduto({
                                   className="num w-16 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 py-1 text-right text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
                                 />
                               ) : (
-                                <span className="num text-text-muted">{l.perda ? fmtQt(parseNumBR(l.perda) ?? 0) : '-'}</span>
+                                <span className="num text-text-muted">{l.perda ? fmtQt(parseNumBR(l.perda, { milhar: proprio }) ?? 0) : '-'}</span>
                               )}
                             </td>
                             {proprio && (
                               <td className="px-3 py-2 text-right num font-medium text-text">
-                                {fmtQt((parseNumBR(l.quantidade) ?? 0) * (l.fator ? parseNumBR(l.fator) ?? 1 : 1) * (1 + (l.perda ? parseNumBR(l.perda) ?? 0 : 0) / 100))}
+                                {fmtQt((parseNumBR(l.quantidade, { milhar: proprio }) ?? 0) * (l.fator ? parseNumBR(l.fator, { milhar: proprio }) ?? 1 : 1) * (1 + (l.perda ? parseNumBR(l.perda, { milhar: proprio }) ?? 0 : 0) / 100))}
                               </td>
                             )}
                             {editando && (

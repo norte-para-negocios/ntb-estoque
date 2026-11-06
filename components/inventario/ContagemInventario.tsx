@@ -61,8 +61,8 @@ const REENVIO_MS = 30_000
 
 // Base do stepper +/-: prioriza o que esta DIGITADO agora (texto cru, pode ter
 // virgula e ainda nao ter dado blur); se invalido, cai no number ja salvo.
-function stepBase(texto: string, fallback: number): number {
-  const p = parseNumBR(texto)
+function stepBase(texto: string, fallback: number, proprio = false): number {
+  const p = parseNumBR(texto, { milhar: proprio })
   return p != null && Number.isFinite(p) ? p : fallback
 }
 
@@ -753,7 +753,7 @@ export function ContagemInventario({
                   ) : (
                     <div className="flex items-center gap-2 lg:gap-1.5">
                       <button
-                        onClick={() => salvarQtd(item.id, Math.max(0, stepBase(texto, base) - 1))}
+                        onClick={() => salvarQtd(item.id, Math.max(0, stepBase(texto, base, proprio) - 1))}
                         disabled={enviando.has(item.id)}
                         className="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface-2 text-text u-motion u-press hover:bg-[var(--border)] disabled:opacity-50 lg:size-8"
                         aria-label="Diminuir"
@@ -771,7 +771,7 @@ export function ContagemInventario({
                           setTextos((prev) => ({ ...prev, [item.id]: limpo }))
                         }}
                         onBlur={(e) => {
-                          const parsed = parseNumBR(e.target.value)
+                          const parsed = parseNumBR(e.target.value, { milhar: proprio })
                           const val = parsed != null && Number.isFinite(parsed) ? parsed : null
                           salvarQtd(item.id, val)
                         }}
@@ -780,7 +780,7 @@ export function ContagemInventario({
                         placeholder="0"
                       />
                       <button
-                        onClick={() => salvarQtd(item.id, stepBase(texto, base) + 1)}
+                        onClick={() => salvarQtd(item.id, stepBase(texto, base, proprio) + 1)}
                         disabled={enviando.has(item.id)}
                         className="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface-2 text-text u-motion u-press hover:bg-[var(--border)] disabled:opacity-50 lg:size-8"
                         aria-label="Aumentar"

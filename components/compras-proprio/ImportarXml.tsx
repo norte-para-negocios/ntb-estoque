@@ -57,7 +57,7 @@ export function ImportarXml({ locais }: { locais: { codigoLocal: number; descric
     iniciarLancamento(async () => {
       const r = await lancarCompraXml({
         xml, codigoLocal: local, icmsRecuperavel: icms,
-        mapeamentos: previa.itens.map((i) => ({ linha: i.linha, codigoProduto: mapa[i.linha]?.produto?.codigoProduto ?? null, fator: parseNumBR(mapa[i.linha]?.fator ?? '1') || 1, codigoLocal: mapa[i.linha]?.local || null })),
+        mapeamentos: previa.itens.map((i) => ({ linha: i.linha, codigoProduto: mapa[i.linha]?.produto?.codigoProduto ?? null, fator: parseNumBR(mapa[i.linha]?.fator ?? '1', { milhar: true }) || 1, codigoLocal: mapa[i.linha]?.local || null })),
       })
       if ('error' in r) { toast.error('Não foi possível lançar', { description: r.error }); return }
       if (r.retida === 'avisos') toast.warning('Nota gravada, sem entrada no estoque', { description: 'Há avisos de custo ou quantidade nos itens: confira na nota e confirme a entrada.' })
@@ -113,7 +113,7 @@ export function ImportarXml({ locais }: { locais: { codigoLocal: number; descric
             <ul className="space-y-3">
               {previa.itens.map((i) => {
                 const m = mapa[i.linha] ?? { produto: null, fator: '1', local: '' }
-                const fator = parseNumBR(m.fator) || 1
+                const fator = parseNumBR(m.fator, { milhar: true }) || 1
                 // mesma conta do lançamento (valor de estoque pelas marcações sugeridas ÷ quantidade recebida)
                 const custo = i.quantidade > 0 ? previaCustoItem({
                   quantidadeNota: i.quantidade, precoUnit: i.valorUnitario, valorTotalItem: i.valorTotalItem, desconto: i.desconto, ipi: i.fiscal.ipi,

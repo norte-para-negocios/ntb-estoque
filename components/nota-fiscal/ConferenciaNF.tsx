@@ -232,7 +232,7 @@ function LinhaItem({ item, editavel, encerrada, locais, extras }: { item: ItemCo
       setTrocando(false); router.refresh()
     })
   }
-  const fatorNum = parseNumBR(fator) || 1
+  const fatorNum = parseNumBR(fator, { milhar: true }) || 1
 
   return (
     <li className="space-y-2 px-4 py-3">

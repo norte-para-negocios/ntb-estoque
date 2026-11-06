@@ -52,7 +52,7 @@ export function ProduzirLote({
   const mapaCmc = useMemo(() => new Map(cmc), [cmc])
   const nome = useMemo(() => new Map(nomes.map((n) => [n.codigoProduto, n])), [nomes])
   const sel = produtos.find((p) => String(p.codigoProduto) === produto)
-  const q = parseNumBR(qtd) ?? 0
+  const q = parseNumBR(qtd, { milhar: true }) ?? 0
 
   const previa = useMemo(() => {
     if (!sel || !(q > 0)) return null

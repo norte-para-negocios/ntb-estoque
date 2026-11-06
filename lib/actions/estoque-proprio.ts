@@ -31,7 +31,7 @@ function ref(prefixo: string): string {
 
 /** Texto digitado → número pela regra única (ponto = milhar, vírgula = decimal). Vazio = null; formato quebrado = NaN. */
 function numero(v: unknown): number | null {
-  const n = lerNumeroBR(v)
+  const n = lerNumeroBR(v, { milhar: true })
   return n == null || Number.isNaN(n) || Number.isFinite(n) ? n : NaN
 }
 const invalido = (n: number | null) => n != null && Number.isNaN(n)

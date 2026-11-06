@@ -34,7 +34,7 @@ export function FreteCteNF({ notaId, ctes, editavel }: { notaId: number; ctes: C
     start(async () => feito(await importarCteNF(notaId, xml), 'CT-e ligado à nota'))
   }
   function salvarManual() {
-    const v = parseNumBR(valor) ?? NaN
+    const v = parseNumBR(valor, { milhar: true }) ?? NaN
     start(async () => { const r = await informarFreteNF(notaId, { valor: v, transportadora: transp, numero }); feito(r, 'Frete informado'); if (!('error' in r)) { setManual(false); setValor('') } })
   }
   return (

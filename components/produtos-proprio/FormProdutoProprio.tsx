@@ -96,7 +96,7 @@ export function FormProdutoProprio({ modo, familias, grupos, inicial }: { modo: 
 
   const opcoes = useMemo(() => opcoesGrupo(grupos), [grupos])
   const menorPreco = useMemo(() => {
-    const ps = linhas.filter((l) => !l.inativo).map((l) => parseNumBR(l.preco)).filter((n): n is number => n != null && Number.isFinite(n))
+    const ps = linhas.filter((l) => !l.inativo).map((l) => parseNumBR(l.preco, { milhar: true })).filter((n): n is number => n != null && Number.isFinite(n))
     return ps.length ? Math.min(...ps) : null
   }, [linhas])
 
@@ -105,16 +105,16 @@ export function FormProdutoProprio({ modo, familias, grupos, inicial }: { modo: 
     if (!unidade.trim()) return toast.error('Informe a unidade')
     const n8 = ncm.replace(/\D/g, '')
     if (n8 && n8.length !== 8) return toast.error('O NCM deve ter 8 dígitos (ou deixe em branco)')
-    const precoNum = parseNumBR(valor)
+    const precoNum = parseNumBR(valor, { milhar: true })
     if (!comVariacoes && precoNum != null && (Number.isNaN(precoNum) || precoNum < 0)) return toast.error('Preço de venda inválido')
-    const minNum = parseNumBR(minimo)
+    const minNum = parseNumBR(minimo, { milhar: true })
     if (minNum != null && (Number.isNaN(minNum) || minNum < 0)) return toast.error('Estoque mínimo inválido')
     const diasNum = validadeDias.trim() ? Math.trunc(Number(validadeDias)) : null
     if (diasNum != null && (!Number.isFinite(diasNum) || diasNum < 1 || diasNum > 3650)) return toast.error('Validade em dias inválida (1 a 3650)')
 
     const vars = comVariacoes
       ? linhas.filter((l) => l.valor.trim()).map((l) => {
-          const p = parseNumBR(l.preco)
+          const p = parseNumBR(l.preco, { milhar: true })
           return { codigo: l.codigo, descricao: `${descricao.trim()} - ${l.valor.trim()}`, preco: p != null && Number.isFinite(p) ? p : 0, inativo: l.inativo, atributos: { [atributo.trim() || 'Variação']: l.valor.trim() } }
         })
       : []

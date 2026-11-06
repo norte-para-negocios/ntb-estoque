@@ -38,7 +38,7 @@ export function BaixaLote({ lote }: { lote: LoteAcao }) {
     start(async () => {
       const r = await baixarLoteVencido({ loteId: lote.id, quantidade: qtd, motivo: m })
       if ('error' in r) { toast.error('Não foi possível dar baixa', { description: r.error }); return }
-      toast.success('Baixa registrada', { description: r.aviso ?? `${fmt(parseNumBR(qtd) ?? 0)} ${un} saíram do estoque como perda.` })
+      toast.success('Baixa registrada', { description: r.aviso ?? `${fmt(parseNumBR(qtd, { milhar: true }) ?? 0)} ${un} saíram do estoque como perda.` })
       setOpen(false)
       router.refresh()
     })

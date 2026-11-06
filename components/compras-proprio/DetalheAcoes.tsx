@@ -24,7 +24,7 @@ export function MapearPendentes({ compraId, itens }: { compraId: number; itens: 
     start(async () => {
       const r = await mapearPendentes({
         compraId,
-        mapeamentos: escolhidos.map((i) => ({ linha: i.linha, codigoProduto: mapa[i.linha].produto!.codigoProduto, fator: parseNumBR(mapa[i.linha].fator) || 1 })),
+        mapeamentos: escolhidos.map((i) => ({ linha: i.linha, codigoProduto: mapa[i.linha].produto!.codigoProduto, fator: parseNumBR(mapa[i.linha].fator, { milhar: true }) || 1 })),
       })
       if ('error' in r) { toast.error('Não foi possível lançar', { description: r.error }); return }
       toast.success(`${r.lancados} ${r.lancados === 1 ? 'item lançado' : 'itens lançados'} no estoque`)

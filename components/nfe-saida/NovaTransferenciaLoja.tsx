@@ -18,7 +18,7 @@ const input = 'w-full rounded-[var(--r-md)] bg-surface-2 px-3 py-2'
 type Destino = { id: number; nome: string; natureza: 'transferencia' | 'remessa' }
 type Local = { codigo: number; descricao: string }
 type Item = { produto: ProdutoBusca; quantidade: string }
-const lerNum = (t: string) => parseNumBR(t) ?? 0 // ponto = milhar, vírgula = decimal (lib/num-br.ts)
+const lerNum = (t: string) => parseNumBR(t, { milhar: true }) ?? 0 // ponto = milhar, vírgula = decimal (lib/num-br.ts)
 
 export function NovaTransferenciaLoja({ destinos, locais }: { destinos: Destino[]; locais: Local[] }) {
   const router = useRouter()

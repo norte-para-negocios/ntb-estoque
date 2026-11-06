@@ -15,7 +15,7 @@ import { PainelNfeSaida } from '@/components/nfe-saida/PainelNfeSaida'
 
 const q = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-const lerNum = (t: string) => parseNumBR(t) ?? 0 // ponto = milhar, vírgula = decimal (lib/num-br.ts)
+const lerNum = (t: string) => parseNumBR(t, { milhar: true }) ?? 0 // ponto = milhar, vírgula = decimal (lib/num-br.ts)
 const th = 'whitespace-nowrap px-2.5 py-2 text-left text-[12px] font-semibold text-text-muted'
 
 // Seção da nota (estoque próprio): devolver itens ao fornecedor. Sai do estoque na hora (ao custo da entrada) e fica

@@ -14,7 +14,7 @@ import { campoCompra, SeletorProduto } from './SeletorProduto'
 
 type Linha = { chave: number; produto: ProdutoBusca | null; quantidade: string; valor: string; lote: string; validade: string }
 const fmtBRL = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-const n = (s: string) => parseNumBR(s) || 0 // ponto = milhar, vírgula = decimal (lib/num-br.ts)
+const n = (s: string) => parseNumBR(s, { milhar: true }) || 0 // ponto = milhar, vírgula = decimal (lib/num-br.ts)
 
 export function CompraManual({ locais }: { locais: { codigoLocal: number; descricao: string; padrao: boolean }[] }) {
   const router = useRouter()

@@ -40,7 +40,7 @@ function atualizarTelas() {
 
 // ponto = milhar, vírgula = decimal (lib/num-br.ts); vazio = 0; formato quebrado = NaN (barrado em lancarCompraManual)
 const numero = (v: unknown): number => {
-  const n = lerNumeroBR(v)
+  const n = lerNumeroBR(v, { milhar: true })
   return n == null ? 0 : Number.isFinite(n) ? n : NaN
 }
 /** Algum número digitado com formato quebrado ("1,234.5")? Sem isso o item sumia calado no filtro "quantidade > 0". */

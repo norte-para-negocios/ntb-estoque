@@ -140,7 +140,7 @@ function useOP(op: OPData) {
   }
 
   function salvarQuantidade() {
-    const num = parseNumBR(quantidade)
+    const num = parseNumBR(quantidade, { milhar: proprio })
     if (num != null && (Number.isNaN(num) || num < 0)) {
       toast.error('Quantidade inválida')
       return
@@ -168,11 +168,11 @@ function useOP(op: OPData) {
   }
 
   function ajustarQuantidade(delta: number) {
-    let num = parseNumBR(quantidade) ?? 0
+    let num = parseNumBR(quantidade, { milhar: proprio }) ?? 0
     if (Number.isNaN(num)) num = 0
     num += delta
     if (num < 0) num = 0
-    setQuantidade(formatNumBR(num))
+    setQuantidade(proprio ? formatNumBR(num) : String(num))
     startTransition(async () => {
       await setQuantidadeOP(op.id, num)
       toast.success('Quantidade salva')
@@ -245,7 +245,7 @@ function useOP(op: OPData) {
 
   function salvarQtdPlanejada(novo: string) {
     if (!novo || novo === qtdPlanejadaSalva.current) return
-    const num = parseNumBR(novo)
+    const num = parseNumBR(novo, { milhar: proprio })
     if (num == null || Number.isNaN(num) || num <= 0) {
       toast.error('Quantidade planejada inválida')
       setQtdPlanejada(qtdPlanejadaSalva.current) // desfaz
@@ -268,7 +268,7 @@ function useOP(op: OPData) {
   const qtdPlanejadaDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function ajustarQtdPlanejada(delta: number) {
-    let num = parseNumBR(qtdPlanejada) ?? 0
+    let num = parseNumBR(qtdPlanejada, { milhar: proprio }) ?? 0
     if (Number.isNaN(num)) num = 0
     num += delta
     if (num <= 0) return // nao deixa a quantidade planejada zerar/negativar no Omie
@@ -296,7 +296,7 @@ function useOP(op: OPData) {
   // (usa os campos inline dataOP/qtdPlanejada) e o dialog do mobile (usa
   // dataConclusao/qtdeConcluir).
   function concluir(dataISO: string | null, qtdStr: string) {
-    const q = parseNumBR(qtdStr)
+    const q = parseNumBR(qtdStr, { milhar: proprio })
     if (q == null || Number.isNaN(q) || q <= 0) {
       toast.error('Quantidade a concluir inválida')
       return
