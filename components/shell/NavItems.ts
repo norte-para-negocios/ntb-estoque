@@ -1,5 +1,6 @@
 import {
   LayoutDashboard,
+  LayoutGrid,
   FileText,
   Factory,
   ArrowLeftRight,
@@ -100,6 +101,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/relatorio-consumo', label: 'Consumo teórico × real', icon: Sigma, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
   { href: '/relatorio-perdas', label: 'Perdas e desperdício', icon: Trash2, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
   { href: '/relatorio-variacao-preco', label: 'Variação de preço nas notas', icon: ChartSpline, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
+  // Fase 8: engenharia de cardápio, só dev (rota em ROTAS_SO_DEV).
+  { href: '/relatorio-engenharia-cardapio', label: 'Engenharia de cardápio', icon: LayoutGrid, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
   { href: '/nota-fiscal', label: 'Notas Fiscais', icon: FileText, group: 'Operação' },
   { href: '/ordem-producao', label: 'Ordens de Produção', icon: Factory, group: 'Operação' },
   { href: '/transferencia', label: 'Transferências', icon: ArrowLeftRight, group: 'Operação' },

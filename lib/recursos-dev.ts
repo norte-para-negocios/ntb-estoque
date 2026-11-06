@@ -23,6 +23,8 @@ export const ROTAS_SO_DEV = [
   '/relatorio-consumo',
   '/relatorio-perdas',
   '/relatorio-variacao-preco',
+  // Fase 8: engenharia de cardápio (popularidade × margem). Só estoque próprio.
+  '/relatorio-engenharia-cardapio',
 ] as const
 
 export async function ehDesenvolvedor(): Promise<boolean> {

@@ -31,6 +31,7 @@ export const ROTAS_SO_DEV_ESPELHO: readonly string[] = [
   '/relatorio-consumo',
   '/relatorio-perdas',
   '/relatorio-variacao-preco',
+  '/relatorio-engenharia-cardapio',
 ]
 
 /** Item de menu que governa a visibilidade do item da central (regra explícita ou NAV de maior prefixo). */

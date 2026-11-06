@@ -250,6 +250,7 @@ export const MODULOS: ModuloCentral[] = [
       { label: 'Taxas e prazos de recebimento', href: '/financeiro/formas-recebimento', desc: 'Adquirente, taxa e prazo de cada forma', soEstoqueProprio: true },
       { label: 'Fluxo de caixa', href: '/financeiro/fluxo-caixa', desc: 'Entrou, saiu e o previsto; saldo por conta', soEstoqueProprio: true },
       { label: 'DRE', href: '/financeiro/dre', desc: 'Resultado por mês, por loja e consolidado', soEstoqueProprio: true },
+      { label: 'Engenharia de cardápio', href: '/relatorio-engenharia-cardapio', desc: 'Pratos por vendas × lucro: manter, divulgar, reprecificar ou tirar', soEstoqueProprio: true },
     ],
     secoes: [
       {

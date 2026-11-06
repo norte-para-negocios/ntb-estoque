@@ -5,7 +5,7 @@ import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { PRESETS, EM_BREVE } from '@/lib/relatorios/catalogo'
 import { getCurrentLojaId } from '@/lib/auth'
-import { TableProperties } from 'lucide-react'
+import { TableProperties, LayoutGrid } from 'lucide-react'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import {
   TrendingUp, BarChart3, ShoppingCart, ArrowDownUp, DollarSign, Scale, Percent, ShieldCheck, CalendarCheck, ArrowUpRight, Boxes, ClipboardX, Factory, FileBarChart, Target, Flag, ChartColumnDecreasing, Warehouse, Calculator, Truck, BellRing, Sigma, Trash2, ChartSpline,
@@ -82,7 +82,10 @@ export default async function RelatoriosPage() {
   const aindaEmTeste = (href: string) => ROTAS_SO_DEV.some((r) => href === r || href.startsWith(r + '?'))
   const secoes = RELATORIOS.map(semOmie).map((sec) => (dev ? sec : { ...sec, itens: sec.itens.filter((i) => !aindaEmTeste(i.href)) })).map((sec) =>
     proprio && sec.grupo === 'Faturamento'
-      ? { ...sec, itens: [{ href: '/relatorio-lucro', titulo: 'Lucro', icon: TrendingUp, descricao: 'Faturamento menos o custo das mercadorias vendidas, por produto, família, tipo, dia ou mês.', pergunta: 'Quanto sobrou de cada venda?' }, ...sec.itens] }
+      ? { ...sec, itens: [{ href: '/relatorio-lucro', titulo: 'Lucro', icon: TrendingUp, descricao: 'Faturamento menos o custo das mercadorias vendidas, por produto, família, tipo, dia ou mês.', pergunta: 'Quanto sobrou de cada venda?' },
+          // Fase 8, só desenvolvedor (rota em ROTAS_SO_DEV)
+          ...(dev ? [{ href: '/relatorio-engenharia-cardapio', titulo: 'Engenharia de cardápio', icon: LayoutGrid, descricao: 'Cada prato pela quantidade vendida e pelo lucro por unidade: o que manter, divulgar, reprecificar ou tirar.', pergunta: 'Quais pratos valem a pena?' }] : []),
+          ...sec.itens] }
       : sec
   ).map((sec) =>
     // Fase 5 (migration 400): só estoque próprio e só desenvolvedor (rotas em ROTAS_SO_DEV)

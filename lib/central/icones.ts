@@ -3,7 +3,7 @@ import {
   Boxes, Building2, Calculator, CalendarClock, CalendarRange, ChartBar, ChartBarDecreasing, ChartBarStacked, ChartColumnStacked,
   ChartLine, ChartSpline, ClipboardCheck, ClipboardList, ClipboardPen, Coins, Cog, Database, Factory, FileCode2, FileDown,
   FileOutput, FilePenLine, FileQuestion, FileSearch, FileSpreadsheet, FileExclamationPoint, FileText, FileUp, FileX, FolderTree, Gauge, Goal, Group,
-  HandCoins, History, Hourglass, IdCard, Landmark, Layers, LayoutDashboard, Lightbulb, List, ListChecks, ListOrdered,
+  HandCoins, History, Hourglass, IdCard, Landmark, Layers, LayoutDashboard, LayoutGrid, Lightbulb, List, ListChecks, ListOrdered,
   ListPlus, ListTree, Logs, MonitorDown, Network, Package, PackageCheck, PackagePlus, PackageSearch, Percent, PiggyBank, Plus,
   Presentation, Printer, QrCode, Receipt, ReceiptText, RefreshCw, Repeat, Replace, Scale, ScanSearch, ScrollText, Search, Shapes,
   ShieldCheck, ShoppingCart, Sigma, SlidersHorizontal, SquareKanban, Stethoscope, Store, Table2, Tags, Target, Trash2, TrendingDown,
@@ -176,6 +176,7 @@ export const ICONE_POR_ROTA: Record<string, Icone> = {
   '/relatorio-indicadores': [Scale, 'relatorio'],
   '/relatorio-margem': [Percent, 'relatorio'],
   '/relatorio-lucro': [PiggyBank, 'relatorio'],
+  '/relatorio-engenharia-cardapio': [LayoutGrid, 'relatorio'],
   '/meta-mensal': [Target, 'relatorio'],
   '/relatorio-meta': [Goal, 'relatorio'],
   // Administração
