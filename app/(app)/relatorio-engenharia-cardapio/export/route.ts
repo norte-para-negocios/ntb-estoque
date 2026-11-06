@@ -8,6 +8,8 @@ import { CLASSES } from '@/lib/relatorios/engenharia-cardapio-puro'
 import { carregarEngenharia } from '@/lib/relatorios/engenharia-cardapio-loader'
 
 export const dynamic = 'force-dynamic'
+const r1 = (v: number) => Math.round(v * 10) / 10
+const r2 = (v: number) => Math.round(v * 100) / 100
 
 // Engenharia de cardápio em Excel: os mesmos pratos, grupos e cortes da tela (só dev, estoque próprio).
 export async function GET(request: Request) {
@@ -38,7 +40,10 @@ export async function GET(request: Request) {
       { key: 'lucro', label: 'Lucro', tipo: 'moeda', somar: true },
       { key: 'obs', label: 'Atenção', largura: 30 },
     ],
-    rows: r.itens.map((i) => ({ ...i, grupo: titulo(i.classe), obs: i.custoIncompleto ? 'Parte das vendas sem custo' : '' })),
+    rows: r.itens.map((i) => ({
+      ...i, grupo: titulo(i.classe), obs: i.custoIncompleto ? 'Parte das vendas sem custo' : '',
+      participacao: r1(i.participacao), margemPct: i.margemPct == null ? null : r1(i.margemPct), margemUnit: r2(i.margemUnit), lucro: r2(i.lucro), cmv: r2(i.cmv),
+    })),
   }
   const semCusto: AbaPlanilha = {
     nome: 'Sem custo', opts: { titulo: 'Vendidos sem custo (fora da conta)' },
