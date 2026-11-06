@@ -15,6 +15,13 @@ export const PERM = {
   categorias: 'Financeiro - Categorias',
   // 360: parcela paga em nota desfeita (cargo Gerente; Admin/AdminLoja já têm tudo)
   decidirNotaDesfeita: 'Financeiro - Decidir nota desfeita',
+  // 370/371: aprovação (Gerente até a faixa dele; alto valor e configurar só Admin/AdminLoja), recorrentes (Gerente),
+  // lançamento avulso e transferência (só Admin/AdminLoja, mexem em dinheiro como o Pagar)
+  aprovar: 'Financeiro - Aprovar pagamento',
+  aprovarAlto: 'Financeiro - Aprovar pagamento alto valor',
+  configurarAprovacao: 'Financeiro - Configurar aprovacao',
+  recorrentes: 'Financeiro - Contas recorrentes',
+  lancamentos: 'Financeiro - Lancamentos e transferencias',
 } as const
 
 /** Porta de entrada de toda página do financeiro: 404 para quem não é dev, loja não-própria ou sem permissão. */
@@ -30,7 +37,7 @@ export async function acessoFinanceiro(permissao: string): Promise<{ lojaId: num
 // Atalhos com o cliente de serviço (use depois de acessoFinanceiro). Tipos e regras de erro vivem em consultas.ts (testado com cliente falso).
 export type {
   ContaCorrente, Categoria, Titulo, TotaisTitulos, LinhaExtrato, PagamentoTitulo, DetalheTitulo, FiltrosTitulos, TituloNota, FamiliaCategoria,
-  NotaSemConta, PendenciaNotaDesfeita, ParcelaPrevista,
+  NotaSemConta, PendenciaNotaDesfeita, ParcelaPrevista, TituloAprovacao, Recorrente, LancamentoAvulso, Transferencia,
 } from './consultas'
 export { semMigration } from './consultas'
 
@@ -51,6 +58,18 @@ export const titulosDaNota = (lojaId: number, notaId: number) => q.titulosDaNota
 export const listarFamiliasCategoria = (lojaId: number) => q.listarFamiliasCategoria(createServiceClient(), lojaId)
 export const notasSemConta = (lojaId: number | null) => q.notasSemConta(createServiceClient(), lojaId)
 export const pendenciasNotaDesfeita = (lojaId: number) => q.pendenciasNotaDesfeita(createServiceClient(), lojaId)
+
+// Fase 4 passo 2 (migration 370): configuração, aprovações, recorrentes, avulsos e transferências.
+export const lerConfigFinanceiro = (lojaId: number) => q.lerConfigFinanceiro(createServiceClient(), lojaId)
+export const listarAprovacoes = (lojaId: number, situacao: 'pendente' | 'decididas') => q.listarAprovacoes(createServiceClient(), lojaId, situacao)
+export const listarRecorrentes = (lojaId: number, hoje: string) => q.listarRecorrentes(createServiceClient(), lojaId, hoje)
+export const listarAvulsosTransferencias = (lojaId: number) => q.listarAvulsosTransferencias(createServiceClient(), lojaId)
+
+/** Nível de aprovação do usuário na loja: 2 = alto valor (admin/dono), 1 = gerente, 0 = não aprova. */
+export async function nivelAprovacaoUsuario(lojaId: number): Promise<0 | 1 | 2> {
+  if (await requirePermissao(lojaId, PERM.aprovarAlto)) return 2
+  return (await requirePermissao(lojaId, PERM.aprovar)) ? 1 : 0
+}
 
 /** Lojas de estoque próprio (ativas) em que o desenvolvedor tem a permissão: a tela "Notas sem conta a pagar" olha todas. */
 export async function lojasPropriasComPermissao(permissao: string): Promise<{ id: number; nome: string }[]> {

@@ -115,6 +115,10 @@ if [ "$bloco" -eq 3 ] && [ "$hora" = "06" ]; then hit /api/cron/snapshot-op-plan
 # 03h de Brasilia), em lotes; so o banco.
 if [ "$bloco" -eq 2 ] && [ "$hora" = "06" ]; then hit /api/cron/podar-historico; fi
 
+# Contas recorrentes do financeiro proprio (migration 370, 05/11/2026): cria as contas a pagar dos proximos 45 dias (aluguel,
+# energia...). Idempotente e so o banco; 1x por dia (bloco 4 = min 40-49, 06 UTC = 03h40 em Brasilia).
+if [ "$bloco" -eq 4 ] && [ "$hora" = "06" ]; then hit /api/cron/fin-recorrentes; fi
+
 # Poda de logs (Fase 1, B2, 03/11/2026): a rota /api/cron/prune existia mas so estava no vercel.json (inativo), entao NADA era
 # podado desde 03/09: 209 mil webhooks (244 MB) e 281 mil tentativas de integracao (72 MB). 1x por dia (bloco 5 = min 50-59,
 # 06 UTC = 03h50 em Brasilia, bloco que so tem o sync-fechamentos-frio). Apaga SO webhooks e integration_attempts, em lotes e

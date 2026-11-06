@@ -194,7 +194,7 @@ export function BotaoPagar({ tituloId, rotuloTitulo, restante, contas, hoje, chi
 }
 
 // ----------------------------------------------------------------------------------------------- cancelar / estornar
-function PedeMotivo({ rotuloBotao, confirmar, aoConcluir, sucesso }: {
+export function PedeMotivo({ rotuloBotao, confirmar, aoConcluir, sucesso }: {
   rotuloBotao: string; confirmar: string; aoConcluir: (motivo: string) => Promise<{ ok: true } | { error: string }>; sucesso: string
 }) {
   const router = useRouter()

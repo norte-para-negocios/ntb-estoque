@@ -95,6 +95,7 @@ export function origemDoTitulo(origemTipo: string | null | undefined, origemId: 
   if (origemTipo === 'pedido_compra' && origemId) return { rotulo: 'Pedido de compra', href: `/pedido-compra/${origemId}` }
   if (!origemTipo || origemTipo === 'manual') return { rotulo: 'Lançado à mão', href: null }
   if (origemTipo === 'importacao') return { rotulo: 'Importado', href: null }
+  if (origemTipo === 'recorrente') return { rotulo: 'Conta recorrente', href: '/financeiro/recorrentes' }
   return { rotulo: origemTipo, href: null }
 }
 

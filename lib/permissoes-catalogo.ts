@@ -219,6 +219,12 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
       { nome: 'Financeiro - Contas correntes', label: 'Ver e cadastrar contas correntes e extrato' },
       { nome: 'Financeiro - Categorias', label: 'Cadastrar categorias financeiras (DRE)' },
       { nome: 'Financeiro - Decidir nota desfeita', label: 'Decidir sobre conta já paga de nota desfeita (estornar ou manter)' },
+      // Fase 4 passo 2 (migrations 370/371): aprovação por faixa de valor, recorrentes, lançamento avulso e transferência.
+      { nome: 'Financeiro - Aprovar pagamento', label: 'Aprovar ou reprovar contas a pagar até a faixa do gerente' },
+      { nome: 'Financeiro - Aprovar pagamento alto valor', label: 'Aprovar ou reprovar contas acima da faixa do gerente (admin/dono)' },
+      { nome: 'Financeiro - Configurar aprovacao', label: 'Ligar a aprovação e definir as faixas de valor' },
+      { nome: 'Financeiro - Contas recorrentes', label: 'Cadastrar contas recorrentes (aluguel, energia…)' },
+      { nome: 'Financeiro - Lancamentos e transferencias', label: 'Lançamento avulso e transferência entre contas (com estorno)' },
     ],
   },
   {
@@ -256,6 +262,9 @@ export const MENU_PERMISSAO: Record<string, string> = {
   '/financeiro/familias': 'Financeiro - Categorias',
   '/financeiro/notas-sem-conta': 'Financeiro - Contas a pagar',
   '/financeiro/notas-desfeitas': 'Financeiro - Decidir nota desfeita',
+  '/financeiro/aprovacoes': 'Financeiro - Aprovar pagamento',
+  '/financeiro/recorrentes': 'Financeiro - Contas recorrentes',
+  '/financeiro/lancamentos': 'Financeiro - Lancamentos e transferencias',
   '/nota-fiscal': 'Notas Fiscais',
   '/ordem-producao': 'Ordens de Producao',
   '/transferencia': 'Transferencias - Ver',

@@ -86,6 +86,7 @@ test('Finanças: itens reais só de estoque próprio e só dev; o resto segue "e
   assert.deepEqual(
     reais.map((i) => i.href).sort(),
     [
+      '/financeiro/aprovacoes',
       '/financeiro/categorias',
       '/financeiro/categorias?criar=1',
       '/financeiro/contas-correntes',
@@ -94,8 +95,10 @@ test('Finanças: itens reais só de estoque próprio e só dev; o resto segue "e
       '/financeiro/contas-pagar/nova',
       '/financeiro/extrato',
       '/financeiro/familias',
+      '/financeiro/lancamentos',
       '/financeiro/notas-desfeitas',
       '/financeiro/notas-sem-conta',
+      '/financeiro/recorrentes',
     ]
   )
   for (const i of reais) {

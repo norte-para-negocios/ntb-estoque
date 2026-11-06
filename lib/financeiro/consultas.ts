@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { SituacaoTitulo, StatusTitulo } from './titulo-puro'
+import type { Aprovacao, ConfigFinanceiro } from './aprovacao-puro'
+import type { Periodicidade } from './recorrentes-puro'
 
 // Consultas de leitura do financeiro (migrations 285/286). Recebem o cliente por parâmetro (sem imports do Next) para serem testadas
 // com um cliente falso: lib/financeiro/consultas.test.ts. As telas usam os atalhos de lib/financeiro/dados.ts.
@@ -30,7 +32,10 @@ export type PagamentoTitulo = {
   estornado_em: string | null; estornado_por_nome: string | null; motivo_estorno: string | null
 }
 export type DetalheTitulo = {
-  titulo: Titulo & { cancelado_em: string | null; motivo_cancelamento: string | null; cancelado_por_nome: string | null; criado_por_nome: string | null }
+  titulo: Titulo & { cancelado_em: string | null; motivo_cancelamento: string | null; cancelado_por_nome: string | null; criado_por_nome: string | null
+    // 370 (ausentes enquanto a migration não for aplicada)
+    aprovacao?: Aprovacao; aprovacao_nivel?: number; aprovacao_em?: string | null; aprovacao_por_nome?: string | null; aprovacao_motivo?: string | null
+    valor_a_confirmar?: boolean }
   pagamentos: PagamentoTitulo[]
   eventos: { tipo: string; detalhe: Record<string, unknown>; user_nome: string | null; created_at: string }[]
 }
@@ -222,4 +227,97 @@ export async function pendenciasNotaDesfeita(db: Db, lojaId: number): Promise<{ 
     valor: n(p.valor), valor_quitado: n(p.valor_quitado), pagamentos: n(p.pagamentos),
   }))
   return { pendencias, semMigration: false }
+}
+
+// ------------------------------------------------- Fase 4 passo 2 (migration 370): aprovação, recorrentes, avulsos e transferências
+
+// Mesmo valor de CONFIG_PADRAO (aprovacao-puro.ts; o teste confere): módulo lido pelo node --test não importa valor de outro módulo.
+const CONFIG_PADRAO_LOCAL: ConfigFinanceiro = { ativa: false, ateCent: 1000_00, altoAcimaCent: 5000_00, autorPodeAprovar: true, recorrentesDias: 45 }
+const cent = (v: unknown) => Math.round(Number(v ?? 0) * 100)
+
+export async function lerConfigFinanceiro(db: Db, lojaId: number): Promise<{
+  config: ConfigFinanceiro; salva: boolean; atualizadoPor: string | null; atualizadoEm: string | null; semMigration: boolean
+}> {
+  const { data, error } = await db.rpc('fin_config_ler', { p_loja: lojaId })
+  if (error) {
+    if (semMigration(error)) return { config: { ...CONFIG_PADRAO_LOCAL }, salva: false, atualizadoPor: null, atualizadoEm: null, semMigration: true }
+    throw new Error(`Não foi possível carregar a configuração do financeiro: ${error.message}`)
+  }
+  const d = (data ?? {}) as Record<string, unknown>
+  return {
+    config: {
+      ativa: !!d.aprovacao_ativa, ateCent: cent(d.aprovacao_ate), altoAcimaCent: cent(d.aprovacao_alto_acima),
+      autorPodeAprovar: d.aprovacao_autor_pode_aprovar !== false, recorrentesDias: n(d.recorrentes_dias) || 45,
+    },
+    salva: !!d.salva, atualizadoPor: (d.atualizado_por_nome as string | null) ?? null, atualizadoEm: (d.updated_at as string | null) ?? null,
+    semMigration: false,
+  }
+}
+
+export type TituloAprovacao = {
+  id: number; numero: number; fornecedor_nome: string; documento: string | null; parcela: number; total_parcelas: number; valor: number
+  data_vencimento: string; categoria_nome: string | null; origem_tipo: string; origem_id: number | null; status: string; situacao: string
+  aprovacao: Aprovacao; aprovacao_nivel: number; aprovacao_em: string | null; aprovacao_por_nome: string | null; aprovacao_motivo: string | null
+  criado_por: string | null; criado_por_nome: string | null; valor_a_confirmar: boolean; observacao: string | null
+}
+
+export async function listarAprovacoes(db: Db, lojaId: number, situacao: 'pendente' | 'decididas'): Promise<{ itens: TituloAprovacao[]; semMigration: boolean }> {
+  const { data, error } = await db.rpc('fin_titulos_aprovacao_listar', { p_loja: lojaId, p_situacao: situacao, p_limite: 500 })
+  if (error) {
+    if (semMigration(error)) return { itens: [], semMigration: true }
+    throw new Error(`Não foi possível carregar as contas da aprovação: ${error.message}`)
+  }
+  const itens = ((data ?? []) as TituloAprovacao[]).map((t) => ({
+    ...t, id: n(t.id), numero: n(t.numero), valor: n(t.valor), parcela: n(t.parcela), total_parcelas: n(t.total_parcelas),
+    aprovacao_nivel: n(t.aprovacao_nivel), origem_id: t.origem_id == null ? null : n(t.origem_id), valor_a_confirmar: !!t.valor_a_confirmar,
+  }))
+  return { itens, semMigration: false }
+}
+
+export type Recorrente = {
+  id: number; descricao: string; fornecedor_id: number; fornecedor_nome: string; categoria_id: number | null; categoria_nome: string | null
+  documento: string | null; valor: number; valor_estimado: boolean; periodicidade: Periodicidade; dia: number; data_inicio: string
+  data_fim: string | null; ativa: boolean; observacao: string | null; geradas: number; ultima_gerada: string | null; proxima: string | null
+  ultima_falha: string | null
+}
+
+export async function listarRecorrentes(db: Db, lojaId: number, hoje: string): Promise<{ recorrentes: Recorrente[]; semMigration: boolean }> {
+  const { data, error } = await db.rpc('fin_recorrentes_listar', { p_loja: lojaId, p_hoje: hoje })
+  if (error) {
+    if (semMigration(error)) return { recorrentes: [], semMigration: true }
+    throw new Error(`Não foi possível carregar as contas recorrentes: ${error.message}`)
+  }
+  const recorrentes = ((data ?? []) as Recorrente[]).map((r) => ({
+    ...r, id: n(r.id), fornecedor_id: n(r.fornecedor_id), categoria_id: r.categoria_id == null ? null : n(r.categoria_id), valor: n(r.valor),
+    dia: n(r.dia), geradas: n(r.geradas), valor_estimado: !!r.valor_estimado, ativa: !!r.ativa,
+  }))
+  return { recorrentes, semMigration: false }
+}
+
+export type LancamentoAvulso = {
+  id: number; data: string; tipo: 'entrada' | 'saida'; valor: number; descricao: string | null; conta_id: number; conta_nome: string
+  categoria_id: number | null; categoria_nome: string | null; criado_por_nome: string | null; estorno_id: number | null; estorno_data: string | null
+}
+export type Transferencia = {
+  id: number; data: string; valor: number; descricao: string | null; conta_origem_id: number; conta_origem_nome: string
+  conta_destino_id: number; conta_destino_nome: string; criado_por_nome: string | null; estornada_em: string | null
+  estornada_por_nome: string | null; motivo_estorno: string | null
+}
+
+export async function listarAvulsosTransferencias(db: Db, lojaId: number): Promise<{
+  avulsos: LancamentoAvulso[]; transferencias: Transferencia[]; semMigration: boolean
+}> {
+  const { data, error } = await db.rpc('fin_avulsos_transferencias_listar', { p_loja: lojaId })
+  if (error) {
+    if (semMigration(error)) return { avulsos: [], transferencias: [], semMigration: true }
+    throw new Error(`Não foi possível carregar os lançamentos e transferências: ${error.message}`)
+  }
+  const d = (data ?? {}) as { avulsos?: LancamentoAvulso[]; transferencias?: Transferencia[] }
+  return {
+    avulsos: (d.avulsos ?? []).map((l) => ({ ...l, id: n(l.id), valor: n(l.valor), conta_id: n(l.conta_id),
+      categoria_id: l.categoria_id == null ? null : n(l.categoria_id), estorno_id: l.estorno_id == null ? null : n(l.estorno_id) })),
+    transferencias: (d.transferencias ?? []).map((t) => ({ ...t, id: n(t.id), valor: n(t.valor), conta_origem_id: n(t.conta_origem_id),
+      conta_destino_id: n(t.conta_destino_id) })),
+    semMigration: false,
+  }
 }

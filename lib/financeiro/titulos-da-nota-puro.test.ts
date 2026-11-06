@@ -186,3 +186,7 @@ test('avisos de parcela paga em nota desfeita apontam para a decisão do gerente
   assert.match(resumoTitulosDaNota([pago], 'pendente', null).aviso ?? '', /gerente/)
   assert.match(avisoAoDesfazer({ com_pagamento: 1 }) ?? '', /gerente/)
 })
+
+test('origemDoTitulo: conta gerada por recorrente (370) leva à tela de recorrentes', () => {
+  assert.deepEqual(origemDoTitulo('recorrente', 12, null), { rotulo: 'Conta recorrente', href: '/financeiro/recorrentes' })
+})

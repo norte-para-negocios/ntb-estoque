@@ -2,15 +2,19 @@ import Link from 'next/link'
 import { origemDoTitulo, rotuloCategoria } from '@/lib/financeiro/titulos-da-nota-puro'
 import { notFound } from 'next/navigation'
 import { hojeBahiaISO } from '@/lib/data-bahia'
-import { acessoFinanceiro, detalheTitulo, listarCategorias, listarContas, listarFornecedores, PERM } from '@/lib/financeiro/dados'
+import { acessoFinanceiro, detalheTitulo, listarCategorias, listarContas, listarFornecedores, nivelAprovacaoUsuario, PERM } from '@/lib/financeiro/dados'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { Money } from '@/components/ui-kit/Money'
 import { BotaoPagar, CancelarTitulo, EstornarPagamento, FormTitulo } from '@/components/financeiro/ContasPagarUI'
 import { dataBR, mesBR, SituacaoSelo } from '@/components/financeiro/comum'
+import { ConfirmarValor, DecidirAprovacao } from '@/components/financeiro/RotinaUI'
+import { bloqueioPagamento, ROTULO_APROVACAO, ROTULO_NIVEL, type Nivel } from '@/lib/financeiro/aprovacao-puro'
 
 // Ficha do título a pagar: dados, pagamentos (com estorno) e histórico de tudo que aconteceu. Nada é apagado.
 const ROTULO_EVENTO: Record<string, string> = {
   incluido: 'Incluído', editado: 'Editado', pagamento: 'Pagamento registrado', estorno: 'Pagamento estornado', cancelado: 'Cancelado',
+  aprovacao_exigida: 'Aguardando aprovação', aprovada: 'Aprovada', reprovada: 'Reprovada', aprovacao_recalculada: 'Aprovação recalculada (valor mudou)',
+  valor_confirmado: 'Valor confirmado',
 }
 const dataHora = (d: string) => new Date(d).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })
 
@@ -25,6 +29,10 @@ export default async function TituloPagarPage({ params }: { params: Promise<{ id
   const [fornecedores, categorias, { contas }] = await Promise.all([listarFornecedores(lojaId), listarCategorias(lojaId), listarContas(lojaId)])
   const contasAtivas = contas.filter((c) => c.ativa).map((c) => ({ id: c.id, nome: c.nome }))
   const aberto = t.status === 'aberto' || t.status === 'parcial'
+  // 370: conta aguardando aprovação, reprovada ou com valor a confirmar não recebe pagamento (o banco também recusa)
+  const aprovacao = t.aprovacao ?? 'nao_exige'
+  const bloqueio = aberto ? bloqueioPagamento({ aprovacao, valorAConfirmar: !!t.valor_a_confirmar }) : null
+  const nivelUsuario = aprovacao === 'pendente' && aberto ? await nivelAprovacaoUsuario(lojaId) : 0
 
   return (
     <div className="space-y-4">
@@ -39,7 +47,7 @@ export default async function TituloPagarPage({ params }: { params: Promise<{ id
               <FormTitulo titulo={{ id: t.id, fornecedor_id: t.fornecedor_id, documento: t.documento, valor: t.valor, valor_quitado: t.valor_quitado, data_emissao: t.data_emissao, data_vencimento: t.data_vencimento, data_competencia: t.data_competencia, categoria_id: t.categoria_id, observacao: t.observacao, status: t.status }}
                 fornecedores={fornecedores} categorias={categorias.filter((c) => c.tipo === 'despesa' && (c.ativa || c.id === t.categoria_id)).map((c) => ({ id: c.id, nome: c.nome }))} hoje={hoje}>Editar</FormTitulo>
             )}
-            {podePagar && aberto && <BotaoPagar tituloId={t.id} rotuloTitulo={`${t.fornecedor_nome} · nº ${t.numero}`} restante={t.restante} contas={contasAtivas} hoje={hoje}>Registrar pagamento</BotaoPagar>}
+            {podePagar && aberto && !bloqueio && <BotaoPagar tituloId={t.id} rotuloTitulo={`${t.fornecedor_nome} · nº ${t.numero}`} restante={t.restante} contas={contasAtivas} hoje={hoje}>Registrar pagamento</BotaoPagar>}
             {t.status === 'aberto' && <CancelarTitulo id={t.id} />}
           </span>
         </div>
@@ -53,6 +61,25 @@ export default async function TituloPagarPage({ params }: { params: Promise<{ id
             <div key={String(rot)}><dt className="text-[12px] text-text-muted">{rot}</dt><dd className="mt-0.5 text-[15px] text-text">{val}</dd></div>
           ))}
         </dl>
+        {aprovacao !== 'nao_exige' && (
+          <div className="space-y-2 rounded-[var(--r-md)] bg-surface-2 p-3">
+            <p className={aprovacao === 'reprovado' ? 'font-medium text-err' : aprovacao === 'pendente' ? 'font-medium text-warn' : 'text-text'}>
+              {ROTULO_APROVACAO[aprovacao]} · quem aprova: {ROTULO_NIVEL[(t.aprovacao_nivel ?? 0) as Nivel]}
+              {t.aprovacao_por_nome ? ` · ${aprovacao === 'reprovado' ? 'reprovada' : 'aprovada'} por ${t.aprovacao_por_nome} em ${dataHora(t.aprovacao_em ?? '')}` : ''}
+              {t.aprovacao_motivo ? ` · motivo: ${t.aprovacao_motivo}` : ''}
+            </p>
+            {aprovacao === 'pendente' && aberto && (nivelUsuario >= (t.aprovacao_nivel ?? 1)
+              ? <DecidirAprovacao tituloId={t.id} rotulo={`a conta nº ${t.numero}`} />
+              : nivelUsuario > 0 && <p className="text-text-muted">Passa da faixa do gerente: só admin/dono aprova.</p>)}
+          </div>
+        )}
+        {t.valor_a_confirmar && aberto && (
+          <div className="space-y-2 rounded-[var(--r-md)] bg-surface-2 p-3">
+            <p className="font-medium text-warn">Valor estimado (conta recorrente): confirme o valor de verdade antes de pagar.</p>
+            <ConfirmarValor tituloId={t.id} valorAtual={t.valor} />
+          </div>
+        )}
+        {bloqueio && podePagar && <p className="text-text-muted">{bloqueio}</p>}
         {t.observacao && <p className="text-text-muted">Obs.: {t.observacao}</p>}
         {t.status === 'cancelado' && <p className="text-text-muted">Cancelado em {dataHora(t.cancelado_em ?? '')}{t.cancelado_por_nome ? ` por ${t.cancelado_por_nome}` : ''}: {t.motivo_cancelamento}</p>}
         {t.status === 'parcial' && <p className="text-text-muted">Para cancelar, estorne antes os pagamentos abaixo.</p>}

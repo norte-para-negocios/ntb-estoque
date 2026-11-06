@@ -238,9 +238,11 @@ export const MODULOS: ModuloCentral[] = [
       { label: 'Notas sem conta a pagar', href: '/financeiro/notas-sem-conta', desc: 'Notas confirmadas sem conta gerada', soEstoqueProprio: true },
       { label: 'Notas desfeitas com conta paga', href: '/financeiro/notas-desfeitas', desc: 'O gerente decide: estornar ou manter', soEstoqueProprio: true },
       { label: 'Categoria por família', href: '/financeiro/familias', desc: 'Família do produto → categoria', soEstoqueProprio: true },
+      { label: 'Aprovação de pagamentos', href: '/financeiro/aprovacoes', desc: 'Contas aguardando aprovação', soEstoqueProprio: true },
+      { label: 'Contas recorrentes', href: '/financeiro/recorrentes', desc: 'Aluguel, energia: contas que se repetem', soEstoqueProprio: true },
+      { label: 'Lançamentos e transferências', href: '/financeiro/lancamentos', desc: 'Despesa ou receita avulsa e transferência entre contas', soEstoqueProprio: true },
       breve('Resumo do caixa', 'Caixa de hoje e vencimentos'),
       breve('Contas a receber', 'Cartões e convênios'),
-      breve('Aprovação de pagamentos', 'Aguardando o dono'),
     ],
     secoes: [
       {

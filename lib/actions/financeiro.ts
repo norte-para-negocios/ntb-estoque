@@ -8,9 +8,12 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { exigirDevAcao } from '@/lib/recursos-dev'
-import { PERM, semMigration } from '@/lib/financeiro/dados'
+import { nivelAprovacaoUsuario, PERM, semMigration } from '@/lib/financeiro/dados'
 import { calcularPagamento, paraCentavos } from '@/lib/financeiro/titulo-puro'
 import { selecaoParaGerar } from '@/lib/financeiro/titulos-da-nota-puro'
+import { validarConfig } from '@/lib/financeiro/aprovacao-puro'
+import { validarRecorrente, type Periodicidade } from '@/lib/financeiro/recorrentes-puro'
+import { validarTransferencia } from '@/lib/financeiro/lancamentos-puro'
 
 // Finanças, etapa 1 (migrations 285/286): contas correntes, categorias, contas a pagar e registro de pagamento.
 // Só desenvolvedores, só loja de estoque próprio, sempre depois da permissão. Escrita só pelas funções SQL (security definer,
@@ -40,6 +43,9 @@ const texto = (v: unknown, max = 300) => String(v ?? '').trim().slice(0, max)
 const dataISO = (v: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v ?? '')) ? String(v) : '')
 
 function atualizar() {
+  revalidatePath('/financeiro/aprovacoes')
+  revalidatePath('/financeiro/recorrentes')
+  revalidatePath('/financeiro/lancamentos')
   revalidatePath('/financeiro/contas-pagar')
   revalidatePath('/financeiro/notas-sem-conta')
   revalidatePath('/financeiro/notas-desfeitas')
@@ -314,4 +320,196 @@ export async function decidirNotaDesfeita(tituloId: number, acao: 'estornar' | '
     `${acao === 'estornar' ? 'Estornou o pagamento' : 'Manteve a conta'}: ${texto(motivo)}`)
   atualizar()
   return { ok: true, status: r.status }
+}
+
+// ------------------------------------------------- Fase 4 passo 2 (migration 370): aprovação, recorrentes, avulso e transferência
+const SEM_370 = 'Recurso ainda não ativado nesta instalação (migration 370).'
+const erro370 = (e: { message?: string; code?: string } | null | undefined) => (semMigration(e) ? SEM_370 : msgErro(e))
+const real = (cent: number) => (cent / 100).toFixed(2)
+
+export type ConfigInput = { ativa: boolean; ate: number | string; altoAcima: number | string; autorPodeAprovar: boolean; recorrentesDias: number | string }
+
+/** Liga/desliga a aprovação e define as faixas (padrão do dono: desligada, R$ 1.000 / R$ 5.000, autor pode aprovar, 45 dias). */
+export async function salvarConfigFinanceiro(input: ConfigInput): Promise<{ ok: true } | Erro> {
+  const __d = viaDesktop('financeiro#salvarConfigFinanceiro', salvarConfigFinanceiro, [input]); if (__d) return __d as never
+  await exigirDevAcao()
+  const ctx = await contexto(PERM.configurarAprovacao)
+  if ('error' in ctx) return ctx
+  const ateCent = paraCentavos(input.ate as number | string)
+  const altoCent = paraCentavos(input.altoAcima as number | string)
+  const dias = Number(input.recorrentesDias)
+  const cfg = { ativa: !!input.ativa, ateCent, altoAcimaCent: altoCent, autorPodeAprovar: !!input.autorPodeAprovar, recorrentesDias: dias }
+  const invalido = validarConfig(cfg)
+  if (invalido) return { error: invalido }
+  const { error } = await createServiceClient().rpc('fin_config_salvar', {
+    p_loja: ctx.lojaId, p_user: ctx.userId, p_user_nome: ctx.nome,
+    p_dados: { aprovacao_ativa: cfg.ativa, aprovacao_ate: real(ateCent), aprovacao_alto_acima: real(altoCent),
+      aprovacao_autor_pode_aprovar: cfg.autorPodeAprovar, recorrentes_dias: dias },
+  })
+  if (error) return { error: erro370(error) }
+  await registrarAuditoria('editar', 'configuração do financeiro', ctx.lojaId,
+    `aprovação ${cfg.ativa ? 'ligada' : 'desligada'}; até ${real(ateCent)}; admin acima de ${real(altoCent)}; ${dias} dias de recorrentes`)
+  atualizar()
+  return { ok: true }
+}
+
+/** Aprovar ou reprovar uma conta a pagar. O nível vem das permissões (gerente = 1, alto valor = 2); o banco confere a faixa. */
+export async function decidirAprovacaoTitulo(tituloId: number, acao: 'aprovar' | 'reprovar', motivo: string): Promise<{ ok: true; aprovacao: string } | Erro> {
+  const __d = viaDesktop('financeiro#decidirAprovacaoTitulo', decidirAprovacaoTitulo, [tituloId, acao, motivo]); if (__d) return __d as never
+  await exigirDevAcao()
+  const lojaId = await getCurrentLojaId()
+  if ((await modoDaLoja(lojaId)) !== 'proprio') return { error: 'O financeiro do Norte só existe na loja de estoque próprio.' }
+  const nivel = await nivelAprovacaoUsuario(lojaId)
+  if (nivel < 1) return { error: 'Sem permissão' }
+  if (acao !== 'aprovar' && acao !== 'reprovar') return { error: 'Decisão inválida.' }
+  if (acao === 'reprovar' && texto(motivo).length < 3) return { error: 'Informe o motivo da reprovação.' }
+  const p = await getProfile()
+  const { data, error } = await createServiceClient().rpc('fin_titulo_aprovacao_decidir', {
+    p_loja: lojaId, p_id: Number(tituloId), p_acao: acao, p_nivel_usuario: nivel, p_motivo: texto(motivo) || null, p_user: p.id, p_user_nome: p.name,
+  })
+  if (error) return { error: erro370(error) }
+  const r = data as { aprovacao: string; duplicado?: boolean }
+  if (!r.duplicado) await registrarAuditoria('editar', 'aprovação de conta a pagar', Number(tituloId),
+    acao === 'reprovar' ? `Reprovou: ${texto(motivo)}` : `Aprovou (nível ${nivel})`)
+  atualizar()
+  revalidatePath(`/financeiro/contas-pagar/${tituloId}`)
+  return { ok: true, aprovacao: r.aprovacao }
+}
+
+/** Conta de recorrente com valor estimado: grava o valor de verdade (só depois disso ela pode ser paga). */
+export async function confirmarValorTitulo(tituloId: number, valor: number | string): Promise<{ ok: true } | Erro> {
+  const __d = viaDesktop('financeiro#confirmarValorTitulo', confirmarValorTitulo, [tituloId, valor]); if (__d) return __d as never
+  await exigirDevAcao()
+  const ctx = await contexto(PERM.contasPagar)
+  if ('error' in ctx) return ctx
+  const c = paraCentavos(valor)
+  if (!(c > 0)) return { error: 'Informe um valor maior que zero.' }
+  const { data, error } = await createServiceClient().rpc('fin_titulo_valor_confirmar', {
+    p_loja: ctx.lojaId, p_id: Number(tituloId), p_valor: real(c), p_user: ctx.userId, p_user_nome: ctx.nome,
+  })
+  if (error) return { error: erro370(error) }
+  if (!(data as { duplicado?: boolean })?.duplicado) await registrarAuditoria('editar', 'conta a pagar', Number(tituloId), `valor confirmado ${real(c)}`)
+  atualizar()
+  revalidatePath(`/financeiro/contas-pagar/${tituloId}`)
+  return { ok: true }
+}
+
+export type RecorrenteInput = {
+  id?: number | null; descricao: string; fornecedorId: number; categoriaId?: number | null; documento?: string; valor: number | string
+  valorEstimado: boolean; periodicidade: Periodicidade; dia: number; inicio: string; fim?: string | null; ativa?: boolean; observacao?: string
+}
+
+export async function salvarRecorrente(input: RecorrenteInput): Promise<{ ok: true; id: number } | Erro> {
+  const __d = viaDesktop('financeiro#salvarRecorrente', salvarRecorrente, [input]); if (__d) return __d as never
+  await exigirDevAcao()
+  const ctx = await contexto(PERM.recorrentes)
+  if ('error' in ctx) return ctx
+  const c = paraCentavos(input.valor)
+  const fim = dataISO(input.fim) || null
+  const invalido = validarRecorrente({ descricao: texto(input.descricao, 120), fornecedorId: Number(input.fornecedorId), valorCent: c,
+    periodicidade: input.periodicidade, dia: Number(input.dia), inicio: dataISO(input.inicio), fim })
+  if (invalido) return { error: invalido }
+  const { data, error } = await createServiceClient().rpc('fin_recorrente_salvar', {
+    p_loja: ctx.lojaId, p_id: input.id ?? null, p_user: ctx.userId, p_user_nome: ctx.nome,
+    p_dados: { descricao: texto(input.descricao, 120), fornecedor_id: Number(input.fornecedorId), categoria_id: input.categoriaId ?? null,
+      documento: texto(input.documento, 60), valor: real(c), valor_estimado: !!input.valorEstimado, periodicidade: input.periodicidade,
+      dia: Number(input.dia), data_inicio: dataISO(input.inicio), data_fim: fim, ativa: input.ativa ?? true, observacao: texto(input.observacao, 300) },
+  })
+  if (error) return { error: erro370(error) }
+  const r = data as { id: number; criada: boolean }
+  await registrarAuditoria(r.criada ? 'criar' : 'editar', 'conta recorrente', r.id, texto(input.descricao, 120))
+  atualizar()
+  return { ok: true, id: r.id }
+}
+
+/** "Gerar agora" (a mesma função do cron diário, só na loja atual; idempotente). */
+export async function gerarRecorrentesAgora(): Promise<{ ok: true; gerados: number; falhas: number } | Erro> {
+  const __d = viaDesktop('financeiro#gerarRecorrentesAgora', gerarRecorrentesAgora, []); if (__d) return __d as never
+  await exigirDevAcao()
+  const ctx = await contexto(PERM.recorrentes)
+  if ('error' in ctx) return ctx
+  const { data, error } = await createServiceClient().rpc('fin_recorrentes_gerar', { p_loja: ctx.lojaId })
+  if (error) return { error: erro370(error) }
+  const l = ((data as { lojas?: { gerados: number; falhas: number }[] })?.lojas ?? [])[0]
+  const gerados = Number(l?.gerados ?? 0)
+  if (gerados > 0) await registrarAuditoria('criar', 'conta a pagar', null, `${gerados} conta(s) de recorrentes`)
+  atualizar()
+  return { ok: true, gerados, falhas: Number(l?.falhas ?? 0) }
+}
+
+export type AvulsoInput = { contaId: number; data: string; tipo: 'entrada' | 'saida'; valor: number | string; descricao: string; categoriaId: number | null; chave: string }
+
+export async function registrarLancamentoAvulso(input: AvulsoInput): Promise<{ ok: true; id: number } | Erro> {
+  const __d = viaDesktop('financeiro#registrarLancamentoAvulso', registrarLancamentoAvulso, [input]); if (__d) return __d as never
+  await exigirDevAcao()
+  const ctx = await contexto(PERM.lancamentos)
+  if ('error' in ctx) return ctx
+  if (!input.chave) return { error: 'Recarregue a tela e tente de novo.' }
+  const c = paraCentavos(input.valor)
+  if (!(c > 0)) return { error: 'Informe um valor maior que zero.' }
+  if (!input.categoriaId) return { error: 'Escolha a categoria (entra na DRE).' }
+  const { data, error } = await createServiceClient().rpc('fin_lancamento_avulso_registrar', {
+    p_loja: ctx.lojaId, p_user: ctx.userId, p_user_nome: ctx.nome, p_chave: input.chave,
+    p_dados: { conta_id: Number(input.contaId), data: dataISO(input.data) || null, tipo: input.tipo, valor: real(c),
+      descricao: texto(input.descricao, 300), categoria_id: Number(input.categoriaId) },
+  })
+  if (error) return { error: erro370(error) }
+  const r = data as { id: number; duplicado: boolean }
+  if (!r.duplicado) await registrarAuditoria('criar', 'lançamento avulso', r.id, `${input.tipo} ${real(c)}: ${texto(input.descricao, 80)}`)
+  atualizar()
+  return { ok: true, id: r.id }
+}
+
+export async function estornarLancamentoAvulso(id: number, motivo: string): Promise<{ ok: true } | Erro> {
+  const __d = viaDesktop('financeiro#estornarLancamentoAvulso', estornarLancamentoAvulso, [id, motivo]); if (__d) return __d as never
+  await exigirDevAcao()
+  const ctx = await contexto(PERM.lancamentos)
+  if ('error' in ctx) return ctx
+  if (texto(motivo).length < 3) return { error: 'Informe o motivo do estorno.' }
+  const { data, error } = await createServiceClient().rpc('fin_lancamento_avulso_estornar', {
+    p_loja: ctx.lojaId, p_lancamento: Number(id), p_motivo: texto(motivo), p_user: ctx.userId, p_user_nome: ctx.nome,
+  })
+  if (error) return { error: erro370(error) }
+  if (!(data as { duplicado?: boolean })?.duplicado) await registrarAuditoria('reverter', 'lançamento avulso', Number(id), texto(motivo))
+  atualizar()
+  return { ok: true }
+}
+
+export type TransferenciaInput = { origemId: number; destinoId: number; data: string; valor: number | string; descricao?: string; chave: string; hoje: string }
+
+export async function registrarTransferencia(input: TransferenciaInput): Promise<{ ok: true; id: number } | Erro> {
+  const __d = viaDesktop('financeiro#registrarTransferencia', registrarTransferencia, [input]); if (__d) return __d as never
+  await exigirDevAcao()
+  const ctx = await contexto(PERM.lancamentos)
+  if ('error' in ctx) return ctx
+  if (!input.chave) return { error: 'Recarregue a tela e tente de novo.' }
+  const c = paraCentavos(input.valor)
+  const invalido = validarTransferencia({ origemId: Number(input.origemId), destinoId: Number(input.destinoId), valorCent: c,
+    data: dataISO(input.data), hoje: dataISO(input.hoje) || dataISO(input.data) })
+  if (invalido) return { error: invalido }
+  const { data, error } = await createServiceClient().rpc('fin_transferencia_registrar', {
+    p_loja: ctx.lojaId, p_user: ctx.userId, p_user_nome: ctx.nome, p_chave: input.chave,
+    p_dados: { conta_origem_id: Number(input.origemId), conta_destino_id: Number(input.destinoId), data: dataISO(input.data), valor: real(c),
+      descricao: texto(input.descricao, 200) },
+  })
+  if (error) return { error: erro370(error) }
+  const r = data as { id: number; duplicado: boolean }
+  if (!r.duplicado) await registrarAuditoria('criar', 'transferência entre contas', r.id, real(c))
+  atualizar()
+  return { ok: true, id: r.id }
+}
+
+export async function estornarTransferencia(id: number, motivo: string): Promise<{ ok: true } | Erro> {
+  const __d = viaDesktop('financeiro#estornarTransferencia', estornarTransferencia, [id, motivo]); if (__d) return __d as never
+  await exigirDevAcao()
+  const ctx = await contexto(PERM.lancamentos)
+  if ('error' in ctx) return ctx
+  if (texto(motivo).length < 3) return { error: 'Informe o motivo do estorno.' }
+  const { data, error } = await createServiceClient().rpc('fin_transferencia_estornar', {
+    p_loja: ctx.lojaId, p_id: Number(id), p_motivo: texto(motivo), p_user: ctx.userId, p_user_nome: ctx.nome,
+  })
+  if (error) return { error: erro370(error) }
+  if (!(data as { duplicado?: boolean })?.duplicado) await registrarAuditoria('reverter', 'transferência entre contas', Number(id), texto(motivo))
+  atualizar()
+  return { ok: true }
 }
