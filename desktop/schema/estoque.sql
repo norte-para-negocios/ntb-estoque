@@ -2593,8 +2593,8 @@ begin
   v_tipo := coalesce(nullif(p_dados->>'tipo', ''), 'despesa');
   if v_tipo not in ('despesa', 'receita') then raise exception 'Tipo de categoria inválido' using errcode = '22023'; end if;
   v_grupo := coalesce(nullif(p_dados->>'grupo_dre', ''), 'outras');
-  if v_grupo not in ('receita_bruta', 'deducoes', 'cmv', 'despesa_operacional', 'despesa_pessoal', 'despesa_administrativa',
-      'despesa_financeira', 'receita_financeira', 'imposto_resultado', 'investimento', 'outras') then
+  if v_grupo not in ('receita_bruta', 'deducoes', 'cmv', 'despesa_operacional', 'despesa_pessoal', 'despesa_ocupacao',
+      'despesa_administrativa', 'despesa_financeira', 'receita_financeira', 'imposto_resultado', 'investimento', 'outras') then
     raise exception 'Linha da DRE inválida' using errcode = '22023';
   end if;
   v_cc := nullif(p_dados->>'categoria_contabil_id', '')::bigint;
@@ -2635,7 +2635,6 @@ CREATE FUNCTION public.fin_categorias_semear(p_loja bigint) RETURNS integer
 declare n int;
 begin
   perform fin_exigir_loja_propria(p_loja);
-  -- Chave estável (padrao): reaplicar nunca recria uma categoria padrão que o usuário renomeou ou inativou.
   with ins as (
     insert into fin_categorias (loja_id, padrao, nome, tipo, grupo_dre)
     select p_loja, v.padrao, v.nome, v.tipo, v.grupo from (values
@@ -2643,16 +2642,17 @@ begin
       ('cmv_insumos', 'Matéria-prima e insumos', 'despesa', 'cmv'),
       ('cmv_embalagens', 'Embalagens', 'despesa', 'cmv'),
       ('pessoal_folha', 'Folha de pagamento e encargos', 'despesa', 'despesa_pessoal'),
-      ('oper_aluguel', 'Aluguel e condomínio', 'despesa', 'despesa_operacional'),
-      ('oper_energia', 'Energia, água e gás', 'despesa', 'despesa_operacional'),
+      ('oper_aluguel', 'Aluguel e condomínio', 'despesa', 'despesa_ocupacao'),
+      ('oper_energia', 'Energia, água e gás', 'despesa', 'despesa_ocupacao'),
       ('oper_manutencao', 'Manutenção e reparos', 'despesa', 'despesa_operacional'),
       ('oper_marketing', 'Marketing e publicidade', 'despesa', 'despesa_operacional'),
       ('adm_telefone', 'Telefone e internet', 'despesa', 'despesa_administrativa'),
       ('adm_servicos', 'Serviços contábeis e jurídicos', 'despesa', 'despesa_administrativa'),
       ('adm_material', 'Material de limpeza e escritório', 'despesa', 'despesa_administrativa'),
-      ('fin_taxas', 'Taxas de cartão e bancárias', 'despesa', 'despesa_financeira'),
+      ('fin_taxas', 'Tarifas bancárias', 'despesa', 'despesa_financeira'),
       ('fin_juros', 'Juros e multas pagos', 'despesa', 'despesa_financeira'),
       ('ded_impostos', 'Impostos sobre vendas', 'despesa', 'deducoes'),
+      ('ded_taxas_cartao', 'Taxas de cartão (maquininha)', 'despesa', 'deducoes'),
       ('outras_despesas', 'Outras despesas', 'despesa', 'outras'),
       ('rec_vendas', 'Venda de mercadorias e pratos', 'receita', 'receita_bruta'),
       ('rec_outras', 'Outras receitas', 'receita', 'outras')
@@ -13057,7 +13057,7 @@ CREATE TABLE public.fin_categorias (
     ativa boolean DEFAULT true NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT fin_categorias_grupo_dre_check CHECK ((grupo_dre = ANY (ARRAY['receita_bruta'::text, 'deducoes'::text, 'cmv'::text, 'despesa_operacional'::text, 'despesa_pessoal'::text, 'despesa_administrativa'::text, 'despesa_financeira'::text, 'receita_financeira'::text, 'imposto_resultado'::text, 'investimento'::text, 'outras'::text]))),
+    CONSTRAINT fin_categorias_grupo_dre_check CHECK ((grupo_dre = ANY (ARRAY['receita_bruta'::text, 'deducoes'::text, 'cmv'::text, 'despesa_operacional'::text, 'despesa_pessoal'::text, 'despesa_ocupacao'::text, 'despesa_administrativa'::text, 'despesa_financeira'::text, 'receita_financeira'::text, 'imposto_resultado'::text, 'investimento'::text, 'outras'::text]))),
     CONSTRAINT fin_categorias_nome_check CHECK (((length(btrim(nome)) >= 2) AND (length(btrim(nome)) <= 80))),
     CONSTRAINT fin_categorias_tipo_check CHECK ((tipo = ANY (ARRAY['despesa'::text, 'receita'::text])))
 );
