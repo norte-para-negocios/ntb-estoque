@@ -1,12 +1,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { detalheTitulo, extratoConta, listarCategorias, listarContas, listarFornecedores, listarTitulos, titulosDaNota, type Db } from './consultas.ts'
+import {
+  detalheTitulo, extratoConta, listarCategorias, listarContas, listarFamiliasCategoria, listarFornecedores, listarTitulos, notasSemConta,
+  pendenciasNotaDesfeita, titulosDaNota, type Db,
+} from './consultas.ts'
 
 // Cliente falso: rpc devolve o que o teste mandar; from() é uma cadeia que termina com { data, error } (await) ou range().
 type Resp = { data: unknown; error: { code?: string; message: string } | null }
 function falso(resp: Resp): Db {
   const cadeia: Record<string, unknown> = {}
-  for (const m of ['select', 'eq', 'order', 'limit']) cadeia[m] = () => cadeia
+  for (const m of ['select', 'eq', 'order', 'limit', 'in']) cadeia[m] = () => cadeia
   cadeia.range = () => Promise.resolve(resp)
   cadeia.then = (ok: (r: Resp) => unknown) => Promise.resolve(resp).then(ok)
   return { rpc: () => Promise.resolve(resp), from: () => cadeia } as unknown as Db
@@ -62,4 +65,45 @@ test('titulosDaNota: converte os números, traz a falha só quando é a última 
   assert.equal(falha.falha, 'Nota sem CNPJ')
   assert.deepEqual(await titulosDaNota(falso(erro('42P01')), 19, 5), { titulos: [], falha: null, semMigration: true })
   await assert.rejects(titulosDaNota(falso(erro('57014')), 19, 5), /contas a pagar da nota/)
+})
+
+// ------------------------------------------------------------------------------------- decisões de 05/11 (migration 360)
+
+test('listarFamiliasCategoria: converte, avisa sem a migration 360 e não engole erro real', async () => {
+  const ok = await listarFamiliasCategoria(falso({ data: [{ codigo_familia: '8000000000257', nome: 'Atacado', inativa: false, produtos: '24', categoria_id: '36', categoria_nome: 'Insumos', categoria_ok: true }], error: null }), 19)
+  assert.equal(ok.semMigration, false)
+  assert.deepEqual(ok.familias[0], { codigo_familia: 8000000000257, nome: 'Atacado', inativa: false, produtos: 24, categoria_id: 36, categoria_nome: 'Insumos', categoria_ok: true })
+  assert.deepEqual(await listarFamiliasCategoria(falso(erro('PGRST202')), 19), { familias: [], semMigration: true })
+  await assert.rejects(listarFamiliasCategoria(falso(erro('57014')), 19), /famílias/)
+})
+
+test('notasSemConta: valores e parcelas viram número; sem migration avisa; erro real sobe', async () => {
+  const ok = await notasSemConta(falso({ data: [{ loja_id: '15', loja_nome: 'ODARA', chave_ligada: false, nota_id: '9', compra_id: '3', numero: '12', fornecedor_nome: 'F', fornecedor_cnpj: '1',
+    emissao: '2026-10-01', data_entrada: '2026-10-02', valor_total: '90.5', status_compra: 'lancada', regra: 'duplicatas',
+    parcelas: [{ parcela: 1, total: 1, vencimento: '2026-10-20', valor: '90.5' }], categoria_id: null, categoria_nome: null, familia_nome: 'Bebidas',
+    motivo_categoria: 'familia_sem_categoria', ultima_falha: null }], error: null }), null)
+  assert.equal(ok.semMigration, false)
+  assert.equal(ok.notas[0].valor_total, 90.5)
+  assert.equal(ok.notas[0].loja_id, 15)
+  assert.equal(ok.notas[0].nota_id, 9)
+  assert.deepEqual(ok.notas[0].parcelas, [{ parcela: 1, total: 1, vencimento: '2026-10-20', valor: 90.5 }])
+  assert.deepEqual(await notasSemConta(falso(erro('42883')), null), { notas: [], semMigration: true })
+  await assert.rejects(notasSemConta(falso(erro('57014')), 15), /notas sem conta/)
+})
+
+test('pendenciasNotaDesfeita: converte e trata a migration ausente', async () => {
+  const ok = await pendenciasNotaDesfeita(falso({ data: [{ titulo_id: '7', numero: 3, nota_id: '9', documento: 'NF 1', fornecedor_nome: 'F', parcela: 1, total_parcelas: 2,
+    valor: '100', valor_quitado: '50', data_vencimento: '2026-11-10', status: 'parcial', status_compra: 'pendente', desfeita_em: '2026-11-05T10:00:00Z', pagamentos: '2' }], error: null }), 19)
+  assert.deepEqual([ok.pendencias[0].titulo_id, ok.pendencias[0].valor, ok.pendencias[0].valor_quitado, ok.pendencias[0].pagamentos], [7, 100, 50, 2])
+  assert.deepEqual(await pendenciasNotaDesfeita(falso(erro('PGRST202')), 19), { pendencias: [], semMigration: true })
+  await assert.rejects(pendenciasNotaDesfeita(falso(erro('500')), 19), /desfeitas/)
+})
+
+test('titulosDaNota: traz o nome da categoria de cada conta (null = "A definir" na tela)', async () => {
+  const tit = [{ id: 1, numero: 7, parcela: 1, total_parcelas: 1, valor: '10', valor_quitado: '0', data_vencimento: '2026-11-10', status: 'aberto', motivo_cancelamento: null, categoria_id: 1, nome: 'Bebidas' }]
+  // o falso devolve as mesmas linhas para a leitura das categorias: id 1 → 'Bebidas'
+  const ok = await titulosDaNota(falso({ data: tit, error: null }), 19, 5)
+  assert.equal(ok.titulos[0].categoria_nome, 'Bebidas')
+  const sem = await titulosDaNota(falso({ data: [{ ...tit[0], categoria_id: null }], error: null }), 19, 5)
+  assert.equal(sem.titulos[0].categoria_nome, null)
 })

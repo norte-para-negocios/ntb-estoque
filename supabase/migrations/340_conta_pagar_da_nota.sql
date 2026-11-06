@@ -10,7 +10,7 @@
 --     - status sai de 'lancada'/'parcial' para 'pendente' (desfeita) ou 'cancelada' → fin_titulos_da_nota_estornar.
 -- * Geração: uma conta por duplicata (full_object.parcelas.parcelasLista = cobr/dup: nDup, dVenc, vDup, gravado pela
 --   gravar_nota_sefaz), na ordem do XML; duplicata sem valor é ignorada; sem vencimento vence na emissão. Sem duplicata:
---   UMA conta no total da nota vencendo na emissão (DECISÃO PENDENTE DO DONO). Fornecedor = cadastro pelo CNPJ da nota
+--   UMA conta no total da nota vencendo na emissão (à vista: decidido pelo dono em 05/11, ver 360). Fornecedor = cadastro pelo CNPJ da nota
 --   (fornecedor_da_nota_sefaz acha ou cria). Categoria = a categoria financeira ligada à categoria contábil da nota (quando
 --   todos os itens têm a mesma), senão a padrão 'Compra de mercadoria para revenda' (cmv_revenda), senão 'Matéria-prima e
 --   insumos' (cmv_insumos). Competência = mês da emissão. Nota em que nenhum item gera conta a pagar (gera_conta_pagar) não gera.

@@ -132,13 +132,14 @@ export async function extratoConta(db: Db, lojaId: number, contaId: number, de: 
 export type TituloNota = {
   id: number; numero: number; parcela: number; total_parcelas: number; valor: number; valor_quitado: number
   data_vencimento: string; status: StatusTitulo; motivo_cancelamento: string | null
+  categoria_id?: number | null; categoria_nome?: string | null
 }
 
 /** Contas a pagar de uma nota (origem 'nota_entrada') e o motivo da última falha de geração, se a última notícia for falha. */
 export async function titulosDaNota(db: Db, lojaId: number, notaId: number):
   Promise<{ titulos: TituloNota[]; falha: string | null; semMigration: boolean }> {
   const { data, error } = await db.from('fin_titulos_pagar')
-    .select('id, numero, parcela, total_parcelas, valor, valor_quitado, data_vencimento, status, motivo_cancelamento')
+    .select('id, numero, parcela, total_parcelas, valor, valor_quitado, data_vencimento, status, motivo_cancelamento, categoria_id')
     .eq('loja_id', lojaId).eq('origem_tipo', 'nota_entrada').eq('origem_id', notaId).order('parcela').order('id')
   if (error) {
     if (semMigration(error)) return { titulos: [], falha: null, semMigration: true }
@@ -148,6 +149,77 @@ export async function titulosDaNota(db: Db, lojaId: number, notaId: number):
     .eq('loja_id', lojaId).eq('entidade', 'nota_entrada').eq('entidade_id', notaId).order('id', { ascending: false }).limit(1)
   if (ee && !semMigration(ee)) throw new Error(`Não foi possível carregar o histórico da nota: ${ee.message}`)
   const ultimo = ((ev ?? []) as { tipo: string; detalhe: { erro?: string } }[])[0]
-  const titulos = ((data ?? []) as TituloNota[]).map((t) => ({ ...t, valor: n(t.valor), valor_quitado: n(t.valor_quitado) }))
+  const ids = [...new Set(((data ?? []) as TituloNota[]).map((t) => t.categoria_id).filter((c): c is number => c != null))]
+  const nomes = new Map<number, string>()
+  if (ids.length) {
+    const { data: cats, error: ec } = await db.from('fin_categorias').select('id, nome').eq('loja_id', lojaId).in('id', ids)
+    if (ec) throw new Error(`Não foi possível carregar as categorias da nota: ${ec.message}`)
+    for (const c of (cats ?? []) as { id: number; nome: string }[]) nomes.set(n(c.id), String(c.nome))
+  }
+  const titulos = ((data ?? []) as TituloNota[]).map((t) => ({
+    ...t, valor: n(t.valor), valor_quitado: n(t.valor_quitado), categoria_id: t.categoria_id ?? null,
+    categoria_nome: t.categoria_id != null ? nomes.get(n(t.categoria_id)) ?? null : null,
+  }))
   return { titulos, falha: ultimo?.tipo === 'titulos_falha' ? String(ultimo.detalhe?.erro ?? 'erro desconhecido') : null, semMigration: false }
+}
+
+// ------------------------------------------------------------- decisões do dono de 05/11 (migration 360)
+export type FamiliaCategoria = {
+  codigo_familia: number; nome: string; inativa: boolean; produtos: number; categoria_id: number | null; categoria_nome: string | null; categoria_ok: boolean
+}
+
+/** Famílias da loja com a categoria financeira ligada (mapa família → categoria, tela só dev). */
+export async function listarFamiliasCategoria(db: Db, lojaId: number): Promise<{ familias: FamiliaCategoria[]; semMigration: boolean }> {
+  const { data, error } = await db.rpc('fin_familia_categoria_listar', { p_loja: lojaId })
+  if (error) {
+    if (semMigration(error)) return { familias: [], semMigration: true }
+    throw new Error(`Não foi possível carregar as famílias: ${error.message}`)
+  }
+  const familias = ((data ?? []) as FamiliaCategoria[]).map((f) => ({
+    codigo_familia: n(f.codigo_familia), nome: String(f.nome), inativa: !!f.inativa, produtos: n(f.produtos),
+    categoria_id: f.categoria_id == null ? null : n(f.categoria_id), categoria_nome: f.categoria_nome ?? null, categoria_ok: !!f.categoria_ok,
+  }))
+  return { familias, semMigration: false }
+}
+
+export type ParcelaPrevista = { parcela: number; total: number; vencimento: string; valor: number }
+export type NotaSemConta = {
+  loja_id: number; loja_nome: string; chave_ligada: boolean; nota_id: number; compra_id: number; numero: string | null
+  fornecedor_nome: string | null; fornecedor_cnpj: string | null; emissao: string | null; data_entrada: string | null; valor_total: number
+  status_compra: string; regra: string; parcelas: ParcelaPrevista[]; categoria_id: number | null; categoria_nome: string | null
+  familia_nome: string | null; motivo_categoria: string | null; ultima_falha: string | null
+}
+
+/** Notas de entrada confirmadas de loja própria sem conta a pagar (p_loja null = todas as lojas próprias). */
+export async function notasSemConta(db: Db, lojaId: number | null): Promise<{ notas: NotaSemConta[]; semMigration: boolean }> {
+  const { data, error } = await db.rpc('fin_notas_sem_conta', { p_loja: lojaId, p_limite: 2000 })
+  if (error) {
+    if (semMigration(error)) return { notas: [], semMigration: true }
+    throw new Error(`Não foi possível carregar as notas sem conta a pagar: ${error.message}`)
+  }
+  const notas = ((data ?? []) as NotaSemConta[]).map((x) => ({
+    ...x, loja_id: n(x.loja_id), nota_id: n(x.nota_id), compra_id: n(x.compra_id), valor_total: n(x.valor_total),
+    categoria_id: x.categoria_id == null ? null : n(x.categoria_id),
+    parcelas: (x.parcelas ?? []).map((p) => ({ parcela: n(p.parcela), total: n(p.total), vencimento: String(p.vencimento), valor: n(p.valor) })),
+  }))
+  return { notas, semMigration: false }
+}
+
+export type PendenciaNotaDesfeita = {
+  titulo_id: number; numero: number; nota_id: number; documento: string | null; fornecedor_nome: string; parcela: number; total_parcelas: number
+  valor: number; valor_quitado: number; data_vencimento: string; status: string; status_compra: string | null; desfeita_em: string; pagamentos: number
+}
+
+/** Contas pagas (no todo ou em parte) de notas cuja entrada foi desfeita, esperando a decisão do gerente. */
+export async function pendenciasNotaDesfeita(db: Db, lojaId: number): Promise<{ pendencias: PendenciaNotaDesfeita[]; semMigration: boolean }> {
+  const { data, error } = await db.rpc('fin_pendencias_nota_desfeita', { p_loja: lojaId })
+  if (error) {
+    if (semMigration(error)) return { pendencias: [], semMigration: true }
+    throw new Error(`Não foi possível carregar as contas de notas desfeitas: ${error.message}`)
+  }
+  const pendencias = ((data ?? []) as PendenciaNotaDesfeita[]).map((p) => ({
+    ...p, titulo_id: n(p.titulo_id), numero: n(p.numero), nota_id: n(p.nota_id), parcela: n(p.parcela), total_parcelas: n(p.total_parcelas),
+    valor: n(p.valor), valor_quitado: n(p.valor_quitado), pagamentos: n(p.pagamentos),
+  }))
+  return { pendencias, semMigration: false }
 }

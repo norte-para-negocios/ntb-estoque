@@ -218,6 +218,7 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
       { nome: 'Financeiro - Contas a pagar - Pagar', label: 'Registrar e estornar pagamentos' },
       { nome: 'Financeiro - Contas correntes', label: 'Ver e cadastrar contas correntes e extrato' },
       { nome: 'Financeiro - Categorias', label: 'Cadastrar categorias financeiras (DRE)' },
+      { nome: 'Financeiro - Decidir nota desfeita', label: 'Decidir sobre conta já paga de nota desfeita (estornar ou manter)' },
     ],
   },
   {
@@ -252,6 +253,9 @@ export const MENU_PERMISSAO: Record<string, string> = {
   '/financeiro/contas-correntes': 'Financeiro - Contas correntes',
   '/financeiro/extrato': 'Financeiro - Contas correntes',
   '/financeiro/categorias': 'Financeiro - Categorias',
+  '/financeiro/familias': 'Financeiro - Categorias',
+  '/financeiro/notas-sem-conta': 'Financeiro - Contas a pagar',
+  '/financeiro/notas-desfeitas': 'Financeiro - Decidir nota desfeita',
   '/nota-fiscal': 'Notas Fiscais',
   '/ordem-producao': 'Ordens de Producao',
   '/transferencia': 'Transferencias - Ver',

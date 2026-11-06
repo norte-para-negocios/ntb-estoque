@@ -13,6 +13,8 @@ export const PERM = {
   pagar: 'Financeiro - Contas a pagar - Pagar',
   contasCorrentes: 'Financeiro - Contas correntes',
   categorias: 'Financeiro - Categorias',
+  // 360: parcela paga em nota desfeita (cargo Gerente; Admin/AdminLoja já têm tudo)
+  decidirNotaDesfeita: 'Financeiro - Decidir nota desfeita',
 } as const
 
 /** Porta de entrada de toda página do financeiro: 404 para quem não é dev, loja não-própria ou sem permissão. */
@@ -26,7 +28,10 @@ export async function acessoFinanceiro(permissao: string): Promise<{ lojaId: num
 }
 
 // Atalhos com o cliente de serviço (use depois de acessoFinanceiro). Tipos e regras de erro vivem em consultas.ts (testado com cliente falso).
-export type { ContaCorrente, Categoria, Titulo, TotaisTitulos, LinhaExtrato, PagamentoTitulo, DetalheTitulo, FiltrosTitulos, TituloNota } from './consultas'
+export type {
+  ContaCorrente, Categoria, Titulo, TotaisTitulos, LinhaExtrato, PagamentoTitulo, DetalheTitulo, FiltrosTitulos, TituloNota, FamiliaCategoria,
+  NotaSemConta, PendenciaNotaDesfeita, ParcelaPrevista,
+} from './consultas'
 export { semMigration } from './consultas'
 
 export const listarContas = (lojaId: number) => q.listarContas(createServiceClient(), lojaId)
@@ -41,3 +46,18 @@ export const extratoConta = (lojaId: number, contaId: number, de: string | null,
 
 // Contas a pagar geradas pela nota de entrada (migration 340): a tela da nota usa só para desenvolvedor, depois de exigir 'proprio'.
 export const titulosDaNota = (lojaId: number, notaId: number) => q.titulosDaNota(createServiceClient(), lojaId, notaId)
+
+// Decisões do dono de 05/11 (migration 360): mapa família → categoria, notas sem conta e notas desfeitas com conta paga.
+export const listarFamiliasCategoria = (lojaId: number) => q.listarFamiliasCategoria(createServiceClient(), lojaId)
+export const notasSemConta = (lojaId: number | null) => q.notasSemConta(createServiceClient(), lojaId)
+export const pendenciasNotaDesfeita = (lojaId: number) => q.pendenciasNotaDesfeita(createServiceClient(), lojaId)
+
+/** Lojas de estoque próprio (ativas) em que o desenvolvedor tem a permissão: a tela "Notas sem conta a pagar" olha todas. */
+export async function lojasPropriasComPermissao(permissao: string): Promise<{ id: number; nome: string }[]> {
+  await exigirDev()
+  const { data, error } = await createServiceClient().from('lojas').select('id, nome').eq('modo_estoque', 'proprio').eq('ativo', true).order('id')
+  if (error) throw new Error(`Não foi possível carregar as lojas: ${error.message}`)
+  const out: { id: number; nome: string }[] = []
+  for (const l of (data ?? []) as { id: number; nome: string }[]) if (await requirePermissao(l.id, permissao)) out.push({ id: Number(l.id), nome: String(l.nome) })
+  return out
+}
