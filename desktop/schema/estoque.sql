@@ -213,6 +213,86 @@ begin
 end $$;
 
 
+--
+-- Name: _fin_titulos_da_nota_gerar(bigint, bigint, text, text, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._fin_titulos_da_nota_gerar(p_loja bigint, p_nota bigint, p_user text, p_user_nome text, p_manual boolean) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  c compras_proprio%rowtype; n notas_fiscais%rowtype; f fornecedores%rowtype; v_cod bigint; v_cat bigint; v_fam bigint; v_motcat text;
+  x record; v_chave text; v_numero int; v_doc text; v_gerados int := 0; v_ja int := 0; v_regra text; v_soma numeric := 0;
+  v_ids bigint[] := '{}'; t fin_titulos_pagar%rowtype; v_emissao date; v_entrada date; v_comp date;
+begin
+  perform fin_exigir_loja_propria(p_loja);
+  if not p_manual and not fin_cp_da_nota_ligado(p_loja) then
+    return jsonb_build_object('ok', true, 'gerados', 0, 'ja_existiam', 0, 'motivo', 'A conta a pagar pela nota ainda não está ligada nesta loja');
+  end if;
+  select * into c from compras_proprio where loja_id = p_loja and nota_fiscal_id = p_nota for update;
+  if not found then raise exception 'Esta nota não tem entrada no estoque' using errcode = '22023'; end if;
+  if c.status not in ('lancada', 'parcial') then
+    return jsonb_build_object('ok', true, 'gerados', 0, 'ja_existiam', 0, 'motivo', 'A entrada da nota não está confirmada');
+  end if;
+  select * into n from notas_fiscais where id = p_nota and loja_id = p_loja and deleted_at is null;
+  if not found then raise exception 'Nota não encontrada' using errcode = '22023'; end if;
+  if coalesce(n.full_object->'infoCadastro'->>'cCancelada', 'N') = 'S' then
+    return jsonb_build_object('ok', true, 'gerados', 0, 'ja_existiam', 0, 'motivo', 'Nota cancelada na SEFAZ');
+  end if;
+  if exists (select 1 from compras_proprio_itens where compra_id = c.id)
+     and not exists (select 1 from compras_proprio_itens where compra_id = c.id and gera_conta_pagar) then
+    return jsonb_build_object('ok', true, 'gerados', 0, 'ja_existiam', 0, 'motivo', 'Nenhum item da nota gera conta a pagar');
+  end if;
+
+  v_cod := fornecedor_da_nota_sefaz(p_loja, coalesce(n.c_cnpj_cpf, c.fornecedor_cnpj), coalesce(n.c_razao_social, c.fornecedor_nome), n.c_nome, n.c_inscricao);
+  if v_cod is null then raise exception 'Nota sem CNPJ/CPF do fornecedor: não dá para gerar a conta a pagar' using errcode = '22023'; end if;
+  select * into f from fornecedores where loja_id = p_loja and codigo_omie = v_cod order by id limit 1;
+  if not found then raise exception 'Fornecedor da nota não encontrado no cadastro' using errcode = '22023'; end if;
+
+  -- 360: categoria = a da família de maior valor; sem categoria ligada = sem categoria ("A definir"). Sem padrão.
+  select k.categoria_id, k.codigo_familia, k.motivo into v_cat, v_fam, v_motcat from fin_categoria_da_nota(p_loja, p_nota) k;
+  v_emissao := coalesce(n.d_emissao_nfe, c.emissao);
+  v_entrada := fin_data_entrada_da_nota(p_loja, p_nota); -- 360: competência pela entrada
+  v_doc := 'NF ' || coalesce(nullif(ltrim(coalesce(n.c_numero_nfe, c.numero, ''), '0'), ''), p_nota::text);
+  perform pg_advisory_xact_lock(7286, p_loja::int); -- mesma trava da numeração de fin_titulo_pagar_salvar
+  for x in select * from fin_parcelas_da_nota(n.full_object, coalesce(n.n_valor_nfe, c.valor_total), v_emissao) loop
+    v_regra := x.regra; v_soma := v_soma + x.valor;
+    v_chave := 'nota_entrada:' || p_nota || ':' || coalesce(c.estornos, 0) || ':' || x.parcela;
+    if exists (select 1 from fin_titulos_pagar where loja_id = p_loja and chave_idempotencia = v_chave)
+       or exists (select 1 from fin_titulos_pagar where loja_id = p_loja and origem_tipo = 'nota_entrada' and origem_id = p_nota
+                  and parcela = x.parcela and status <> 'cancelado') then
+      v_ja := v_ja + 1;
+      continue;
+    end if;
+    v_comp := date_trunc('month', coalesce(v_entrada, v_emissao, x.vencimento))::date;
+    select coalesce(max(numero), 0) + 1 into v_numero from fin_titulos_pagar where loja_id = p_loja;
+    insert into fin_titulos_pagar (loja_id, numero, fornecedor_id, fornecedor_nome, documento, parcela, total_parcelas, valor, data_emissao,
+        data_vencimento, data_competencia, categoria_id, observacao, origem_tipo, origem_id, chave_idempotencia, assinatura, criado_por, criado_por_nome)
+    values (p_loja, v_numero, f.id, coalesce(nullif(f.nome_fantasia, ''), f.razao_social), v_doc, x.parcela, x.total_parcelas, x.valor, v_emissao,
+        x.vencimento, v_comp, v_cat,
+        case when p_manual then 'Gerada à mão pela nota de entrada' else 'Gerada pela nota de entrada' end
+          || case when x.regra = 'sem_duplicata' then ' (sem duplicata no XML: à vista, vence na emissão)' else '' end,
+        'nota_entrada', p_nota, v_chave, md5(concat_ws('|', 'nota_entrada', p_nota, x.parcela, x.valor, x.vencimento)), p_user, p_user_nome)
+    returning * into t;
+    v_ids := v_ids || t.id; v_gerados := v_gerados + 1;
+    perform fin_registrar_evento(p_loja, 'titulo_pagar', t.id, 'incluido',
+      jsonb_build_object('numero', t.numero, 'valor', t.valor, 'vencimento', t.data_vencimento, 'fornecedor', t.fornecedor_nome,
+        'origem', 'nota_entrada', 'nota_id', p_nota, 'parcela', t.parcela, 'regra', x.regra, 'manual', p_manual,
+        'categoria_id', v_cat, 'familia', v_fam, 'motivo_categoria', v_motcat, 'competencia', v_comp), p_user, p_user_nome);
+  end loop;
+
+  if v_gerados > 0 then
+    perform fin_registrar_evento(p_loja, 'nota_entrada', p_nota, 'titulos_gerados', jsonb_build_object('titulos', to_jsonb(v_ids),
+      'regra', v_regra, 'rodada', coalesce(c.estornos, 0), 'diferenca_total', v_soma - coalesce(n.n_valor_nfe, c.valor_total),
+      'manual', p_manual, 'categoria_id', v_cat, 'familia', v_fam, 'motivo_categoria', v_motcat, 'data_entrada', v_entrada), p_user, p_user_nome);
+  end if;
+  return jsonb_build_object('ok', true, 'gerados', v_gerados, 'ja_existiam', v_ja, 'regra', coalesce(v_regra, 'sem_valor'), 'titulos', to_jsonb(v_ids),
+    'categoria_id', v_cat, 'motivo_categoria', v_motcat,
+    'motivo', case when v_regra is null then 'Nota sem valor e sem duplicata' end);
+end $$;
+
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
@@ -589,6 +669,65 @@ CREATE FUNCTION public._recuo_pares(p_loja bigint, p_produtos bigint[], p_desde 
     from estoque_movimentos_efetivo e join estoque_movimentos_efetivo o on o.id = e.reverses_id
    where e.loja_id = p_loja and e.codigo_produto = any(p_produtos) and e.data_ref >= p_desde and o.data_ref < p_desde
 $$;
+
+
+--
+-- Name: _refazer_custo_entradas_compras(bigint, bigint[], text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._refazer_custo_entradas_compras(p_loja bigint, p_compras bigint[], p_motivo text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    SET enable_seqscan TO 'off'
+    AS $$ -- mesma razão do reprocessar_custo (312)
+declare
+  it compras_proprio_itens%rowtype; e record; v_lote uuid := gen_random_uuid(); v_prods bigint[]; v_min date; v_local bigint;
+  v_qtd numeric; v_novo numeric; v_n int := 0; v_rep jsonb; v_revisados bigint[] := '{}';
+begin
+  if (select modo_estoque from lojas where id = p_loja) is distinct from 'proprio' then
+    raise exception 'A loja % não usa estoque próprio', p_loja using errcode = '22023';
+  end if;
+  -- entradas vivas (lançadas, não estornadas) de item com a conta N3 (o CT-e só entra no custo desse caminho)
+  select array_agg(distinct i.codigo_produto order by i.codigo_produto), min(ef.data_ref)
+    into v_prods, v_min
+    from compras_proprio_itens i
+    join compras_proprio c on c.id = i.compra_id and c.loja_id = p_loja
+    join estoque_movimentos_efetivo ef on ef.id = i.movimento_id
+   where i.compra_id = any(p_compras) and i.lancado and i.movimento_id is not null and i.valor_total_item is not null
+     and not exists (select 1 from estoque_movimentos s where s.reverses_id = i.movimento_id);
+  if v_prods is null then
+    return jsonb_build_object('entradas_revisadas', 0, 'produtos', '[]'::jsonb, 'avisos', '[]'::jsonb);
+  end if;
+  perform _exigir_periodo_aberto(p_loja, v_min, 'custo da entrada da nota (CT-e)');
+  perform _travar_custo_produtos(p_loja, (select x.produtos from _cascata_custo(p_loja, v_prods,
+    _recuo_pares(p_loja, v_prods, v_min, _primeiro_dia_aberto(p_loja))) x));
+
+  for it in
+    select i.* from compras_proprio_itens i join compras_proprio c on c.id = i.compra_id and c.loja_id = p_loja
+     where i.compra_id = any(p_compras) and i.lancado and i.movimento_id is not null and i.valor_total_item is not null
+       and not exists (select 1 from estoque_movimentos s where s.reverses_id = i.movimento_id)
+     order by i.compra_id, i.linha
+  loop
+    select ef.* into e from estoque_movimentos_efetivo ef where ef.id = it.movimento_id;
+    select codigo_local_estoque into v_local from compras_proprio where id = it.compra_id;
+    v_qtd := coalesce(it.quantidade_recebida, it.quantidade * it.fator);
+    continue when v_qtd is null or v_qtd <= 0;
+    -- mesma conta do lancar_compra (313/185): regra N3 sobre a projeção do item, já com o frete_cte novo
+    v_novo := round(custo_estoque_item_omie(item_compra_full_object(it, v_local), it.quantidade, it.valor_unitario) / v_qtd, 6);
+    continue when not (v_novo > 0) or v_novo = coalesce(e.custo_original, 0);
+    perform _revisar_movimento(e.id, v_lote, e.data_ref, v_novo, e.cmc_apos, e.saldo_apos, e.saldo_total_apos, false,
+                               'custo da entrada: ' || p_motivo);
+    update compras_proprio_itens set custo_unitario_base = v_novo where id = it.id;
+    v_revisados := v_revisados || e.id;
+    v_n := v_n + 1;
+  end loop;
+
+  if v_n > 0 then
+    v_rep := reprocessar_custo(p_loja, v_prods, v_min, p_motivo);
+  end if;
+  return jsonb_build_object('entradas_revisadas', v_n, 'movimentos', to_jsonb(v_revisados), 'produtos', to_jsonb(v_prods),
+                            'desde', v_min, 'reprocessamento', v_rep, 'avisos', coalesce(v_rep->'avisos', '[]'::jsonb));
+end $$;
 
 
 --
@@ -1858,14 +1997,13 @@ CREATE FUNCTION public.desvincular_cte_compra(p_loja bigint, p_cte bigint, p_use
     SET search_path TO 'public'
     AS $$
 declare t compras_proprio_cte%rowtype; c compras_proprio%rowtype; x record; v_n int := 0;
+  v_tocadas bigint[] := '{}'; v_custo jsonb; -- 351
 begin
   select * into t from compras_proprio_cte where id = p_cte and loja_id = p_loja for update;
   if not found then raise exception 'CT-e não encontrado nesta loja' using errcode = '22023'; end if;
   for x in select compra_id from compras_proprio_cte_compra where cte_id = t.id loop
     select * into c from compras_proprio where id = x.compra_id for update;
-    if exists (select 1 from compras_proprio_itens where compra_id = c.id and lancado) then
-      raise exception 'A nota % já entrou no estoque: desfaça a entrada antes de desligar o CT-e.', coalesce(c.numero, c.id::text) using errcode = '22023';
-    end if;
+    -- 351: nota já lançada também pode perder o CT-e (o custo da entrada é refeito no fim)
   end loop;
   for x in select compra_id from compras_proprio_cte_compra where cte_id = t.id loop
     delete from compras_proprio_cte_compra where cte_id = t.id and compra_id = x.compra_id;
@@ -1874,9 +2012,12 @@ begin
     insert into compras_proprio_eventos (loja_id, compra_id, tipo, detalhe, user_id)
     values (p_loja, x.compra_id, 'cte_desvinculado', jsonb_build_object('cte_id', t.id, 'chave', t.chave, 'numero', t.numero), p_user);
     perform projetar_itens_compra_na_nota(x.compra_id);
+    v_tocadas := v_tocadas || x.compra_id; -- 351
     v_n := v_n + 1;
   end loop;
-  return jsonb_build_object('ok', true, 'cte_id', t.id, 'notas', v_n);
+  v_custo := _refazer_custo_entradas_compras(p_loja, v_tocadas,
+               'CT-e ' || coalesce(t.numero, t.chave, t.id::text) || ' desligado depois da entrada');
+  return jsonb_build_object('ok', true, 'cte_id', t.id, 'notas', v_n, 'custo_refeito', v_custo);
 end $$;
 
 
@@ -2316,6 +2457,35 @@ $$;
 
 
 --
+-- Name: fin_categoria_da_nota(bigint, bigint); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_categoria_da_nota(p_loja bigint, p_nota bigint) RETURNS TABLE(categoria_id bigint, codigo_familia bigint, motivo text)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+#variable_conflict use_column
+declare v_fam bigint; v_cat bigint;
+begin
+  select g.fam into v_fam
+  from (select p.codigo_familia as fam, sum(round(coalesce(i.valor_total_item, i.valor_total), 2)) as valor
+        from compras_proprio c
+        join compras_proprio_itens i on i.compra_id = c.id
+        left join produtos p on p.loja_id = c.loja_id and p.codigo_produto = i.codigo_produto
+        where c.loja_id = p_loja and c.nota_fiscal_id = p_nota and i.gera_conta_pagar
+        group by p.codigo_familia) g
+  order by g.valor desc, (g.fam is null), g.fam
+  limit 1;
+  if not found then return query select null::bigint, null::bigint, 'sem_itens'::text; return; end if;
+  if v_fam is null then return query select null::bigint, null::bigint, 'sem_familia'::text; return; end if;
+  select m.categoria_id into v_cat from fin_familia_categoria m
+    join fin_categorias k on k.id = m.categoria_id and k.loja_id = m.loja_id and k.ativa and k.tipo = 'despesa'
+   where m.loja_id = p_loja and m.codigo_familia = v_fam;
+  return query select v_cat, v_fam, case when v_cat is null then 'familia_sem_categoria' else 'mapeada' end;
+end $$;
+
+
+--
 -- Name: fin_categoria_salvar(bigint, bigint, jsonb, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -2508,6 +2678,25 @@ end $_$;
 
 
 --
+-- Name: fin_data_entrada_da_nota(bigint, bigint); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_data_entrada_da_nota(p_loja bigint, p_nota bigint) RETURNS date
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_comp bigint; v date;
+begin
+  select id into v_comp from compras_proprio where loja_id = p_loja and nota_fiscal_id = p_nota order by id desc limit 1;
+  if v_comp is null then return null; end if;
+  select min(m.data_ref) into v from compras_proprio_itens i join estoque_movimentos_efetivo m on m.id = i.movimento_id
+   where i.compra_id = v_comp and i.lancado;
+  if v is null then select d.data into v from _data_entrada_compra(p_loja, v_comp) d; end if;
+  return v;
+end $$;
+
+
+--
 -- Name: fin_exigir_loja_propria(bigint); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -2554,6 +2743,61 @@ end $$;
 
 
 --
+-- Name: fin_familia_categoria_listar(bigint); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_familia_categoria_listar(p_loja bigint) RETURNS TABLE(codigo_familia bigint, nome text, inativa boolean, produtos integer, categoria_id bigint, categoria_nome text, categoria_ok boolean)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select f.codigo_familia, f.nome::text, f.inativo,
+         (select count(*) from produtos p where p.loja_id = p_loja and p.codigo_familia = f.codigo_familia)::int,
+         m.categoria_id, k.nome, coalesce(k.ativa and k.tipo = 'despesa', false)
+  from familias f
+  left join fin_familia_categoria m on m.loja_id = f.loja_id and m.codigo_familia = f.codigo_familia
+  left join fin_categorias k on k.id = m.categoria_id and k.loja_id = m.loja_id
+  where f.loja_id = p_loja and f.codigo_familia is not null
+    and (not f.inativo or m.categoria_id is not null
+         or exists (select 1 from produtos p where p.loja_id = p_loja and p.codigo_familia = f.codigo_familia))
+  order by lower(f.nome), f.codigo_familia
+$$;
+
+
+--
+-- Name: fin_familia_categoria_salvar(bigint, bigint, bigint, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_familia_categoria_salvar(p_loja bigint, p_codigo_familia bigint, p_categoria bigint, p_user text DEFAULT NULL::text, p_user_nome text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_antes bigint; v_nome text;
+begin
+  perform fin_exigir_loja_propria(p_loja);
+  select nome into v_nome from familias where loja_id = p_loja and codigo_familia = p_codigo_familia;
+  if not found then raise exception 'Família não encontrada nesta loja' using errcode = '22023'; end if;
+  if p_categoria is not null and not exists (select 1 from fin_categorias where id = p_categoria and loja_id = p_loja and tipo = 'despesa' and ativa) then
+    raise exception 'Escolha uma categoria de despesa ativa desta loja' using errcode = '22023';
+  end if;
+  select categoria_id into v_antes from fin_familia_categoria where loja_id = p_loja and codigo_familia = p_codigo_familia for update;
+  if v_antes is not distinct from p_categoria then
+    return jsonb_build_object('ok', true, 'mudou', false);
+  end if;
+  if p_categoria is null then
+    delete from fin_familia_categoria where loja_id = p_loja and codigo_familia = p_codigo_familia;
+  else
+    insert into fin_familia_categoria (loja_id, codigo_familia, categoria_id, atualizado_por, atualizado_por_nome)
+    values (p_loja, p_codigo_familia, p_categoria, p_user, p_user_nome)
+    on conflict (loja_id, codigo_familia) do update set categoria_id = excluded.categoria_id, atualizado_por = excluded.atualizado_por,
+      atualizado_por_nome = excluded.atualizado_por_nome, updated_at = now();
+  end if;
+  perform fin_registrar_evento(p_loja, 'familia_categoria', p_codigo_familia, case when p_categoria is null then 'desligada' else 'ligada' end,
+    jsonb_build_object('familia', v_nome, 'antes', v_antes, 'depois', p_categoria), p_user, p_user_nome);
+  return jsonb_build_object('ok', true, 'mudou', true);
+end $$;
+
+
+--
 -- Name: fin_hoje(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -2562,6 +2806,99 @@ CREATE FUNCTION public.fin_hoje() RETURNS date
     AS $$
   select (now() at time zone 'America/Bahia')::date
 $$;
+
+
+--
+-- Name: fin_nota_desfeita_decidir(bigint, bigint, text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_nota_desfeita_decidir(p_loja bigint, p_titulo bigint, p_acao text, p_motivo text, p_user text DEFAULT NULL::text, p_user_nome text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare t fin_titulos_pagar%rowtype; v_motivo text := btrim(coalesce(p_motivo, '')); pg record; v_est int := 0; v_ult text;
+begin
+  perform fin_exigir_loja_propria(p_loja);
+  if p_acao not in ('estornar', 'manter') then raise exception 'Decisão inválida' using errcode = '22023'; end if;
+  if length(v_motivo) < 3 then raise exception 'Informe o motivo da decisão' using errcode = '22023'; end if;
+  select * into t from fin_titulos_pagar where id = p_titulo and loja_id = p_loja for update;
+  if not found then raise exception 'Conta a pagar não encontrada' using errcode = '22023'; end if;
+  select e.tipo into v_ult from fin_eventos e where e.loja_id = p_loja and e.entidade = 'titulo_pagar' and e.entidade_id = t.id
+    and e.tipo in ('nota_desfeita_com_pagamento', 'nota_desfeita_mantida', 'nota_desfeita_estornada') order by e.id desc limit 1;
+  if (p_acao = 'manter' and v_ult = 'nota_desfeita_mantida') or (p_acao = 'estornar' and v_ult = 'nota_desfeita_estornada') then
+    return jsonb_build_object('ok', true, 'duplicado', true, 'status', t.status);
+  end if;
+  if not exists (select 1 from fin_pendencias_nota_desfeita(p_loja) x where x.titulo_id = t.id) then
+    raise exception 'Esta conta não tem decisão pendente (a nota foi confirmada de novo ou a decisão já foi tomada)' using errcode = '22023';
+  end if;
+
+  if p_acao = 'manter' then
+    perform fin_registrar_evento(p_loja, 'titulo_pagar', t.id, 'nota_desfeita_mantida',
+      jsonb_build_object('nota_id', t.origem_id, 'motivo', v_motivo, 'valor_quitado', t.valor_quitado), p_user, p_user_nome);
+    return jsonb_build_object('ok', true, 'duplicado', false, 'status', t.status);
+  end if;
+
+  for pg in select id from fin_pagamentos where titulo_id = t.id and loja_id = p_loja and estornado_em is null order by id loop
+    perform fin_pagamento_estornar(p_loja, pg.id, 'Nota desfeita: ' || v_motivo, p_user, p_user_nome);
+    v_est := v_est + 1;
+  end loop;
+  select * into t from fin_titulos_pagar where id = p_titulo;
+  if t.valor_quitado <> 0 then raise exception 'O pagamento não foi estornado por inteiro' using errcode = '22023'; end if;
+  update fin_titulos_pagar set status = 'cancelado', cancelado_em = now(), cancelado_por = p_user, cancelado_por_nome = p_user_nome,
+      motivo_cancelamento = 'Nota desfeita: pagamento estornado (' || v_motivo || ')', updated_at = now() where id = t.id;
+  perform fin_registrar_evento(p_loja, 'titulo_pagar', t.id, 'cancelado', jsonb_build_object('motivo', v_motivo, 'nota_id', t.origem_id), p_user, p_user_nome);
+  perform fin_registrar_evento(p_loja, 'titulo_pagar', t.id, 'nota_desfeita_estornada',
+    jsonb_build_object('nota_id', t.origem_id, 'motivo', v_motivo, 'pagamentos_estornados', v_est), p_user, p_user_nome);
+  return jsonb_build_object('ok', true, 'duplicado', false, 'status', 'cancelado', 'pagamentos_estornados', v_est);
+end $$;
+
+
+--
+-- Name: fin_notas_sem_conta(bigint, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_notas_sem_conta(p_loja bigint DEFAULT NULL::bigint, p_limite integer DEFAULT 500) RETURNS TABLE(loja_id bigint, loja_nome text, chave_ligada boolean, nota_id bigint, compra_id bigint, numero text, fornecedor_nome text, fornecedor_cnpj text, emissao date, data_entrada date, valor_total numeric, status_compra text, regra text, parcelas jsonb, categoria_id bigint, categoria_nome text, familia_nome text, motivo_categoria text, ultima_falha text)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+#variable_conflict use_column
+begin
+  return query
+  with base as (
+    select c.loja_id, l.nome::text as loja_nome, l.fin_cp_da_nota_ativo as chave, c.nota_fiscal_id as nota_id, c.id as compra_id,
+           coalesce(nullif(ltrim(coalesce(n.c_numero_nfe, c.numero, ''), '0'), ''), c.numero)::text as numero,
+           coalesce(n.c_razao_social, c.fornecedor_nome)::text as forn, coalesce(n.c_cnpj_cpf, c.fornecedor_cnpj)::text as cnpj,
+           coalesce(n.d_emissao_nfe, c.emissao) as emissao, coalesce(n.n_valor_nfe, c.valor_total) as valor, c.status, n.full_object,
+           c.estornos
+    from compras_proprio c
+    join lojas l on l.id = c.loja_id and l.modo_estoque = 'proprio'
+    join notas_fiscais n on n.id = c.nota_fiscal_id and n.loja_id = c.loja_id and n.deleted_at is null
+    where (p_loja is null or c.loja_id = p_loja) and c.status in ('lancada', 'parcial')
+      and coalesce(n.full_object->'infoCadastro'->>'cCancelada', 'N') <> 'S'
+      and (not exists (select 1 from compras_proprio_itens i where i.compra_id = c.id)
+           or exists (select 1 from compras_proprio_itens i where i.compra_id = c.id and i.gera_conta_pagar))
+      and not exists (select 1 from fin_titulos_pagar t where t.loja_id = c.loja_id and t.origem_tipo = 'nota_entrada'
+                        and t.origem_id = c.nota_fiscal_id
+                        and (t.status <> 'cancelado' or t.chave_idempotencia like 'nota_entrada:' || c.nota_fiscal_id || ':' || c.estornos || ':%'))
+  )
+  select b.loja_id, b.loja_nome, b.chave, b.nota_id, b.compra_id, b.numero, b.forn, b.cnpj, b.emissao,
+         fin_data_entrada_da_nota(b.loja_id, b.nota_id), round(b.valor, 2), b.status, p.regra, p.parcelas,
+         k.categoria_id, kc.nome::text, f.nome::text, k.motivo,
+         (select e.detalhe->>'erro' from fin_eventos e where e.loja_id = b.loja_id and e.entidade = 'nota_entrada' and e.entidade_id = b.nota_id
+           order by e.id desc limit 1)
+  from base b
+  cross join lateral (
+    select min(x.regra) as regra,
+           jsonb_agg(jsonb_build_object('parcela', x.parcela, 'total', x.total_parcelas, 'vencimento', x.vencimento, 'valor', x.valor) order by x.parcela) as parcelas
+    from fin_parcelas_da_nota(b.full_object, b.valor, b.emissao) x
+  ) p
+  cross join lateral fin_categoria_da_nota(b.loja_id, b.nota_id) k
+  left join fin_categorias kc on kc.id = k.categoria_id
+  left join familias f on f.loja_id = b.loja_id and f.codigo_familia = k.codigo_familia
+  where p.parcelas is not null
+  order by b.loja_id, b.emissao desc nulls last, b.nota_id desc
+  limit greatest(1, least(coalesce(p_limite, 500), 2000));
+end $$;
 
 
 --
@@ -2722,6 +3059,29 @@ begin
     return query select 1, 1, v_base, round(p_valor_total, 2), 'sem_duplicata'::text;
   end if;
 end $_$;
+
+
+--
+-- Name: fin_pendencias_nota_desfeita(bigint); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fin_pendencias_nota_desfeita(p_loja bigint) RETURNS TABLE(titulo_id bigint, numero integer, nota_id bigint, documento text, fornecedor_nome text, parcela integer, total_parcelas integer, valor numeric, valor_quitado numeric, data_vencimento date, status text, status_compra text, desfeita_em timestamp with time zone, pagamentos integer)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select t.id, t.numero, t.origem_id, t.documento, t.fornecedor_nome, t.parcela, t.total_parcelas, t.valor, t.valor_quitado,
+         t.data_vencimento, t.status, c.status, ev.created_at,
+         (select count(*) from fin_pagamentos pg where pg.titulo_id = t.id and pg.estornado_em is null)::int
+  from fin_titulos_pagar t
+  left join lateral (select cp.status from compras_proprio cp where cp.loja_id = t.loja_id and cp.nota_fiscal_id = t.origem_id
+                     order by cp.id desc limit 1) c on true
+  join lateral (select e.tipo, e.created_at from fin_eventos e where e.loja_id = t.loja_id and e.entidade = 'titulo_pagar' and e.entidade_id = t.id
+                  and e.tipo in ('nota_desfeita_com_pagamento', 'nota_desfeita_mantida') order by e.id desc limit 1) ev on true
+  where t.loja_id = p_loja and t.origem_tipo = 'nota_entrada' and t.status <> 'cancelado' and t.valor_quitado > 0
+    and coalesce(c.status, 'cancelada') not in ('lancada', 'parcial')
+    and ev.tipo = 'nota_desfeita_com_pagamento'
+  order by ev.created_at, t.id
+$$;
 
 
 --
@@ -2926,9 +3286,6 @@ CREATE FUNCTION public.fin_titulos_da_nota_estornar(p_loja bigint, p_nota bigint
 declare t fin_titulos_pagar%rowtype; v_canc int := 0; v_pagos int := 0; v_nums int[] := '{}'; v_motivo text;
 begin
   perform fin_exigir_loja_propria(p_loja);
-  if not fin_cp_da_nota_ligado(p_loja) then
-    return jsonb_build_object('ok', true, 'cancelados', 0, 'com_pagamento', 0, 'numeros_com_pagamento', '[]'::jsonb, 'desligado', true);
-  end if;
   v_motivo := coalesce(nullif(btrim(coalesce(p_motivo, '')), ''), 'Entrada da nota desfeita');
   for t in select * from fin_titulos_pagar where loja_id = p_loja and origem_tipo = 'nota_entrada' and origem_id = p_nota
              and status <> 'cancelado' order by parcela, id for update loop
@@ -2957,83 +3314,23 @@ end $$;
 --
 
 CREATE FUNCTION public.fin_titulos_da_nota_gerar(p_loja bigint, p_nota bigint, p_user text DEFAULT NULL::text, p_user_nome text DEFAULT NULL::text) RETURNS jsonb
-    LANGUAGE plpgsql SECURITY DEFINER
+    LANGUAGE sql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-declare
-  c compras_proprio%rowtype; n notas_fiscais%rowtype; f fornecedores%rowtype; v_cod bigint; v_cat bigint; v_cc bigint;
-  x record; v_chave text; v_numero int; v_doc text; v_gerados int := 0; v_ja int := 0; v_regra text; v_soma numeric := 0;
-  v_ids bigint[] := '{}'; t fin_titulos_pagar%rowtype; v_emissao date;
-begin
-  perform fin_exigir_loja_propria(p_loja);
-  if not fin_cp_da_nota_ligado(p_loja) then
-    return jsonb_build_object('ok', true, 'gerados', 0, 'ja_existiam', 0, 'motivo', 'A conta a pagar pela nota ainda não está ligada nesta loja');
-  end if;
-  select * into c from compras_proprio where loja_id = p_loja and nota_fiscal_id = p_nota for update;
-  if not found then raise exception 'Esta nota não tem entrada no estoque' using errcode = '22023'; end if;
-  if c.status not in ('lancada', 'parcial') then
-    return jsonb_build_object('ok', true, 'gerados', 0, 'ja_existiam', 0, 'motivo', 'A entrada da nota não está confirmada');
-  end if;
-  select * into n from notas_fiscais where id = p_nota and loja_id = p_loja and deleted_at is null;
-  if not found then raise exception 'Nota não encontrada' using errcode = '22023'; end if;
-  if coalesce(n.full_object->'infoCadastro'->>'cCancelada', 'N') = 'S' then
-    return jsonb_build_object('ok', true, 'gerados', 0, 'ja_existiam', 0, 'motivo', 'Nota cancelada na SEFAZ');
-  end if;
-  if exists (select 1 from compras_proprio_itens where compra_id = c.id)
-     and not exists (select 1 from compras_proprio_itens where compra_id = c.id and gera_conta_pagar) then
-    return jsonb_build_object('ok', true, 'gerados', 0, 'ja_existiam', 0, 'motivo', 'Nenhum item da nota gera conta a pagar');
-  end if;
+  select _fin_titulos_da_nota_gerar(p_loja, p_nota, p_user, p_user_nome, false)
+$$;
 
-  -- fornecedor pelo CNPJ da nota (acha ou cria, mesma regra da gravação da nota da SEFAZ)
-  v_cod := fornecedor_da_nota_sefaz(p_loja, coalesce(n.c_cnpj_cpf, c.fornecedor_cnpj), coalesce(n.c_razao_social, c.fornecedor_nome), n.c_nome, n.c_inscricao);
-  if v_cod is null then raise exception 'Nota sem CNPJ/CPF do fornecedor: não dá para gerar a conta a pagar' using errcode = '22023'; end if;
-  select * into f from fornecedores where loja_id = p_loja and codigo_omie = v_cod order by id limit 1;
-  if not found then raise exception 'Fornecedor da nota não encontrado no cadastro' using errcode = '22023'; end if;
 
-  -- categoria: a ligada à categoria contábil única da nota; senão a padrão de compra
-  select min(i.categoria_contabil_id) into v_cc from nota_fiscal_items i where i.nota_fiscal_id = p_nota and i.loja_id = p_loja
-    having count(distinct i.categoria_contabil_id) = 1 and count(*) = count(i.categoria_contabil_id);
-  if v_cc is not null then
-    select id into v_cat from fin_categorias where loja_id = p_loja and categoria_contabil_id = v_cc and tipo = 'despesa' and ativa order by id limit 1;
-  end if;
-  if v_cat is null then
-    select id into v_cat from fin_categorias where loja_id = p_loja and tipo = 'despesa' and ativa and padrao in ('cmv_revenda', 'cmv_insumos')
-      order by case padrao when 'cmv_revenda' then 1 else 2 end limit 1;
-  end if;
+--
+-- Name: fin_titulos_da_nota_gerar_manual(bigint, bigint, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
 
-  v_emissao := coalesce(n.d_emissao_nfe, c.emissao);
-  v_doc := 'NF ' || coalesce(nullif(ltrim(coalesce(n.c_numero_nfe, c.numero, ''), '0'), ''), p_nota::text);
-  perform pg_advisory_xact_lock(7286, p_loja::int); -- mesma trava da numeração de fin_titulo_pagar_salvar
-  for x in select * from fin_parcelas_da_nota(n.full_object, coalesce(n.n_valor_nfe, c.valor_total), v_emissao) loop
-    v_regra := x.regra; v_soma := v_soma + x.valor;
-    v_chave := 'nota_entrada:' || p_nota || ':' || coalesce(c.estornos, 0) || ':' || x.parcela;
-    if exists (select 1 from fin_titulos_pagar where loja_id = p_loja and chave_idempotencia = v_chave)
-       or exists (select 1 from fin_titulos_pagar where loja_id = p_loja and origem_tipo = 'nota_entrada' and origem_id = p_nota
-                  and parcela = x.parcela and status <> 'cancelado') then
-      v_ja := v_ja + 1;
-      continue;
-    end if;
-    select coalesce(max(numero), 0) + 1 into v_numero from fin_titulos_pagar where loja_id = p_loja;
-    insert into fin_titulos_pagar (loja_id, numero, fornecedor_id, fornecedor_nome, documento, parcela, total_parcelas, valor, data_emissao,
-        data_vencimento, data_competencia, categoria_id, observacao, origem_tipo, origem_id, chave_idempotencia, assinatura, criado_por, criado_por_nome)
-    values (p_loja, v_numero, f.id, coalesce(nullif(f.nome_fantasia, ''), f.razao_social), v_doc, x.parcela, x.total_parcelas, x.valor, v_emissao,
-        x.vencimento, date_trunc('month', coalesce(v_emissao, x.vencimento))::date, v_cat,
-        case when x.regra = 'sem_duplicata' then 'Gerada pela nota de entrada (sem duplicata no XML: vence na emissão)' else 'Gerada pela nota de entrada' end,
-        'nota_entrada', p_nota, v_chave, md5(concat_ws('|', 'nota_entrada', p_nota, x.parcela, x.valor, x.vencimento)), p_user, p_user_nome)
-    returning * into t;
-    v_ids := v_ids || t.id; v_gerados := v_gerados + 1;
-    perform fin_registrar_evento(p_loja, 'titulo_pagar', t.id, 'incluido',
-      jsonb_build_object('numero', t.numero, 'valor', t.valor, 'vencimento', t.data_vencimento, 'fornecedor', t.fornecedor_nome,
-        'origem', 'nota_entrada', 'nota_id', p_nota, 'parcela', t.parcela, 'regra', x.regra), p_user, p_user_nome);
-  end loop;
-
-  if v_gerados > 0 then
-    perform fin_registrar_evento(p_loja, 'nota_entrada', p_nota, 'titulos_gerados', jsonb_build_object('titulos', to_jsonb(v_ids),
-      'regra', v_regra, 'rodada', coalesce(c.estornos, 0), 'diferenca_total', v_soma - coalesce(n.n_valor_nfe, c.valor_total)), p_user, p_user_nome);
-  end if;
-  return jsonb_build_object('ok', true, 'gerados', v_gerados, 'ja_existiam', v_ja, 'regra', coalesce(v_regra, 'sem_valor'), 'titulos', to_jsonb(v_ids),
-    'motivo', case when v_regra is null then 'Nota sem valor e sem duplicata' end);
-end $$;
+CREATE FUNCTION public.fin_titulos_da_nota_gerar_manual(p_loja bigint, p_nota bigint, p_user text DEFAULT NULL::text, p_user_nome text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select _fin_titulos_da_nota_gerar(p_loja, p_nota, p_user, p_user_nome, true)
+$$;
 
 
 --
@@ -8943,10 +9240,11 @@ CREATE FUNCTION public.trg_compra_conta_pagar() RETURNS trigger
     AS $$
 declare v_erro text;
 begin
-  if new.nota_fiscal_id is null or not fin_cp_da_nota_ligado(new.loja_id) then
+  if new.nota_fiscal_id is null or not exists (select 1 from lojas where id = new.loja_id and modo_estoque = 'proprio') then
     return null;
   end if;
   if new.status in ('lancada', 'parcial') then
+    if not fin_cp_da_nota_ligado(new.loja_id) then return null; end if;
     begin
       perform fin_titulos_da_nota_gerar(new.loja_id, new.nota_fiscal_id, null, 'Entrada da nota fiscal');
     exception when others then
@@ -9805,6 +10103,7 @@ CREATE FUNCTION public.vincular_cte_compra(p_loja bigint, p_cte bigint, p_rateio
     SET search_path TO 'public'
     AS $$
 declare t compras_proprio_cte%rowtype; c compras_proprio%rowtype; x record; v_soma numeric := 0; v_n int := 0;
+  v_tocadas bigint[] := '{}'; v_custo jsonb; -- 351
 begin
   select * into t from compras_proprio_cte where id = p_cte and loja_id = p_loja for update;
   if not found then raise exception 'CT-e não encontrado nesta loja' using errcode = '22023'; end if;
@@ -9812,22 +10111,17 @@ begin
   for x in select (e->>'compra_id')::bigint as compra_id, round((e->>'valor')::numeric, 2) as valor from jsonb_array_elements(p_rateio) e loop
     select * into c from compras_proprio where id = x.compra_id and loja_id = p_loja for update;
     if not found then raise exception 'Nota % não é desta loja', x.compra_id using errcode = '22023'; end if;
-    if exists (select 1 from compras_proprio_itens where compra_id = c.id and lancado) then
-      raise exception 'A nota % já entrou no estoque: desfaça a entrada, ligue o CT-e e confirme de novo.', coalesce(c.numero, c.id::text) using errcode = '22023';
-    end if;
+    -- 351: nota já lançada também aceita o CT-e (o custo da entrada é refeito no fim)
     if x.valor is null or x.valor < 0 then raise exception 'Valor do frete inválido' using errcode = '22023'; end if;
     v_soma := v_soma + x.valor;
   end loop;
   if abs(v_soma - t.valor) > 0.01 then
     raise exception 'O rateio (%) não fecha com o valor do CT-e (%)', v_soma, t.valor using errcode = '22023';
   end if;
-  -- nota que sai do rateio ao religar também não pode ter item lançado (o frete dela mudaria depois da entrada)
-  for x in select distinct l.compra_id, c2.numero from compras_proprio_cte_compra l join compras_proprio c2 on c2.id = l.compra_id
+  -- nota que sai do rateio ao religar: trava a linha (o custo dela também é refeito no fim)
+  for x in select distinct l.compra_id from compras_proprio_cte_compra l
             where l.cte_id = t.id and not exists (select 1 from jsonb_array_elements(p_rateio) e where (e->>'compra_id')::bigint = l.compra_id) loop
     perform 1 from compras_proprio where id = x.compra_id for update;
-    if exists (select 1 from compras_proprio_itens where compra_id = x.compra_id and lancado) then
-      raise exception 'A nota % já entrou no estoque: desfaça a entrada antes de tirar o CT-e dela.', coalesce(x.numero, x.compra_id::text) using errcode = '22023';
-    end if;
   end loop;
   -- religar o mesmo CT-e substitui o rateio anterior (não soma duas vezes)
   for x in select distinct compra_id from compras_proprio_cte_compra where cte_id = t.id loop
@@ -9835,6 +10129,7 @@ begin
     if not exists (select 1 from jsonb_array_elements(p_rateio) e where (e->>'compra_id')::bigint = x.compra_id) then
       perform _recalcular_frete_cte(x.compra_id);
       perform projetar_itens_compra_na_nota(x.compra_id);
+      v_tocadas := v_tocadas || x.compra_id; -- 351
     end if;
   end loop;
   for x in select (e->>'compra_id')::bigint as compra_id, round((e->>'valor')::numeric, 2) as valor from jsonb_array_elements(p_rateio) e loop
@@ -9846,9 +10141,13 @@ begin
     insert into compras_proprio_eventos (loja_id, compra_id, tipo, detalhe, user_id)
     values (p_loja, x.compra_id, 'cte_vinculado', jsonb_build_object('cte_id', t.id, 'chave', t.chave, 'numero', t.numero, 'valor', x.valor), p_user);
     perform projetar_itens_compra_na_nota(x.compra_id);
+    v_tocadas := v_tocadas || x.compra_id; -- 351
     v_n := v_n + 1;
   end loop;
-  return jsonb_build_object('ok', true, 'cte_id', t.id, 'notas', v_n);
+  -- 351: CT-e ligado depois da entrada → refaz o custo das entradas pela data da nota
+  v_custo := _refazer_custo_entradas_compras(p_loja, v_tocadas,
+               'CT-e ' || coalesce(t.numero, t.chave, t.id::text) || ' ligado depois da entrada');
+  return jsonb_build_object('ok', true, 'cte_id', t.id, 'notas', v_n, 'custo_refeito', v_custo);
 end $$;
 
 
@@ -11149,11 +11448,11 @@ CREATE VIEW public.estoque_movimentos_efetivo WITH (security_invoker='true') AS
     COALESCE(r.data_efetiva, m.data_ref) AS data_ref,
     m.created_at,
     (r.id IS NOT NULL) AS revisado,
-    m.custo_unitario AS custo_original,
+    COALESCE(ce.custo_unitario, m.custo_unitario) AS custo_original,
     m.data_ref AS data_ref_original,
     r.criado_em AS revisado_em,
     r.motivo AS motivo_revisao
-   FROM (public.estoque_movimentos m
+   FROM ((public.estoque_movimentos m
      LEFT JOIN LATERAL ( SELECT x.id,
             x.data_efetiva,
             x.custo_unitario,
@@ -11166,14 +11465,19 @@ CREATE VIEW public.estoque_movimentos_efetivo WITH (security_invoker='true') AS
            FROM public.estoque_mov_revisao x
           WHERE (x.movimento_id = m.id)
           ORDER BY x.id DESC
-         LIMIT 1) r ON (true));
+         LIMIT 1) r ON (true))
+     LEFT JOIN LATERAL ( SELECT x.custo_unitario
+           FROM public.estoque_mov_revisao x
+          WHERE ((x.movimento_id = m.id) AND (x.motivo ~~ 'custo da entrada:%'::text))
+          ORDER BY x.id DESC
+         LIMIT 1) ce ON (true));
 
 
 --
 -- Name: VIEW estoque_movimentos_efetivo; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON VIEW public.estoque_movimentos_efetivo IS 'Ledger do estoque próprio com a última revisão de custo/data aplicada (311). Fonte de custo dos relatórios.';
+COMMENT ON VIEW public.estoque_movimentos_efetivo IS 'Ledger do estoque próprio com a última revisão de custo/data aplicada (311). Fonte de custo dos relatórios. custo_original = custo do ledger, ou o custo da entrada refeito (revisão "custo da entrada: …", 351).';
 
 
 --
@@ -11737,6 +12041,21 @@ ALTER TABLE public.fin_eventos ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY 
     NO MINVALUE
     NO MAXVALUE
     CACHE 1
+);
+
+
+--
+-- Name: fin_familia_categoria; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fin_familia_categoria (
+    loja_id bigint NOT NULL,
+    codigo_familia bigint NOT NULL,
+    categoria_id bigint NOT NULL,
+    atualizado_por text,
+    atualizado_por_nome text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -13890,7 +14209,8 @@ SELECT
     NULL::numeric AS quantidade_base,
     NULL::numeric AS preco_base,
     NULL::numeric AS vinculado,
-    NULL::numeric AS recebido;
+    NULL::numeric AS recebido,
+    NULL::numeric AS devolvido;
 
 
 --
@@ -15951,6 +16271,14 @@ ALTER TABLE ONLY public.fin_eventos
 
 
 --
+-- Name: fin_familia_categoria fin_familia_categoria_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_familia_categoria
+    ADD CONSTRAINT fin_familia_categoria_pkey PRIMARY KEY (loja_id, codigo_familia);
+
+
+--
 -- Name: fin_lancamentos fin_lancamentos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -17290,6 +17618,13 @@ CREATE INDEX estoque_lotes_vencimento ON public.estoque_lotes USING btree (loja_
 
 
 --
+-- Name: estoque_mov_revisao_custo_entrada; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX estoque_mov_revisao_custo_entrada ON public.estoque_mov_revisao USING btree (movimento_id, id DESC) WHERE (motivo ~~ 'custo da entrada:%'::text);
+
+
+--
 -- Name: estoque_mov_revisao_lote; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -18337,12 +18672,17 @@ CREATE OR REPLACE VIEW public.pedidos_compra_itens_situacao WITH (security_invok
     i.obs,
     round((i.quantidade * i.fator), 6) AS quantidade_base,
     round((i.preco_unitario / i.fator), 6) AS preco_base,
-    COALESCE(sum(COALESCE(ci.quantidade_recebida, (ci.quantidade * ci.fator))) FILTER (WHERE (c.status <> 'cancelada'::text)), (0)::numeric) AS vinculado,
-    COALESCE(sum(COALESCE(ci.quantidade_recebida, (ci.quantidade * ci.fator))) FILTER (WHERE ((c.status <> 'cancelada'::text) AND ci.lancado)), (0)::numeric) AS recebido
-   FROM (((public.pedidos_compra_itens i
+    COALESCE(sum((COALESCE(ci.quantidade_recebida, (ci.quantidade * ci.fator)) - COALESCE(dv.quantidade, (0)::numeric))) FILTER (WHERE (c.status <> 'cancelada'::text)), (0)::numeric) AS vinculado,
+    COALESCE(sum((COALESCE(ci.quantidade_recebida, (ci.quantidade * ci.fator)) - COALESCE(dv.quantidade, (0)::numeric))) FILTER (WHERE ((c.status <> 'cancelada'::text) AND ci.lancado)), (0)::numeric) AS recebido,
+    COALESCE(sum(dv.quantidade) FILTER (WHERE (c.status <> 'cancelada'::text)), (0)::numeric) AS devolvido
+   FROM ((((public.pedidos_compra_itens i
      LEFT JOIN public.pedidos_compra_vinculos v ON ((v.pedido_item_id = i.id)))
      LEFT JOIN public.compras_proprio_itens ci ON (((ci.id = v.compra_item_id) AND (ci.codigo_produto = i.codigo_produto))))
      LEFT JOIN public.compras_proprio c ON ((c.id = ci.compra_id)))
+     LEFT JOIN LATERAL ( SELECT sum(di.quantidade) AS quantidade
+           FROM (public.devolucoes_fornecedor_itens di
+             JOIN public.devolucoes_fornecedor d ON ((d.id = di.devolucao_id)))
+          WHERE ((di.compra_item_id = ci.id) AND (d.situacao <> 'cancelada'::text))) dv ON (true))
   GROUP BY i.id;
 
 
@@ -19699,6 +20039,22 @@ ALTER TABLE ONLY public.fin_contas_correntes
 
 ALTER TABLE ONLY public.fin_eventos
     ADD CONSTRAINT fin_eventos_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id);
+
+
+--
+-- Name: fin_familia_categoria fin_familia_categoria_categoria_id_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_familia_categoria
+    ADD CONSTRAINT fin_familia_categoria_categoria_id_loja_id_fkey FOREIGN KEY (categoria_id, loja_id) REFERENCES public.fin_categorias(id, loja_id);
+
+
+--
+-- Name: fin_familia_categoria fin_familia_categoria_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fin_familia_categoria
+    ADD CONSTRAINT fin_familia_categoria_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id);
 
 
 --
@@ -21467,6 +21823,19 @@ CREATE POLICY fin_eventos_select_por_loja ON public.fin_eventos FOR SELECT USING
 
 
 --
+-- Name: fin_familia_categoria; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.fin_familia_categoria ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: fin_familia_categoria fin_familia_categoria_select_por_loja; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY fin_familia_categoria_select_por_loja ON public.fin_familia_categoria FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
+
+
+--
 -- Name: fin_lancamentos; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -22726,6 +23095,15 @@ GRANT ALL ON FUNCTION public._expandir_receita(p_loja bigint, p_produto bigint, 
 
 
 --
+-- Name: FUNCTION _fin_titulos_da_nota_gerar(p_loja bigint, p_nota bigint, p_user text, p_user_nome text, p_manual boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._fin_titulos_da_nota_gerar(p_loja bigint, p_nota bigint, p_user text, p_user_nome text, p_manual boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._fin_titulos_da_nota_gerar(p_loja bigint, p_nota bigint, p_user text, p_user_nome text, p_manual boolean) TO postgres;
+GRANT ALL ON FUNCTION public._fin_titulos_da_nota_gerar(p_loja bigint, p_nota bigint, p_user text, p_user_nome text, p_manual boolean) TO service_role;
+
+
+--
 -- Name: TABLE estoque_movimentos; Type: ACL; Schema: public; Owner: -
 --
 
@@ -22847,6 +23225,14 @@ GRANT ALL ON FUNCTION public._recalcular_frete_cte(p_compra bigint) TO service_r
 
 REVOKE ALL ON FUNCTION public._recuo_pares(p_loja bigint, p_produtos bigint[], p_desde date, p_aberto date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._recuo_pares(p_loja bigint, p_produtos bigint[], p_desde date, p_aberto date) TO postgres;
+
+
+--
+-- Name: FUNCTION _refazer_custo_entradas_compras(p_loja bigint, p_compras bigint[], p_motivo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._refazer_custo_entradas_compras(p_loja bigint, p_compras bigint[], p_motivo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._refazer_custo_entradas_compras(p_loja bigint, p_compras bigint[], p_motivo text) TO postgres;
 
 
 --
@@ -23323,6 +23709,15 @@ GRANT ALL ON FUNCTION public.ficha_tem_ciclo(p_loja bigint, p_produto bigint, p_
 
 
 --
+-- Name: FUNCTION fin_categoria_da_nota(p_loja bigint, p_nota bigint); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_categoria_da_nota(p_loja bigint, p_nota bigint) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_categoria_da_nota(p_loja bigint, p_nota bigint) TO postgres;
+GRANT ALL ON FUNCTION public.fin_categoria_da_nota(p_loja bigint, p_nota bigint) TO service_role;
+
+
+--
 -- Name: FUNCTION fin_categoria_salvar(p_loja bigint, p_id bigint, p_dados jsonb, p_user text, p_user_nome text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -23377,6 +23772,15 @@ GRANT ALL ON FUNCTION public.fin_data_duplicata(p text) TO service_role;
 
 
 --
+-- Name: FUNCTION fin_data_entrada_da_nota(p_loja bigint, p_nota bigint); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_data_entrada_da_nota(p_loja bigint, p_nota bigint) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_data_entrada_da_nota(p_loja bigint, p_nota bigint) TO postgres;
+GRANT ALL ON FUNCTION public.fin_data_entrada_da_nota(p_loja bigint, p_nota bigint) TO service_role;
+
+
+--
 -- Name: FUNCTION fin_exigir_loja_propria(p_loja bigint); Type: ACL; Schema: public; Owner: -
 --
 
@@ -23395,12 +23799,48 @@ GRANT ALL ON FUNCTION public.fin_extrato(p_loja bigint, p_conta bigint, p_de dat
 
 
 --
+-- Name: FUNCTION fin_familia_categoria_listar(p_loja bigint); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_familia_categoria_listar(p_loja bigint) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_familia_categoria_listar(p_loja bigint) TO postgres;
+GRANT ALL ON FUNCTION public.fin_familia_categoria_listar(p_loja bigint) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_familia_categoria_salvar(p_loja bigint, p_codigo_familia bigint, p_categoria bigint, p_user text, p_user_nome text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_familia_categoria_salvar(p_loja bigint, p_codigo_familia bigint, p_categoria bigint, p_user text, p_user_nome text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_familia_categoria_salvar(p_loja bigint, p_codigo_familia bigint, p_categoria bigint, p_user text, p_user_nome text) TO postgres;
+GRANT ALL ON FUNCTION public.fin_familia_categoria_salvar(p_loja bigint, p_codigo_familia bigint, p_categoria bigint, p_user text, p_user_nome text) TO service_role;
+
+
+--
 -- Name: FUNCTION fin_hoje(); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public.fin_hoje() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fin_hoje() TO postgres;
 GRANT ALL ON FUNCTION public.fin_hoje() TO service_role;
+
+
+--
+-- Name: FUNCTION fin_nota_desfeita_decidir(p_loja bigint, p_titulo bigint, p_acao text, p_motivo text, p_user text, p_user_nome text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_nota_desfeita_decidir(p_loja bigint, p_titulo bigint, p_acao text, p_motivo text, p_user text, p_user_nome text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_nota_desfeita_decidir(p_loja bigint, p_titulo bigint, p_acao text, p_motivo text, p_user text, p_user_nome text) TO postgres;
+GRANT ALL ON FUNCTION public.fin_nota_desfeita_decidir(p_loja bigint, p_titulo bigint, p_acao text, p_motivo text, p_user text, p_user_nome text) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_notas_sem_conta(p_loja bigint, p_limite integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_notas_sem_conta(p_loja bigint, p_limite integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_notas_sem_conta(p_loja bigint, p_limite integer) TO postgres;
+GRANT ALL ON FUNCTION public.fin_notas_sem_conta(p_loja bigint, p_limite integer) TO service_role;
 
 
 --
@@ -23437,6 +23877,15 @@ GRANT ALL ON FUNCTION public.fin_pagamento_registrar(p_loja bigint, p_titulo big
 REVOKE ALL ON FUNCTION public.fin_parcelas_da_nota(p_full_object jsonb, p_valor_total numeric, p_emissao date, p_hoje date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fin_parcelas_da_nota(p_full_object jsonb, p_valor_total numeric, p_emissao date, p_hoje date) TO postgres;
 GRANT ALL ON FUNCTION public.fin_parcelas_da_nota(p_full_object jsonb, p_valor_total numeric, p_emissao date, p_hoje date) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_pendencias_nota_desfeita(p_loja bigint); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_pendencias_nota_desfeita(p_loja bigint) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_pendencias_nota_desfeita(p_loja bigint) TO postgres;
+GRANT ALL ON FUNCTION public.fin_pendencias_nota_desfeita(p_loja bigint) TO service_role;
 
 
 --
@@ -23509,6 +23958,15 @@ GRANT ALL ON FUNCTION public.fin_titulos_da_nota_estornar(p_loja bigint, p_nota 
 REVOKE ALL ON FUNCTION public.fin_titulos_da_nota_gerar(p_loja bigint, p_nota bigint, p_user text, p_user_nome text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fin_titulos_da_nota_gerar(p_loja bigint, p_nota bigint, p_user text, p_user_nome text) TO postgres;
 GRANT ALL ON FUNCTION public.fin_titulos_da_nota_gerar(p_loja bigint, p_nota bigint, p_user text, p_user_nome text) TO service_role;
+
+
+--
+-- Name: FUNCTION fin_titulos_da_nota_gerar_manual(p_loja bigint, p_nota bigint, p_user text, p_user_nome text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fin_titulos_da_nota_gerar_manual(p_loja bigint, p_nota bigint, p_user text, p_user_nome text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fin_titulos_da_nota_gerar_manual(p_loja bigint, p_nota bigint, p_user text, p_user_nome text) TO postgres;
+GRANT ALL ON FUNCTION public.fin_titulos_da_nota_gerar_manual(p_loja bigint, p_nota bigint, p_user text, p_user_nome text) TO service_role;
 
 
 --
@@ -25944,6 +26402,14 @@ GRANT ALL ON TABLE public.fin_eventos TO service_role;
 GRANT ALL ON SEQUENCE public.fin_eventos_id_seq TO postgres;
 GRANT ALL ON SEQUENCE public.fin_eventos_id_seq TO authenticated;
 GRANT ALL ON SEQUENCE public.fin_eventos_id_seq TO service_role;
+
+
+--
+-- Name: TABLE fin_familia_categoria; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.fin_familia_categoria TO postgres;
+GRANT ALL ON TABLE public.fin_familia_categoria TO service_role;
 
 
 --
