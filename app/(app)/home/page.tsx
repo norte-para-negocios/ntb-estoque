@@ -24,7 +24,7 @@ import { CountUp } from '@/components/ui-kit/CountUp'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { TEXTO_CLASSE, type CorToken } from '@/lib/status-cor'
 import { limiteJanelaQuente, contarOrdensProducaoAntigas, complementarOrdensProducao } from '@/lib/historico-contabo'
-import { PainelGerencial } from '@/components/home/PainelGerencial'
+import { PainelGerencial, carregarPainelGerencial } from '@/components/home/PainelGerencial'
 import { ehDesenvolvedor } from '@/lib/recursos-dev'
 
 export default async function HomePage() {
@@ -42,19 +42,22 @@ export default async function HomePage() {
 
   const lojaId = profile.current_loja_id
   const supabase = await createClient()
-  const ator = await getAtorGestao()
-
   const isAdmin = profile.perfil === 'Admin'
-  const perms = await getPermissoesNomes(lojaId)
+
+  // Fase 12 (velocidade): papel, permissões, vínculo, modo de estoque e "é desenvolvedor" em paralelo (antes, em série).
+  const [ator, perms, vinculoRes, homeProprio, dev] = await Promise.all([
+    getAtorGestao(),
+    getPermissoesNomes(lojaId),
+    isAdmin
+      ? Promise.resolve(null)
+      : supabase.from('loja_user').select('id').eq('loja_id', lojaId).eq('user_id', profile.id).maybeSingle(),
+    modoDaLoja(Number(lojaId)).then((m) => m === 'proprio'),
+    ehDesenvolvedor(),
+  ])
   const pode = (nome: string) => perms.has('*') || perms.has(nome)
 
   if (!isAdmin) {
-    const { data: vinculo } = await supabase
-      .from('loja_user')
-      .select('id')
-      .eq('loja_id', lojaId)
-      .eq('user_id', profile.id)
-      .maybeSingle()
+    const vinculo = vinculoRes?.data
     if (!vinculo) {
       return (
         <EmptyState
@@ -90,6 +93,23 @@ export default async function HomePage() {
   // pra um card de exibicao que nao alimenta paginacao nem logica critica.
   const headEstimado = { count: 'estimated' as const, head: true }
   const SALDO_OR = 'quantidade.gt.0,and(quantidade.is.null,identificacao_n_qtde.gt.0)'
+
+  // Fase 12: o que não depende das contagens começa junto com elas (validade por lote da loja própria, alertas do
+  // menu novo, painel gerencial). Mesmas consultas e regras de antes, só sem esperar uma pela outra.
+  const validadePromise = homeProprio && pode('Validade') ? resumoValidade(Number(lojaId), hojeBahiaISO()) : null
+  const devPromise = homeProprio && dev
+    ? Promise.all([
+        supabase.from('fin_titulos_pagar').select('id', head).eq('loja_id', lojaId).in('status', ['aberto', 'parcial']).lte('data_vencimento', hojeLocal),
+        supabase.from('ordens_producao').select('id', head).eq('loja_id', lojaId).eq('concluida', false).lte('identificacao_d_dt_previsao', hojeLocal),
+        supabase.from('pedidos_compra').select('id', head).eq('loja_id', lojaId).eq('etapa', 'aguardando_aprovacao'),
+        supabase.from('requisicoes_compra').select('id', head).eq('loja_id', lojaId).eq('etapa', 'aberta'),
+      ])
+    : null
+  const painelPromise = ator.podeGerir ? carregarPainelGerencial(lojaId) : null
+  // Promessa que só é lida mais abaixo: evita "unhandled rejection" se falhar antes (o await de baixo ainda lança).
+  validadePromise?.catch(() => {})
+  devPromise?.catch(() => {})
+  painelPromise?.catch(() => {})
 
   // Phase 1: todas as contagens + data mais recente de posicao (para valor do estoque)
   const [produtos, nfs, ops, invAbertos, vencendo, errosSync, loja, nfPendentes, reporRes, transfAbertas, maxPosRes, opsPendentesRetry] =
@@ -149,29 +169,32 @@ export default async function HomePage() {
   // do resultado de vencidasQuentesRaw). Achado real (2026-07-30): rodavam
   // em sequencia sem necessidade, cada uma custando uma rodada inteira de
   // rede ate Supabase/Contabo.
-  const [opsAntigasCount, { data: vencidasQuentesRaw }] = await Promise.all([
-    contarOrdensProducaoAntigas({ lojaId, dataFinal: limiteJanelaQuente() }),
-    supabase
-      .from('ordens_producao')
-      .select('id, identificacao_n_cod_op, identificacao_n_cod_produto, quantidade, identificacao_n_qtde')
-      .eq('loja_id', lojaId)
-      .not('validade', 'is', null)
-      .or(SALDO_OR)
-      .lt('validade', hojeLocal),
-  ])
-  const opsTotalCount = (ops.count ?? 0) + opsAntigasCount
-  const vencidasCompletas = await complementarOrdensProducao(vencidasQuentesRaw ?? [], {
-    lojaId,
-    validadeInicio: '0001-01-01',
-    validadeFinal: localISO(-1),
-  })
-  const qtdVencidos = vencidasCompletas.filter((o) => {
-    const temSaldo = Number(o.quantidade ?? 0) > 0 || (o.quantidade == null && Number(o.identificacao_n_qtde ?? 0) > 0)
-    return temSaldo
-  }).length
+  // Fase 12: "vencidos" (OPs com validade) só alimenta o alerta da loja Omie; na loja própria o alerta vem dos lotes
+  // (resumoValidade) e essa leitura (com a ida ao Contabo) não aparecia na tela. Agora só roda na loja Omie, e em
+  // paralelo com a lista de repor (Phase 2), que não depende dela.
+  const vencidosPromise = homeProprio
+    ? Promise.resolve(0)
+    : supabase
+        .from('ordens_producao')
+        .select('id, identificacao_n_cod_op, identificacao_n_cod_produto, quantidade, identificacao_n_qtde')
+        .eq('loja_id', lojaId)
+        .not('validade', 'is', null)
+        .or(SALDO_OR)
+        .lt('validade', hojeLocal)
+        .then(({ data: vencidasQuentesRaw }) => complementarOrdensProducao(vencidasQuentesRaw ?? [], {
+          lojaId,
+          validadeInicio: '0001-01-01',
+          validadeFinal: localISO(-1),
+        }))
+        .then((vencidasCompletas) => vencidasCompletas.filter((o) => {
+          const temSaldo = Number(o.quantidade ?? 0) > 0 || (o.quantidade == null && Number(o.identificacao_n_qtde ?? 0) > 0)
+          return temSaldo
+        }).length)
 
   // Phase 2: produtos a repor + saldo/mínimo para a lista
-  const [prodsReporRes, posReporRes] = await Promise.all([
+  const [opsAntigasCount, qtdVencidos, prodsReporRes, posReporRes] = await Promise.all([
+    contarOrdensProducaoAntigas({ lojaId, dataFinal: limiteJanelaQuente() }),
+    vencidosPromise,
     qtdRepor
       ? supabase.from('produtos').select('codigo_produto, codigo, descricao').eq('loja_id', lojaId).in('codigo_produto', codigosRepor.slice(0, 8)).order('descricao')
       : (Promise.resolve({ data: [] }) as Promise<{ data: { codigo_produto: number; codigo: string; descricao: string }[] }>),
@@ -180,6 +203,7 @@ export default async function HomePage() {
       : (Promise.resolve({ data: [] }) as Promise<{ data: { n_cod_prod: number; n_saldo: number; estoque_minimo: number | null }[] }>),
   ])
 
+  const opsTotalCount = (ops.count ?? 0) + opsAntigasCount
   const prodsRepor = prodsReporRes.data ?? []
 
   // A.3.4: mapa de saldo/mínimo por produto (acumula locais)
@@ -221,12 +245,11 @@ export default async function HomePage() {
     alertas.push({ icon: AlertTriangle, token: 'err', texto: `${qtdRepor} produto(s) abaixo do mínimo para repor`, href: '/produto?vista=compras&repor=1' })
   if ((errosSync.count ?? 0) > 0 && isAdmin)
     alertas.push({ icon: AlertTriangle, token: 'err', texto: `${errosSync.count} erro(s) de sincronização nas últimas 24h`, href: '/sync-status' })
-  const homeProprio = lojaId ? (await modoDaLoja(Number(lojaId))) === 'proprio' : false
   if (syncAtraso && isAdmin && !homeProprio)
     alertas.push({ icon: TrendingUp, token: 'warn', texto: 'Sincronização com Omie atrasada (mais de 24h)', href: '/sync-status' })
   if (homeProprio && pode('Validade')) {
     // Estoque próprio: validade por lote (migration 145), com o prazo de alerta da loja.
-    const rv = await resumoValidade(Number(lojaId), hojeBahiaISO())
+    const rv = await validadePromise!
     if (rv.vencidos > 0)
       alertas.push({ icon: CalendarClock, token: 'err', texto: `${rv.vencidos} lote(s) vencido(s) ainda em estoque`, href: '/validade?modo=vencidos' })
     if (rv.vencendo > 0)
@@ -246,13 +269,8 @@ export default async function HomePage() {
 
   // Menu novo (só desenvolvedores, loja de estoque próprio): o que os módulos de compras, produção e finanças
   // já calculam e o painel não mostrava. Tabela que ainda não existe (migration não aplicada) só não gera alerta.
-  if (homeProprio && (await ehDesenvolvedor())) {
-    const [contasHoje, opsHoje, pedidosAprovar, requisicoesAprovar] = await Promise.all([
-      supabase.from('fin_titulos_pagar').select('id', head).eq('loja_id', lojaId).in('status', ['aberto', 'parcial']).lte('data_vencimento', hojeLocal),
-      supabase.from('ordens_producao').select('id', head).eq('loja_id', lojaId).eq('concluida', false).lte('identificacao_d_dt_previsao', hojeLocal),
-      supabase.from('pedidos_compra').select('id', head).eq('loja_id', lojaId).eq('etapa', 'aguardando_aprovacao'),
-      supabase.from('requisicoes_compra').select('id', head).eq('loja_id', lojaId).eq('etapa', 'aberta'),
-    ])
+  if (devPromise) {
+    const [contasHoje, opsHoje, pedidosAprovar, requisicoesAprovar] = await devPromise
     const n = (r: { count: number | null; error: unknown }) => (r.error ? 0 : r.count ?? 0)
     if (n(contasHoje) > 0)
       alertas.push({ icon: CalendarClock, token: 'warn', texto: `${n(contasHoje)} conta(s) a pagar vencem hoje ou estão atrasadas`, href: `/financeiro/contas-pagar?situacao=em_aberto&ate=${hojeLocal}` })
@@ -270,12 +288,14 @@ export default async function HomePage() {
   ].filter((k) => pode(k.perm))
 
   // Desenvolvedores: "Novo …" já abre o formulário da lista (?criar=1, useCriarDaCentral); os demais seguem na lista.
-  const criarDireto = (await ehDesenvolvedor()) ? '?criar=1' : ''
+  const criarDireto = dev ? '?criar=1' : ''
   const atalhos = [
     { label: 'Novo inventário', desc: 'Contagem de estoque', href: `/inventario${criarDireto}`, icon: ClipboardList, perm: 'Inventarios - Criar' },
     { label: 'Nova transferência', desc: 'Entre locais', href: `/transferencia${criarDireto}`, icon: ArrowLeftRight, perm: 'Transferencias - Criar' },
     { label: 'Etiquetas de NF', desc: 'Imprimir', href: '/nota-fiscal', icon: FileText, perm: 'Notas Fiscais' },
   ].filter((a) => pode(a.perm))
+
+  const painelDados = painelPromise ? await painelPromise : null
 
   const fmtQtd = (n: number) =>
     n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
@@ -418,7 +438,7 @@ export default async function HomePage() {
           "Ultimas notas fiscais" que existia antes (mostrava n_valor_nfe pra
           TODO MUNDO, inclusive Operacao -- vazamento real, achado nesta
           tarefa) saiu daqui; quem precisa dessa lista usa /nota-fiscal. */}
-      {ator.podeGerir && <PainelGerencial lojaId={lojaId} />}
+      {painelDados && <PainelGerencial lojaId={lojaId} dados={painelDados} />}
     </div>
   )
 }

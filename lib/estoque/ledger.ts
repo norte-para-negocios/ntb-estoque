@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { createServiceClient } from '@/lib/supabase/server'
 
 export type ModoEstoque = 'omie' | 'proprio' | 'nenhum'
@@ -13,13 +14,15 @@ export type ResultadoMovimento = {
   custo_estimado?: boolean
 }
 
-export async function modoDaLoja(lojaId: number): Promise<ModoEstoque> {
+// Fase 12 (velocidade): layout e página perguntam o modo da mesma loja na mesma requisição; cache() do React lê uma vez
+// por requisição (fora da renderização, ex. rota de API, não guarda nada: comportamento de antes).
+export const modoDaLoja = cache(async (lojaId: number): Promise<ModoEstoque> => {
   const { data, error } = await createServiceClient().from('lojas').select('modo_estoque').eq('id', lojaId).maybeSingle()
   // Falha de leitura não pode virar "omie": a loja própria iria pelo caminho errado. Falha alto.
   if (error) throw new Error(`Não foi possível ler o modo de estoque da loja: ${error.message}`)
   const m = (data as { modo_estoque?: string } | null)?.modo_estoque
   return m === 'proprio' || m === 'nenhum' ? m : 'omie'
-}
+})
 
 type Base = { lojaId: number; local: number; produto: number; origem: string; ref: string; user?: string | null; obs?: string | null; linha?: number; data?: string | null }
 

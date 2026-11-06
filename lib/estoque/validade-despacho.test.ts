@@ -13,7 +13,9 @@ test('Validade: desvio para lotes vem antes da leitura de ordens_producao', () =
 
 test('Início: alertas por lote só em loja própria; o caminho do Omie segue igual', () => {
   const fonte = readFileSync('app/(app)/home/page.tsx', 'utf8')
-  assert.match(fonte, /if \(homeProprio && pode\('Validade'\)\) \{[\s\S]*resumoValidade\([\s\S]*\} else \{[\s\S]*qtdVencidos > 0/)
+  // Fase 12: a leitura dos lotes começa cedo (em paralelo), com a mesma condição, e o alerta lê o resultado no mesmo if.
+  assert.match(fonte, /homeProprio && pode\('Validade'\) \? resumoValidade\(/)
+  assert.match(fonte, /if \(homeProprio && pode\('Validade'\)\) \{[\s\S]*await validadePromise[\s\S]*\} else \{[\s\S]*qtdVencidos > 0/)
 })
 
 test('Compra manual leva lote/validade pela função com lotes', () => {

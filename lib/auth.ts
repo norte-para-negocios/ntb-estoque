@@ -1,13 +1,32 @@
 import { cache } from 'react'
+import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { temPermissao } from '@/lib/permissao-puro'
+import { CABECALHO_SESSAO, conferirSessao } from '@/lib/sessao-verificada-puro'
 
 // Velocidade (13/10/2026): cada tela chamava auth.getUser() (ida ao servidor de login) e lia o perfil de novo em cada
 // requirePermissao/isAdmin/getCurrentLojaId — 5 a 15 idas em série por página. cache() do React guarda o resultado
 // só durante a mesma requisição (fora da renderização, ex. rota de API, não guarda nada: comportamento de antes).
-const usuarioDaRequisicao = cache(async () => {
+// Fase 12 (06/11/2026): o proxy já conferiu a sessão no login nesta mesma requisição; se a assinatura dele bater com o
+// token do cookie, não repete a ida (0,3 a 1,4 s medidos no Contabo). Sem assinatura válida: auth.getUser(), como antes.
+// Só o id é usado por quem chama (getProfile, requirePermissao, getPermissoesNomes, getAtorGestao).
+const usuarioDaRequisicao = cache(async (): Promise<{ id: string } | null> => {
   const supabase = await createClient()
+  const chave = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (chave) {
+    let assinatura: string | null = null
+    try {
+      assinatura = (await headers()).get(CABECALHO_SESSAO)
+    } catch {
+      assinatura = null // fora de uma requisição
+    }
+    if (assinatura) {
+      const { data: { session } } = await supabase.auth.getSession()
+      const id = conferirSessao(chave, assinatura, session?.access_token)
+      if (id) return { id }
+    }
+  }
   const { data: { user } } = await supabase.auth.getUser()
   return user
 })
@@ -148,16 +167,11 @@ export type AtorGestao = {
 
 export async function getAtorGestao(): Promise<AtorGestao> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Fase 12: usuário e perfil da requisição (mesmo cache do getProfile), em vez de outra ida ao login + outra leitura.
+  const user = await usuarioDaRequisicao()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('perfil')
-    .eq('id', user.id)
-    .single<{ perfil: string | null }>()
+  const profile = await perfilDaRequisicao(user.id)
 
   const perfil = profile?.perfil ?? null
   const isAdminGlobal = perfil === 'Admin'
@@ -206,24 +220,25 @@ export const getPermissoesNomes = cache(async (lojaId: number | null): Promise<S
   if (profile?.perfil === 'Admin') return new Set(['*'])
   if (!lojaId) return new Set()
 
-  // Admin de loja: acesso total aos modulos da loja atual (se vinculado a ela).
-  if (profile?.perfil === 'AdminLoja') {
-    const { data: vinculo } = await supabase
-      .from('loja_user')
-      .select('id')
+  // Fase 12: vínculo com a loja (id + cargo) e permissões diretas numa ida só, em paralelo (antes: até 3 em série).
+  const [{ data }, { data: vinc }] = await Promise.all([
+    // Junta permissao_user (da loja) com o nome da permissao.
+    supabase
+      .from('permissao_user')
+      .select('permissoes(nome)')
       .eq('user_id', user.id)
       .eq('loja_id', lojaId)
-      .maybeSingle()
-    if (vinculo) return new Set(['*'])
-  }
+      .returns<{ permissoes: { nome: string } | { nome: string }[] | null }[]>(),
+    supabase
+      .from('loja_user')
+      .select('id, cargo_id')
+      .eq('user_id', user.id)
+      .eq('loja_id', lojaId)
+      .maybeSingle<{ id: number; cargo_id: number | null }>(),
+  ])
 
-  // Junta permissao_user (da loja) com o nome da permissao.
-  const { data } = await supabase
-    .from('permissao_user')
-    .select('permissoes(nome)')
-    .eq('user_id', user.id)
-    .eq('loja_id', lojaId)
-    .returns<{ permissoes: { nome: string } | { nome: string }[] | null }[]>()
+  // Admin de loja: acesso total aos modulos da loja atual (se vinculado a ela).
+  if (profile?.perfil === 'AdminLoja' && vinc) return new Set(['*'])
 
   const nomes = new Set<string>()
   const addNomes = (rows: { permissoes: { nome: string } | { nome: string }[] | null }[] | null) => {
@@ -237,12 +252,6 @@ export const getPermissoesNomes = cache(async (lojaId: number | null): Promise<S
   addNomes(data)
 
   // + permissões herdadas do CARGO do usuário nesta loja.
-  const { data: vinc } = await supabase
-    .from('loja_user')
-    .select('cargo_id')
-    .eq('user_id', user.id)
-    .eq('loja_id', lojaId)
-    .maybeSingle<{ cargo_id: number | null }>()
   if (vinc?.cargo_id) {
     const { data: doCargo } = await supabase
       .from('cargo_permissao')

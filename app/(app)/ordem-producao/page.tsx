@@ -113,8 +113,9 @@ export default async function OrdemProducaoPage({
 
   // Familias distintas (produtos com ordens) para o select (melhor esforco).
   // Famílias pela tabela de famílias (antes: a coluna de todos os produtos, cortada em 1000 linhas e lenta).
-  const { data: familiasRaw } = await supabase.from('familias').select('nome').eq('loja_id', lojaId).order('nome')
-  const familias = [...new Set((familiasRaw ?? []).map((f) => f.nome as string).filter(Boolean))]
+  // Fase 12 (velocidade): começa já e só espera onde é usada (o select de família), em paralelo com o resto.
+  const familiasP = supabase.from('familias').select('nome').eq('loja_id', lojaId).order('nome')
+    .then(({ data: familiasRaw }) => [...new Set((familiasRaw ?? []).map((f) => f.nome as string).filter(Boolean))])
 
   // Filtros op_produto / tipo_produto / familia: as colunas produto_* em
   // ordens_producao sao 100% NULL. Cruzamos via a tabela produtos para obter os
@@ -222,132 +223,164 @@ export default async function OrdemProducaoPage({
     return new Map((data ?? []).map((p) => [p.codigo_produto, p]))
   }
 
-  let ordens: OPRow[]
-  let temProxima: boolean
-  let prodMap: Awaited<ReturnType<typeof resolverProdutos>>
-  let truncado = false // conjunto bateu no teto de lotes (so sem filtro de data em loja enorme)
+  // Fase 12 (velocidade): a lista da página (OPs → produtos/ficha → insumos) roda em paralelo com os contadores e os
+  // totais de custo logo abaixo; antes tudo esperava em série. Mesmas consultas, mesma ordem dentro da lista.
+  const listaP = (async () => {
+    let ordens: OPRow[]
+    let temProxima: boolean
+    let prodMap: Awaited<ReturnType<typeof resolverProdutos>>
+    let truncado = false // conjunto bateu no teto de lotes (so sem filtro de data em loja enorme)
 
-  if (precisaBuscarTudo) {
-    // Busca o conjunto completo (filtrado) em lotes para filtrar conclusao e/ou
-    // ordenar por nome do produto em memoria, depois pagina. Com o filtro padrao
-    // de mes corrente, esse conjunto e pequeno.
-    const todas: OPRow[] = []
-    const LOTE = 1000
-    const MAX_LOTES = 60 // teto de seguranca (~60k OPs) para nao travar o SSR
-    for (let off = 0, i = 0; i < MAX_LOTES; off += LOTE, i++) {
-      const { data, error } = await baseQuery().range(off, off + LOTE - 1)
-      // Achado real (auditoria de relatórios, 2026-07-26): um erro transitório
-      // no meio da paginação (ex.: statement-timeout) era tratado igual a
-      // "acabaram os dados" -- marca truncado (mesmo aviso já exibido pro
-      // teto de MAX_LOTES) em vez de deixar o conjunto parecer completo.
-      if (error) { console.error('ordem-producao: falha ao paginar OPs', error); truncado = true; break }
-      const lote = (data ?? []) as OPRow[]
-      if (!lote.length) break
-      todas.push(...lote)
-      if (lote.length < LOTE) break
-      if (i === MAX_LOTES - 1) truncado = true // saiu pelo teto com lote cheio: ha mais
+    if (precisaBuscarTudo) {
+      // Busca o conjunto completo (filtrado) em lotes para filtrar conclusao e/ou
+      // ordenar por nome do produto em memoria, depois pagina. Com o filtro padrao
+      // de mes corrente, esse conjunto e pequeno.
+      const todas: OPRow[] = []
+      const LOTE = 1000
+      const MAX_LOTES = 60 // teto de seguranca (~60k OPs) para nao travar o SSR
+      for (let off = 0, i = 0; i < MAX_LOTES; off += LOTE, i++) {
+        const { data, error } = await baseQuery().range(off, off + LOTE - 1)
+        // Achado real (auditoria de relatórios, 2026-07-26): um erro transitório
+        // no meio da paginação (ex.: statement-timeout) era tratado igual a
+        // "acabaram os dados" -- marca truncado (mesmo aviso já exibido pro
+        // teto de MAX_LOTES) em vez de deixar o conjunto parecer completo.
+        if (error) { console.error('ordem-producao: falha ao paginar OPs', error); truncado = true; break }
+        const lote = (data ?? []) as OPRow[]
+        if (!lote.length) break
+        todas.push(...lote)
+        if (lote.length < LOTE) break
+        if (i === MAX_LOTES - 1) truncado = true // saiu pelo teto com lote cheio: ha mais
+      }
+      const completouComContabo = !proprio && usarContabo
+      // campo: 'previsao' -- o filtro de periodo desta tela e sobre
+      // identificacao_d_dt_previsao (data planejada), nao dt_conclusao_real (default
+      // do helper). Achado real 2026-07-19: sem isso, o complemento frio filtrava
+      // pela data de conclusao, entao OPs nao concluidas do Contabo nunca entravam
+      // com periodo aplicado e OPs concluidas apareciam no periodo errado.
+      let filtradas = completouComContabo
+        ? await complementarOrdensProducao(todas, { lojaId, dataInicio, dataFinal, campo: 'previsao' })
+        : todas
+      prodMap = await resolverProdutos(filtradas)
+      if (ordEmMemoria) {
+        const dir = ord === 'produto_za' ? -1 : 1
+        filtradas = [...filtradas].sort((a, b) => {
+          const na = (prodMap.get(a.identificacao_n_cod_produto as number)?.descricao ?? '').toLowerCase()
+          const nb = (prodMap.get(b.identificacao_n_cod_produto as number)?.descricao ?? '').toLowerCase()
+          return na.localeCompare(nb, 'pt-BR') * dir
+        })
+      } else if (completouComContabo) {
+        // As linhas do Contabo entram no final do array (fora da ordenacao do banco
+        // que so cobriu "todas") -- reordena em memoria seguindo o mesmo criterio de `ord`.
+        filtradas = [...filtradas].sort((a, b) => {
+          if (ord === 'codigo') {
+            const va = a.identificacao_n_cod_produto, vb = b.identificacao_n_cod_produto
+            if (va == null) return 1
+            if (vb == null) return -1
+            return va - vb
+          }
+          if (ord === 'qtd_desc' || ord === 'qtd_asc') {
+            const va = a.identificacao_n_qtde, vb = b.identificacao_n_qtde
+            if (va == null) return 1
+            if (vb == null) return -1
+            return ord === 'qtd_desc' ? vb - va : va - vb
+          }
+          if (ord === 'validade_asc' || ord === 'validade_desc') {
+            const va = a.validade, vb = b.validade
+            if (va == null) return 1
+            if (vb == null) return -1
+            return ord === 'validade_desc' ? (va < vb ? 1 : -1) : va < vb ? -1 : 1
+          }
+          return 0
+        })
+      }
+      temProxima = filtradas.length > page * POR_PAGINA
+      ordens = filtradas.slice((page - 1) * POR_PAGINA, page * POR_PAGINA)
+    } else {
+      // .range busca POR_PAGINA+1 de proposito: a linha extra detecta a proxima pagina.
+      const { data } = await baseQuery().range((page - 1) * POR_PAGINA, page * POR_PAGINA)
+      const ordensRaw = (data ?? []) as OPRow[]
+      temProxima = ordensRaw.length > POR_PAGINA
+      ordens = temProxima ? ordensRaw.slice(0, POR_PAGINA) : ordensRaw
+      prodMap = await resolverProdutos(ordens)
     }
-    const completouComContabo = !proprio && usarContabo
-    // campo: 'previsao' -- o filtro de periodo desta tela e sobre
-    // identificacao_d_dt_previsao (data planejada), nao dt_conclusao_real (default
-    // do helper). Achado real 2026-07-19: sem isso, o complemento frio filtrava
-    // pela data de conclusao, entao OPs nao concluidas do Contabo nunca entravam
-    // com periodo aplicado e OPs concluidas apareciam no periodo errado.
-    let filtradas = completouComContabo
-      ? await complementarOrdensProducao(todas, { lojaId, dataInicio, dataFinal, campo: 'previsao' })
-      : todas
-    prodMap = await resolverProdutos(filtradas)
-    if (ordEmMemoria) {
-      const dir = ord === 'produto_za' ? -1 : 1
-      filtradas = [...filtradas].sort((a, b) => {
-        const na = (prodMap.get(a.identificacao_n_cod_produto as number)?.descricao ?? '').toLowerCase()
-        const nb = (prodMap.get(b.identificacao_n_cod_produto as number)?.descricao ?? '').toLowerCase()
-        return na.localeCompare(nb, 'pt-BR') * dir
-      })
-    } else if (completouComContabo) {
-      // As linhas do Contabo entram no final do array (fora da ordenacao do banco
-      // que so cobriu "todas") -- reordena em memoria seguindo o mesmo criterio de `ord`.
-      filtradas = [...filtradas].sort((a, b) => {
-        if (ord === 'codigo') {
-          const va = a.identificacao_n_cod_produto, vb = b.identificacao_n_cod_produto
-          if (va == null) return 1
-          if (vb == null) return -1
-          return va - vb
-        }
-        if (ord === 'qtd_desc' || ord === 'qtd_asc') {
-          const va = a.identificacao_n_qtde, vb = b.identificacao_n_qtde
-          if (va == null) return 1
-          if (vb == null) return -1
-          return ord === 'qtd_desc' ? vb - va : va - vb
-        }
-        if (ord === 'validade_asc' || ord === 'validade_desc') {
-          const va = a.validade, vb = b.validade
-          if (va == null) return 1
-          if (vb == null) return -1
-          return ord === 'validade_desc' ? (va < vb ? 1 : -1) : va < vb ? -1 : 1
-        }
-        return 0
-      })
-    }
-    temProxima = filtradas.length > page * POR_PAGINA
-    ordens = filtradas.slice((page - 1) * POR_PAGINA, page * POR_PAGINA)
-  } else {
-    // .range busca POR_PAGINA+1 de proposito: a linha extra detecta a proxima pagina.
-    const { data } = await baseQuery().range((page - 1) * POR_PAGINA, page * POR_PAGINA)
-    const ordensRaw = (data ?? []) as OPRow[]
-    temProxima = ordensRaw.length > POR_PAGINA
-    ordens = temProxima ? ordensRaw.slice(0, POR_PAGINA) : ordensRaw
-    prodMap = await resolverProdutos(ordens)
-  }
 
-  // Ingredientes da malha: busca full_object so para as OPs da pagina atual
-  type Ingrediente = { cod: number; nome: string; unidade: string; qtd: number }
-  const { data: opsFullObj } = await supabase
-    .from('ordens_producao')
-    .select('id, full_object')
-    .in('id', ordens.map((o) => o.id))
-  const fullObjMap = new Map(
-    (opsFullObj ?? []).map((o) => [
-      o.id as number,
-      (o.full_object as { itensDetalhes?: { nIdProdutoMalha: number; nQtde: number }[] | null } | null)
-        ?.itensDetalhes ?? [],
-    ])
-  )
-  const ingCodesSet = new Set<number>()
-  for (const items of fullObjMap.values()) {
-    for (const i of items) if (i.nIdProdutoMalha) ingCodesSet.add(i.nIdProdutoMalha)
-  }
-  const { data: ingProds } = ingCodesSet.size
-    ? await supabase
-        .from('produtos')
-        .select('codigo_produto, descricao, unidade')
-        .eq('loja_id', lojaId)
-        .in('codigo_produto', [...ingCodesSet])
-    : { data: [] as { codigo_produto: number; descricao: string; unidade: string }[] }
-  const ingProdMap = new Map((ingProds ?? []).map((p) => [p.codigo_produto, p]))
-  const ingredientesMap = new Map<number, Ingrediente[]>()
-  for (const [opId, items] of fullObjMap) {
-    const ings: Ingrediente[] = items
-      .filter((i) => i.nIdProdutoMalha)
-      .map((i) => {
-        const p = ingProdMap.get(i.nIdProdutoMalha)
-        return {
-          cod: i.nIdProdutoMalha,
-          nome: formatarNomeProduto(p?.descricao) || `#${i.nIdProdutoMalha}`,
-          unidade: p?.unidade ?? '',
-          qtd: Number(i.nQtde),
-        }
-      })
-    if (ings.length) ingredientesMap.set(opId, ings)
-  }
+    // Ingredientes da malha: busca full_object so para as OPs da pagina atual
+    type Ingrediente = { cod: number; nome: string; unidade: string; qtd: number }
+    const { data: opsFullObj } = await supabase
+      .from('ordens_producao')
+      .select('id, full_object')
+      .in('id', ordens.map((o) => o.id))
+    const fullObjMap = new Map(
+      (opsFullObj ?? []).map((o) => [
+        o.id as number,
+        (o.full_object as { itensDetalhes?: { nIdProdutoMalha: number; nQtde: number }[] | null } | null)
+          ?.itensDetalhes ?? [],
+      ])
+    )
+    const ingCodesSet = new Set<number>()
+    for (const items of fullObjMap.values()) {
+      for (const i of items) if (i.nIdProdutoMalha) ingCodesSet.add(i.nIdProdutoMalha)
+    }
+    const { data: ingProds } = ingCodesSet.size
+      ? await supabase
+          .from('produtos')
+          .select('codigo_produto, descricao, unidade')
+          .eq('loja_id', lojaId)
+          .in('codigo_produto', [...ingCodesSet])
+      : { data: [] as { codigo_produto: number; descricao: string; unidade: string }[] }
+    const ingProdMap = new Map((ingProds ?? []).map((p) => [p.codigo_produto, p]))
+    const ingredientesMap = new Map<number, Ingrediente[]>()
+    for (const [opId, items] of fullObjMap) {
+      const ings: Ingrediente[] = items
+        .filter((i) => i.nIdProdutoMalha)
+        .map((i) => {
+          const p = ingProdMap.get(i.nIdProdutoMalha)
+          return {
+            cod: i.nIdProdutoMalha,
+            nome: formatarNomeProduto(p?.descricao) || `#${i.nIdProdutoMalha}`,
+            unidade: p?.unidade ?? '',
+            qtd: Number(i.nQtde),
+          }
+        })
+      if (ings.length) ingredientesMap.set(opId, ings)
+    }
+    return { ordens, temProxima, prodMap, truncado, ingredientesMap }
+  })()
+  listaP.catch(() => {}) // lida mais abaixo; evita "unhandled rejection" se falhar antes do await
 
   // Locais de estoque ativos da loja para o seletor de "Criar OP"
-  const { data: locais } = await supabase
+  const locaisP = supabase
     .from('local_estoques')
     .select('codigo_local_estoque, descricao')
     .eq('loja_id', lojaId)
     .neq('inativo', 'S')
     .order('descricao')
+    .then((r) => r)
+
+  // Estoque proprio: totais de custo/quantidade das OPs filtradas (nao depende dos chips de status: respeita periodo, produto, local, usuario, insumo e numero).
+  const totaisProprioP: Promise<{ ops: number; concluidas: number; custo: number } | null> = proprio ? (async () => {
+    let ops = 0
+    let concluidas = 0
+    let custo = 0
+    for (let off = 0; off < 200000; off += 1000) {
+      let q = supabase.from('ordens_producao').select('id, concluida, custo_total').eq('loja_id', lojaId)
+      if (dataInicio) q = q.gte('identificacao_d_dt_previsao', dataInicio)
+      if (dataFinal) q = q.lte('identificacao_d_dt_previsao', dataFinal)
+      if (sp.ordem_producao) q = q.ilike('identificacao_c_num_op', `%${escapeIlike(sp.ordem_producao)}%`)
+      if (codigosFiltro !== null) q = q.in('identificacao_n_cod_produto', codigosFiltro.length ? codigosFiltro : [-1])
+      if (filtrosProprio) q = aplicarFiltrosOPProprio(q, filtrosProprio)
+      q = aplicarBuscaOP(q, busca)
+      const { data: lote, error: erroLote } = await q.order('id', { ascending: true }).range(off, off + 999)
+      if (erroLote) { console.error('ordem-producao: falha ao somar custos', erroLote.message); break }
+      const rows = (lote ?? []) as { concluida: boolean | null; custo_total: number | null }[]
+      ops += rows.length
+      concluidas += rows.filter((r) => r.concluida).length
+      custo += rows.reduce((a, r) => a + (Number(r.custo_total) || 0), 0)
+      if (rows.length < 1000) break
+    }
+    return { ops, concluidas, custo }
+  })() : Promise.resolve(null)
+  totaisProprioP.catch(() => {})
 
   // Totais por status granular: ignora filtro de status/conclusao para mostrar todos os contadores.
   // head:true = so o count, sem trazer linhas (barato) -- so vale dentro da janela
@@ -471,30 +504,8 @@ export default async function OrdemProducaoPage({
     totAtrasadasFinal = totAtrasadas ?? 0
   }
 
-  // Estoque proprio: totais de custo/quantidade das OPs filtradas (nao depende dos chips de status: respeita periodo, produto, local, usuario, insumo e numero).
-  let totaisProprio: { ops: number; concluidas: number; custo: number } | null = null
-  if (proprio) {
-    let ops = 0
-    let concluidas = 0
-    let custo = 0
-    for (let off = 0; off < 200000; off += 1000) {
-      let q = supabase.from('ordens_producao').select('id, concluida, custo_total').eq('loja_id', lojaId)
-      if (dataInicio) q = q.gte('identificacao_d_dt_previsao', dataInicio)
-      if (dataFinal) q = q.lte('identificacao_d_dt_previsao', dataFinal)
-      if (sp.ordem_producao) q = q.ilike('identificacao_c_num_op', `%${escapeIlike(sp.ordem_producao)}%`)
-      if (codigosFiltro !== null) q = q.in('identificacao_n_cod_produto', codigosFiltro.length ? codigosFiltro : [-1])
-      if (filtrosProprio) q = aplicarFiltrosOPProprio(q, filtrosProprio)
-      q = aplicarBuscaOP(q, busca)
-      const { data: lote, error: erroLote } = await q.order('id', { ascending: true }).range(off, off + 999)
-      if (erroLote) { console.error('ordem-producao: falha ao somar custos', erroLote.message); break }
-      const rows = (lote ?? []) as { concluida: boolean | null; custo_total: number | null }[]
-      ops += rows.length
-      concluidas += rows.filter((r) => r.concluida).length
-      custo += rows.reduce((a, r) => a + (Number(r.custo_total) || 0), 0)
-      if (rows.length < 1000) break
-    }
-    totaisProprio = { ops, concluidas, custo }
-  }
+  const [{ ordens, temProxima, prodMap, truncado, ingredientesMap }, familias, { data: locais }, totaisProprio] =
+    await Promise.all([listaP, familiasP, locaisP, totaisProprioP])
 
   const exportParams = new URLSearchParams()
   // Usa o periodo efetivo (mes corrente por default) para o CSV bater com a tela.

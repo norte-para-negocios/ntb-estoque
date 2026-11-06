@@ -9,13 +9,17 @@ function fmtMoeda(n: number) {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-export async function PainelGerencial({ lojaId }: { lojaId: number }) {
+/** Dados do painel (ano corrente). A home começa esta leitura junto com as contagens (Fase 12, velocidade). */
+export function carregarPainelGerencial(lojaId: number) {
   const hoje = new Date()
   const anoAtual = hoje.getFullYear()
   const dataIni = `${anoAtual}-01-01`
   const dataFim = hoje.toISOString().slice(0, 10)
+  return carregarDashboardGerencial(lojaId, dataIni, dataFim, 10)
+}
 
-  const d = await carregarDashboardGerencial(lojaId, dataIni, dataFim, 10)
+export async function PainelGerencial({ lojaId, dados }: { lojaId: number; dados?: Awaited<ReturnType<typeof carregarDashboardGerencial>> }) {
+  const d = dados ?? (await carregarPainelGerencial(lojaId))
 
   return (
     <section className="space-y-7 pt-2">

@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { urlEChaveAtuais } from '@/lib/supabase/server'
+import { assinarSessao, CABECALHO_SESSAO } from '@/lib/sessao-verificada-puro'
 
 // App desktop (canal /api/offline): manda a sessão no header Authorization em vez de cookie.
 // Validamos o token no GoTrue (setSession chama /user) e o transformamos nos mesmos cookies que
@@ -86,7 +87,19 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/home', request.url))
   }
 
-  return supabaseResponse
+  // Fase 12 (velocidade): a sessão acabou de ser conferida no login (getUser acima). Passa à página, num cabeçalho
+  // interno, a assinatura "este usuário com este token" (lib/sessao-verificada-puro.ts) para ela não repetir a ida ao
+  // login. O cabeçalho que vier de fora é sempre apagado; sem usuário, sem chave ou sem token, a página confere sozinha.
+  const headers = new Headers(request.headers)
+  headers.delete(CABECALHO_SESSAO)
+  const chave = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (user && chave) {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.access_token) headers.set(CABECALHO_SESSAO, assinarSessao(chave, user.id, session.access_token))
+  }
+  const resposta = NextResponse.next({ request: { headers } })
+  for (const c of supabaseResponse.cookies.getAll()) resposta.cookies.set(c)
+  return resposta
 }
 
 export const config = {

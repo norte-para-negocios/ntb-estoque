@@ -19,32 +19,39 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const supabase = await createClient()
 
-  // Quais rotas do menu o usuario pode ver (4.2). Admin e super admin recebem null = todas.
-  const permissoes = await getPermissoesNomes(profile.current_loja_id)
-  const rotasVisiveis = isAdmin || superAdmin ? null : Array.from(rotasPermitidas(permissoes))
+  // Fase 12 (velocidade): permissões, lojas do seletor e modo de estoque não dependem uns dos outros; em paralelo
+  // (antes: 6 a 8 idas ao banco em série antes de a tela começar a aparecer).
+  const lojasDoSeletor = async () => {
+    let lojasQuery = supabase
+      .from('lojas')
+      .select('id, nome, nome_fantasia')
+      .eq('ativo', true)
+      .order('nome_fantasia')
 
-  let lojasQuery = supabase
-    .from('lojas')
-    .select('id, nome, nome_fantasia')
-    .eq('ativo', true)
-    .order('nome_fantasia')
+    // Nao-admin so enxerga as lojas que tem em loja_user, e nunca ve lojas de teste.
+    if (!isAdmin) {
+      const { data: vinculos } = await supabase
+        .from('loja_user')
+        .select('loja_id')
+        .eq('user_id', profile.id)
+      const lojaIds = [
+        ...new Set((vinculos ?? []).map((v) => v.loja_id).filter((v): v is number => v != null)),
+      ]
+      lojasQuery = lojasQuery.eq('is_test', false).in('id', lojaIds.length ? lojaIds : [-1])
+    }
 
-  // Nao-admin so enxerga as lojas que tem em loja_user, e nunca ve lojas de teste.
-  if (!isAdmin) {
-    const { data: vinculos } = await supabase
-      .from('loja_user')
-      .select('loja_id')
-      .eq('user_id', profile.id)
-    const lojaIds = [
-      ...new Set((vinculos ?? []).map((v) => v.loja_id).filter((v): v is number => v != null)),
-    ]
-    lojasQuery = lojasQuery.eq('is_test', false).in('id', lojaIds.length ? lojaIds : [-1])
+    const { data } = await lojasQuery
+    return data
   }
 
-  const { data: lojas } = await lojasQuery
-
-  // Itens soEstoqueProprio do menu: só para loja em modo estoque próprio.
-  const modoEstoque = profile.current_loja_id != null ? await modoDaLoja(profile.current_loja_id) : null
+  const [permissoes, lojas, modoEstoque] = await Promise.all([
+    // Quais rotas do menu o usuario pode ver (4.2). Admin e super admin recebem null = todas.
+    getPermissoesNomes(profile.current_loja_id),
+    lojasDoSeletor(),
+    // Itens soEstoqueProprio do menu: só para loja em modo estoque próprio.
+    profile.current_loja_id != null ? modoDaLoja(profile.current_loja_id) : Promise.resolve(null),
+  ])
+  const rotasVisiveis = isAdmin || superAdmin ? null : Array.from(rotasPermitidas(permissoes))
   const estoqueProprio = modoEstoque === 'proprio'
   // Tela de Estoque vale para loja propria e para loja Omie (espelho); some so em 'nenhum'.
   const temEstoque = modoEstoque === 'proprio' || modoEstoque === 'omie'
