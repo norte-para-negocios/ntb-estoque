@@ -3,6 +3,7 @@ import { CheckCircle2, AlertTriangle, Link2, Link2Off } from 'lucide-react'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { modoDaLoja } from '@/lib/estoque/ledger'
+import { ehDesenvolvedor } from '@/lib/recursos-dev'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { SincronizarAgora } from '@/components/sync-catalogo/SincronizarAgora'
@@ -16,10 +17,13 @@ export default async function SyncCatalogoPage() {
   if (!(await requirePermissao(lojaId, 'Produtos'))) notFound()
   if ((await modoDaLoja(lojaId)) !== 'proprio') notFound()
   const supabase = createServiceClient()
+  // Fase 6 lote 2: "só no Estoque", "só no Vendas" e "conflito" ainda só para desenvolvedor; a equipe segue vendo as falhas de entrega.
+  const dev = await ehDesenvolvedor()
+  const tiposVisiveis = dev ? ['erro_entrega', 'so_estoque', 'so_vendas', 'conflito'] : ['erro_entrega']
   const [{ data: loja }, { data: fila }, { data: diverg }, { data: ultimo }] = await Promise.all([
     supabase.from('lojas').select('vendas_store_id').eq('id', lojaId).maybeSingle(),
     supabase.from('sync_outbox').select('id, entidade, ref, status, tentativas, erro, proxima_tentativa, atualizado_em').eq('loja_id', lojaId).in('status', ['pending', 'erro']).order('id', { ascending: false }).limit(100),
-    supabase.from('sync_divergencias').select('id, entidade, ref, tipo, detalhe, detectado_em').eq('loja_id', lojaId).is('resolvido_em', null).order('detectado_em', { ascending: false }).limit(100),
+    supabase.from('sync_divergencias').select('id, entidade, ref, tipo, detalhe, detectado_em').eq('loja_id', lojaId).is('resolvido_em', null).in('tipo', tiposVisiveis).order('detectado_em', { ascending: false }).limit(300),
     supabase.from('sync_outbox').select('atualizado_em').eq('loja_id', lojaId).eq('status', 'ok').order('atualizado_em', { ascending: false }).limit(1),
   ])
   const ligada = !!loja?.vendas_store_id

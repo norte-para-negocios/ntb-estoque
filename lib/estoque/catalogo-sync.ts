@@ -4,6 +4,8 @@
 //   - o que chega do Vendas entra por `aplicar_catalogo_vendas` (sem eco);
 //   - preço de venda: o Vendas manda; código/unidade/tipo/NCM/custo: o Estoque manda; nome/ativo/grupo: o mais novo.
 import { createServiceClient } from '@/lib/supabase/server'
+import { compararCatalogo, planoDivergencias, type ProdutoEstoque, type ProdutoVendas } from './catalogo-divergencias-puro'
+import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 
 const MAX_TENTATIVAS = 8
 const TIMEOUT_MS = 20_000
@@ -283,7 +285,7 @@ export async function entregarAgora(lojaId: number): Promise<void> {
  *  (1) puxa o catálogo do Vendas e aplica (idempotente; preço do Vendas manda);
  *  (2) enfileira o que o Estoque tem e o Vendas ainda não conhece (sem vendas_ref) ou que mudou depois da última entrega.
  */
-export async function reconciliarCatalogo(lojaId: number): Promise<{ aplicadoDoVendas: number; enfileirados: number; erro?: string }> {
+export async function reconciliarCatalogo(lojaId: number): Promise<{ aplicadoDoVendas: number; enfileirados: number; divergencias?: number; erro?: string }> {
   const supabase = createServiceClient()
   const { data: loja, error: eLoja } = await supabase.from('lojas').select('id, integracao_api_key, vendas_store_id').eq('id', lojaId).maybeSingle()
   if (eLoja) return { aplicadoDoVendas: 0, enfileirados: 0, erro: `Falha ao ler a loja: ${eLoja.message}` }
@@ -291,6 +293,7 @@ export async function reconciliarCatalogo(lojaId: number): Promise<{ aplicadoDoV
   if (!loja?.integracao_api_key || !loja.vendas_store_id || !base) return { aplicadoDoVendas: 0, enfileirados: 0 }
 
   let aplicado = 0
+  let snapProdutos: ProdutoVendas[] = []
   try {
     const r = await getJson(`${base}/api/integracao/catalogo`, loja.integracao_api_key as string)
     const snap = r.json as { ok?: boolean; grupos?: unknown[]; produtos?: unknown[]; error?: string }
@@ -302,6 +305,7 @@ export async function reconciliarCatalogo(lojaId: number): Promise<{ aplicadoDoV
     const novos = (m?.produtos ?? []).filter((x) => x.criado)
     if (novos.length) await postJson(`${base}/api/integracao/catalogo`, loja.integracao_api_key as string, { origem: 'estoque', mapa: { produtos: novos.map((x) => ({ vendas_ref: x.vendas_ref, codigo: x.codigo })) } })
     aplicado = (snap.produtos?.length ?? 0) + (snap.grupos?.length ?? 0)
+    snapProdutos = (snap.produtos ?? []) as ProdutoVendas[]
   } catch (e) {
     return { aplicadoDoVendas: 0, enfileirados: 0, erro: e instanceof Error ? e.message : String(e) }
   }
@@ -329,7 +333,39 @@ export async function reconciliarCatalogo(lojaId: number): Promise<{ aplicadoDoV
     )
     if (!error) enfileirados++
   }
-  return { aplicadoDoVendas: aplicado, enfileirados }
+  // Fase 6 lote 2: o que a reconciliação não igualou vira divergência na tela (nunca impede a sincronização).
+  let divergencias: number | undefined
+  try { divergencias = await registrarDivergencias(lojaId, snapProdutos) } catch (e) { console.error('sync-catalogo: divergências:', e) }
+  return { aplicadoDoVendas: aplicado, enfileirados, divergencias }
+}
+
+async function registrarDivergencias(lojaId: number, vendas: ProdutoVendas[]): Promise<number> {
+  const supabase = createServiceClient()
+  const [prods, { data: fila, error: eFila }, { data: abertas, error: eAb }] = await Promise.all([
+    buscarTodasLinhas<ProdutoEstoque>((from, to) =>
+      supabase.from('produtos').select('codigo, vendas_ref, descricao, valor_unitario, inativo, pdv, ncm, tipo_item').eq('loja_id', lojaId).not('codigo', 'is', null).order('id').range(from, to),
+      undefined, (e) => { throw new Error(e.message) }),
+    supabase.from('sync_outbox').select('ref').eq('loja_id', lojaId).eq('entidade', 'produto').eq('status', 'pending'),
+    supabase.from('sync_divergencias').select('id, ref, tipo, detalhe').eq('loja_id', lojaId).is('resolvido_em', null).in('tipo', ['so_estoque', 'so_vendas', 'conflito']),
+  ])
+  if (eFila || eAb) throw new Error((eFila ?? eAb)!.message)
+  // produto ainda na fila de entrega: a diferença some sozinha na próxima entrega, não é divergência
+  const naFila = new Set((fila ?? []).map((f) => String(f.ref)))
+  const atuais = compararCatalogo(prods, vendas).filter((d) => d.tipo === 'so_vendas' || !naFila.has(d.ref))
+  const plano = planoDivergencias((abertas ?? []) as { id: number; ref: string; tipo: string; detalhe: string | null }[], atuais)
+  if (plano.inserir.length) {
+    const { error } = await supabase.from('sync_divergencias').insert(plano.inserir.map((d) => ({ loja_id: lojaId, ...d })))
+    if (error) throw new Error(error.message)
+  }
+  for (const a of plano.atualizar) {
+    const { error } = await supabase.from('sync_divergencias').update({ detalhe: a.detalhe }).eq('id', a.id)
+    if (error) throw new Error(error.message)
+  }
+  if (plano.resolver.length) {
+    const { error } = await supabase.from('sync_divergencias').update({ resolvido_em: new Date().toISOString() }).in('id', plano.resolver)
+    if (error) throw new Error(error.message)
+  }
+  return atuais.length
 }
 
 // ---------------------------------------------------------------------------------- rodada completa (cron)
