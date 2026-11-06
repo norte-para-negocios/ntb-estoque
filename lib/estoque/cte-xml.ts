@@ -87,3 +87,19 @@ export function ratearFreteItens(valor: number, itens: { linha: number; base: nu
   const partes = proporcional(valor, itens.map((i) => i.base))
   return itens.map((i, k) => ({ linha: i.linha, valor: partes[k] }))
 }
+
+// ---------- CT-e depois da entrada (decisão do dono e do Ramon, 05/11/2026; migration 351) ----------
+
+/** Ligar/desligar CT-e em nota que já entrou no estoque refaz o custo da entrada. Recurso novo: só dev por enquanto. */
+export function decidirCteDepoisDaEntrada(e: { algumaLancada: boolean; dev: boolean }): string | null {
+  if (!e.algumaLancada || e.dev) return null
+  return 'Ligar ou desligar o CT-e depois da entrada ainda está em teste. Desfaça a entrada, ligue o CT-e e confirme de novo.'
+}
+
+/** Texto para a tela a partir do `custo_refeito` que vincular/desvincular_cte_compra devolvem (351). */
+export function avisoCustoRefeito(r: { entradas_revisadas?: number | string; desde?: string | null } | null | undefined): string | null {
+  const n = Number(r?.entradas_revisadas) || 0
+  if (!n) return null
+  const d = typeof r?.desde === 'string' && /^\d{4}-\d{2}-\d{2}/.test(r.desde) ? `, desde ${r.desde.slice(8, 10)}/${r.desde.slice(5, 7)}/${r.desde.slice(0, 4)}` : ''
+  return `Custo da entrada refeito pela data da nota (${n} ${n === 1 ? 'item' : 'itens'}${d}).`
+}

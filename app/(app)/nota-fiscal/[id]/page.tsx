@@ -237,7 +237,8 @@ export default async function NotaFiscalItensPage({
           <>
             {conferencia?.compra && (
               <FreteCteNF notaId={Number(id)} ctes={conferencia.ctes}
-                editavel={podeManifestar && conferencia.compra.status !== 'cancelada' && !conferencia.itens.some((i) => i.lancado)} />
+                // 351: depois da entrada também (refaz o custo); recurso novo, só dev por enquanto
+                editavel={podeManifestar && conferencia.compra.status !== 'cancelada' && (dev || !conferencia.itens.some((i) => i.lancado))} />
             )}
             <EntradasGeradasNF lojaId={lojaId} referencias={refsDaEntrada(nf.c_chave_nfe ?? null, conferencia?.compra?.id ?? null, conferencia?.compra?.estornos ?? 0)} />
           </>

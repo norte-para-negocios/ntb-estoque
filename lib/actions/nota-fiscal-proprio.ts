@@ -13,7 +13,7 @@ import { criarProdutoProprio } from '@/lib/estoque/proprio-driver'
 import { espelharNotaNoFrio } from '@/lib/estoque/nf-frio'
 import { localPadraoEntrada } from '@/lib/estoque/nf-sefaz'
 import { importarNotaPorChave, sincronizarSefaz } from '@/lib/estoque/sefaz-sync'
-import { lerCte, ratearFreteCte, validarCteImportado } from '@/lib/estoque/cte-xml'
+import { avisoCustoRefeito, decidirCteDepoisDaEntrada, lerCte, ratearFreteCte, validarCteImportado } from '@/lib/estoque/cte-xml'
 import { carregarCmc, carregarMemoria } from '@/lib/estoque/nf-memoria'
 import { carregarCredencialLoja } from '@/lib/estoque/sefaz-certificado'
 import { enviarManifestacao } from '@/lib/estoque/sefaz-rede'
@@ -53,6 +53,15 @@ async function avisoContasPagasDaNota(lojaId: number, notaId: number): Promise<s
     .eq('loja_id', lojaId).eq('origem_tipo', 'nota_entrada').eq('origem_id', notaId).neq('status', 'cancelado').gt('valor_quitado', 0)
   if (error) return semMigration(error) ? null : 'Não foi possível conferir as contas a pagar desta nota: confira em Financeiro › Contas a pagar.'
   return avisoAoDesfazer({ com_pagamento: (data ?? []).length })
+}
+
+/** 351: CT-e em nota já lançada refaz o custo da entrada; recurso novo, só dev por enquanto. null = pode seguir. */
+async function travaCteDepoisDaEntrada(lojaId: number, compraIds: number[]): Promise<string | null> {
+  const ids = [...new Set(compraIds)].filter((x) => x > 0)
+  if (!ids.length) return null
+  const { data, error } = await createServiceClient().from('compras_proprio_itens').select('id').eq('loja_id', lojaId).in('compra_id', ids).eq('lancado', true).limit(1)
+  if (error) return 'Não foi possível conferir se a nota já entrou no estoque: ' + error.message
+  return decidirCteDepoisDaEntrada({ algumaLancada: !!data?.length, dev: data?.length ? await ehDesenvolvedor() : false })
 }
 
 async function compraDaNota(lojaId: number, notaId: number) {
@@ -440,8 +449,9 @@ export async function manifestarNotaSefaz(notaId: number, tipo: TipoManifestacao
 const TAMANHO_MAX_CTE = 900_000
 
 /** Liga um CT-e (XML do transportador) à nota: grava o CT-e (mesma chave = reaproveita), reparte entre as notas da loja
- *  que ele transporta (pelo valor da nota) e dentro de cada nota pelo valor líquido do item. Só antes da entrada. */
-export async function importarCteNF(notaId: number, xml: string): Promise<{ ok: true; notas: number } | { error: string }> {
+ *  que ele transporta (pelo valor da nota) e dentro de cada nota pelo valor líquido do item. Nota já lançada (351, só dev
+ *  por enquanto): o custo da entrada é refeito pela data da nota. */
+export async function importarCteNF(notaId: number, xml: string): Promise<{ ok: true; notas: number; aviso?: string } | { error: string }> {
   const __d = viaDesktop('nota-fiscal-proprio#importarCteNF', importarCteNF, [notaId, xml]); if (__d) return __d as never
   const ctx = await contexto('Notas Fiscais - Manifestar')
   if ('error' in ctx) return ctx
@@ -463,6 +473,8 @@ export async function importarCteNF(notaId: number, xml: string): Promise<{ ok: 
   const ids = lista.map((c) => c.nota_fiscal_id).filter((x): x is number => x != null)
   const { data: notas } = ids.length ? await sb.from('notas_fiscais').select('id, n_valor_nfe').eq('loja_id', ctx.lojaId).in('id', ids) : { data: [] as { id: number; n_valor_nfe: number }[] }
   const valorNota = new Map((notas ?? []).map((n) => [Number(n.id), Number(n.n_valor_nfe) || 0]))
+  const trava = await travaCteDepoisDaEntrada(ctx.lojaId, lista.map((c) => Number(c.id)))
+  if (trava) return { error: trava }
   const rateio = ratearFreteCte(cte.valorPrestacao, lista.map((c) => ({ compraId: Number(c.id), valorNota: (c.nota_fiscal_id != null ? valorNota.get(Number(c.nota_fiscal_id)) : undefined) ?? (Number(c.valor_total) || 0) })))
   // grava o CT-e (unique (loja_id, chave): mesma chave = o mesmo CT-e)
   let cteId: number
@@ -485,11 +497,12 @@ export async function importarCteNF(notaId: number, xml: string): Promise<{ ok: 
   if (error) return { error: error.message }
   for (const c of lista) if (c.nota_fiscal_id != null) await atualizarSituacao(ctx.lojaId, Number(c.nota_fiscal_id))
   await registrarAuditoria('editar', 'nota fiscal (CT-e)', notaId, `CT-e ${cte.numero} · ${cte.valorPrestacao}`)
-  return { ok: true, notas: Number((data as { notas: number }).notas) || 0 }
+  const aviso = avisoCustoRefeito((data as { custo_refeito?: { entradas_revisadas?: number; desde?: string } }).custo_refeito)
+  return { ok: true, notas: Number((data as { notas: number }).notas) || 0, ...(aviso ? { aviso } : {}) }
 }
 
 /** Frete sem XML (valor digitado): CT-e "manual" só desta nota. */
-export async function informarFreteNF(notaId: number, dados: { valor: number; transportadora?: string; numero?: string }): Promise<{ ok: true } | { error: string }> {
+export async function informarFreteNF(notaId: number, dados: { valor: number; transportadora?: string; numero?: string }): Promise<{ ok: true; aviso?: string } | { error: string }> {
   const __d = viaDesktop('nota-fiscal-proprio#informarFreteNF', informarFreteNF, [notaId, dados]); if (__d) return __d as never
   const ctx = await contexto('Notas Fiscais - Manifestar')
   if ('error' in ctx) return ctx
@@ -497,33 +510,39 @@ export async function informarFreteNF(notaId: number, dados: { valor: number; tr
   if (!(valor > 0)) return { error: 'Informe o valor do frete.' }
   const compra = await compraDaNota(ctx.lojaId, notaId)
   if (!compra) return { error: 'Esta nota ainda não tem itens (só o resumo chegou da SEFAZ).' }
+  const trava = await travaCteDepoisDaEntrada(ctx.lojaId, [Number(compra.id)])
+  if (trava) return { error: trava }
   const sb = createServiceClient()
   const { data: ins, error } = await sb.from('compras_proprio_cte').insert({
     loja_id: ctx.lojaId, numero: dados.numero?.trim().slice(0, 30) || null, transportadora_nome: dados.transportadora?.trim().slice(0, 120) || null, valor, origem: 'manual', user_id: ctx.userId,
   }).select('id').single()
   if (error) return { error: error.message }
-  const { error: ev } = await sb.rpc('vincular_cte_compra', { p_loja: ctx.lojaId, p_cte: Number(ins.id), p_rateio: [{ compra_id: compra.id, valor }], p_user: ctx.userId })
+  const { data: rv, error: ev } = await sb.rpc('vincular_cte_compra', { p_loja: ctx.lojaId, p_cte: Number(ins.id), p_rateio: [{ compra_id: compra.id, valor }], p_user: ctx.userId })
   if (ev) { await sb.from('compras_proprio_cte').delete().eq('id', ins.id).eq('loja_id', ctx.lojaId); return { error: ev.message } }
   await registrarAuditoria('editar', 'nota fiscal (frete)', notaId, String(valor))
   await atualizarSituacao(ctx.lojaId, notaId)
-  return { ok: true }
+  const aviso = avisoCustoRefeito((rv as { custo_refeito?: { entradas_revisadas?: number; desde?: string } } | null)?.custo_refeito)
+  return { ok: true, ...(aviso ? { aviso } : {}) }
 }
 
-/** Desliga um CT-e das notas (o frete sai do custo dos itens). Só antes da entrada. */
-export async function desvincularCteNF(notaId: number, cteId: number): Promise<{ ok: true } | { error: string }> {
+/** Desliga um CT-e das notas (o frete sai do custo dos itens). Nota já lançada: custo refeito (351, só dev por enquanto). */
+export async function desvincularCteNF(notaId: number, cteId: number): Promise<{ ok: true; aviso?: string } | { error: string }> {
   const __d = viaDesktop('nota-fiscal-proprio#desvincularCteNF', desvincularCteNF, [notaId, cteId]); if (__d) return __d as never
   const ctx = await contexto('Notas Fiscais - Manifestar')
   if ('error' in ctx) return ctx
   const sb = createServiceClient()
   const { data: ligadas } = await sb.from('compras_proprio_cte_compra').select('compra_id').eq('cte_id', cteId).eq('loja_id', ctx.lojaId)
-  const { error } = await sb.rpc('desvincular_cte_compra', { p_loja: ctx.lojaId, p_cte: cteId, p_user: ctx.userId })
+  const trava = await travaCteDepoisDaEntrada(ctx.lojaId, (ligadas ?? []).map((l) => Number(l.compra_id)))
+  if (trava) return { error: trava }
+  const { data: rd, error } = await sb.rpc('desvincular_cte_compra', { p_loja: ctx.lojaId, p_cte: cteId, p_user: ctx.userId })
   if (error) return { error: error.message }
+  const aviso = avisoCustoRefeito((rd as { custo_refeito?: { entradas_revisadas?: number; desde?: string } } | null)?.custo_refeito)
   const compras = (ligadas ?? []).map((l) => Number(l.compra_id))
   if (compras.length) {
     const { data: cs } = await sb.from('compras_proprio').select('nota_fiscal_id').eq('loja_id', ctx.lojaId).in('id', compras)
     for (const c of cs ?? []) if (c.nota_fiscal_id != null) await atualizarSituacao(ctx.lojaId, Number(c.nota_fiscal_id))
   } else await atualizarSituacao(ctx.lojaId, notaId)
-  return { ok: true }
+  return { ok: true, ...(aviso ? { aviso } : {}) }
 }
 
 /** Busca na SEFAZ uma NF-e pela chave digitada (só leitura; 1 tentativa por chave por hora). Precisa de internet:

@@ -24,9 +24,9 @@ export function FreteCteNF({ notaId, ctes, editavel }: { notaId: number; ctes: C
   const [numero, setNumero] = useState('')
   if (!editavel && !ctes.length) return null
 
-  function feito(r: { ok: true } | { error: string }, msg: string) {
+  function feito(r: { ok: true; aviso?: string } | { error: string }, msg: string) {
     if ('error' in r) { toast.error('Não foi possível', { description: r.error }); return }
-    toast.success(msg); router.refresh()
+    toast.success(msg, r.aviso ? { description: r.aviso } : undefined); router.refresh()
   }
   async function enviarXml(f: File | undefined) {
     if (!f) return
