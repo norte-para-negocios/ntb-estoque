@@ -8,6 +8,7 @@ import { lerPeriodo } from '@/lib/faturamento-periodo'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { createServiceClient } from '@/lib/supabase/server'
 import { rpcTodos } from '@/lib/supabase/rpc-todos'
+import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
@@ -16,7 +17,7 @@ import { CartaoResumo } from '@/components/faturamento/CartaoResumo'
 import { CLASSES, engenhariaCardapio, type ClasseCardapio, type LinhaVendida } from '@/lib/relatorios/engenharia-cardapio-puro'
 
 // Fase 8, só desenvolvedor: matriz popularidade × margem dos pratos vendidos (base: lucro_proprio por produto).
-type Sp = { ini?: string; fim?: string; mes?: string; ver?: string }
+type Sp = { ini?: string; fim?: string; mes?: string; ver?: string; familia?: string }
 
 const n = (v: unknown) => Number(v) || 0
 const fmtQtd = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })
@@ -36,16 +37,28 @@ export default async function EngenhariaCardapioPage({ searchParams }: { searchP
   const ver = CLASSES.some((c) => c.classe === sp.ver) ? (sp.ver as ClasseCardapio) : null
 
   let erro: string | null = null
-  const linhas = await rpcTodos<Record<string, unknown>>(createServiceClient(), 'lucro_proprio',
-    { p_loja: lojaId, p_ini: p.ini, p_fim: p.fim, p_dim: 'produto' }, (e) => { erro = e.message })
-  const r = engenhariaCardapio(((linhas ?? []) as Record<string, unknown>[]).map((x): LinhaVendida => ({
+  const supabase = createServiceClient()
+  const [linhas, prods] = await Promise.all([
+    rpcTodos<Record<string, unknown>>(supabase, 'lucro_proprio',
+      { p_loja: lojaId, p_ini: p.ini, p_fim: p.fim, p_dim: 'produto' }, (e) => { erro = e.message }),
+    buscarTodasLinhas<{ descricao: string | null; descricao_familia: string | null }>((from, to) =>
+      supabase.from('produtos').select('descricao, descricao_familia').eq('loja_id', lojaId).order('codigo_produto').range(from, to)),
+  ])
+  // O método compara pratos da mesma categoria (cerveja com cerveja, prato com prato): filtro por família.
+  // lucro_proprio devolve a descrição do produto como rótulo; a família vem do cadastro pela mesma descrição.
+  const familiaDe = new Map<string, string>()
+  for (const x of prods ?? []) if (x.descricao) familiaDe.set(x.descricao, x.descricao_familia?.trim() || 'Sem família')
+  const todas = ((linhas ?? []) as Record<string, unknown>[]).map((x) => ({ ...x, familia: familiaDe.get(String(x.rotulo ?? '')) ?? 'Sem família' }))
+  const familias = [...new Set(todas.map((x) => x.familia))].sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  const familia = sp.familia && familias.includes(sp.familia) ? sp.familia : null
+  const r = engenhariaCardapio(todas.filter((x) => !familia || x.familia === familia).map((x): LinhaVendida => ({
     rotulo: String(x.rotulo ?? ''), quantidade: n(x.quantidade), faturamento: n(x.faturamento), cmv: n(x.cmv),
     itens_sem_baixa: n(x.itens_sem_baixa), itens_sem_custo: n(x.itens_sem_custo),
   })))
   const lista = ver ? r.itens.filter((i) => i.classe === ver) : r.itens
   const conta = (c: ClasseCardapio) => r.itens.filter((i) => i.classe === c)
 
-  const base: Record<string, string> = { ini: p.ini, fim: p.fim, ver: ver ?? '' }
+  const base: Record<string, string> = { ini: p.ini, fim: p.fim, ver: ver ?? '', familia: familia ?? '' }
   const href = (over: Record<string, string>) => {
     const q = new URLSearchParams()
     for (const [k, v] of Object.entries({ ...base, ...over })) if (v) q.set(k, v)
@@ -61,6 +74,14 @@ export default async function EngenhariaCardapioPage({ searchParams }: { searchP
       <PageHeader title="Engenharia de cardápio" icon={LayoutGrid} voltarHref="/relatorios"
         description="Cada prato vendido no período, pela quantidade que sai e pelo lucro que deixa em cada unidade." />
       <PeriodoBar basePath="/relatorio-engenharia-cardapio" params={base} ini={p.ini} fim={p.fim} hoje={hoje} />
+      {familias.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[13px] text-text-muted">Família:</span>
+          <Link href={href({ familia: '', ver: '' })} className={chip(familia == null)}>Todas</Link>
+          {familias.map((f) => <Link key={f} href={href({ familia: f, ver: '' })} className={chip(familia === f)}>{f}</Link>)}
+        </div>
+      )}
+      {familia == null && familias.length > 1 && <p className="text-[13px] text-text-muted">Para comparar do jeito certo, escolha uma família: bebida se compara com bebida, prato com prato.</p>}
 
       {erro ? (
         <p role="alert" className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-err shadow-[var(--shadow-sm)]">Não foi possível carregar as vendas: {erro}</p>
