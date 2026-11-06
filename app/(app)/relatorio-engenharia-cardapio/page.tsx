@@ -48,13 +48,14 @@ export default async function EngenhariaCardapioPage({ searchParams }: { searchP
   // lucro_proprio devolve a descrição do produto como rótulo; a família vem do cadastro pela mesma descrição.
   const familiaDe = new Map<string, string>()
   for (const x of prods ?? []) if (x.descricao) familiaDe.set(x.descricao, x.descricao_familia?.trim() || 'Sem família')
-  const todas = ((linhas ?? []) as Record<string, unknown>[]).map((x) => ({ ...x, familia: familiaDe.get(String(x.rotulo ?? '')) ?? 'Sem família' }))
-  const familias = [...new Set(todas.map((x) => x.familia))].sort((a, b) => a.localeCompare(b, 'pt-BR'))
-  const familia = sp.familia && familias.includes(sp.familia) ? sp.familia : null
-  const r = engenhariaCardapio(todas.filter((x) => !familia || x.familia === familia).map((x): LinhaVendida => ({
+  const todas = ((linhas ?? []) as Record<string, unknown>[]).map((x): LinhaVendida & { familia: string } => ({
     rotulo: String(x.rotulo ?? ''), quantidade: n(x.quantidade), faturamento: n(x.faturamento), cmv: n(x.cmv),
     itens_sem_baixa: n(x.itens_sem_baixa), itens_sem_custo: n(x.itens_sem_custo),
-  })))
+    familia: familiaDe.get(String(x.rotulo ?? '')) ?? 'Sem família',
+  }))
+  const familias = [...new Set(todas.map((x) => x.familia))].sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  const familia = sp.familia && familias.includes(sp.familia) ? sp.familia : null
+  const r = engenhariaCardapio(todas.filter((x) => !familia || x.familia === familia))
   const lista = ver ? r.itens.filter((i) => i.classe === ver) : r.itens
   const conta = (c: ClasseCardapio) => r.itens.filter((i) => i.classe === c)
 
