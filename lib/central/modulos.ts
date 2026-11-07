@@ -183,6 +183,7 @@ export const MODULOS: ModuloCentral[] = [
         desc: 'Quem compra da loja e quem entrega as mercadorias',
         itens: [{ label: 'Exibir todos', href: '/cliente', soEstoqueProprio: true }],
       },
+      { nome: 'Histórico de cadastros', desc: 'Quem mudou o quê nos cadastros, campo a campo', itens: [{ label: 'Exibir todos', href: '/historico-cadastro' }] },
       { nome: 'Compradores e prazos', desc: 'Quem compra e em quantos dias chega', itens: [{ label: 'Exibir todos', href: '/compras-cadastros' }] },
       {
         nome: 'Relatórios',

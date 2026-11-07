@@ -27,6 +27,8 @@ export const ROTAS_SO_DEV = [
   '/relatorio-engenharia-cardapio',
   // Fase 6 (migration 450): clientes e transportadoras. Só estoque próprio.
   '/cliente',
+  // Fase 9: histórico de cadastros (quem mudou o quê).
+  '/historico-cadastro',
 ] as const
 
 export async function ehDesenvolvedor(): Promise<boolean> {

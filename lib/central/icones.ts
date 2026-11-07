@@ -138,6 +138,7 @@ export const ICONE_POR_ROTA: Record<string, Icone> = {
   '/sintegra': [ScanSearch, 'marca'],
   '/fornecedor': [Truck, 'marca'],
   '/cliente': [Users, 'marca'],
+  '/historico-cadastro': [History, 'relatorio'],
   '/fornecedor/importar': [FileSpreadsheet, 'importar'],
   '/compras-cadastros': [UserCog, 'marca'],
   '/relatorio-compras': [ChartBar, 'relatorio'],

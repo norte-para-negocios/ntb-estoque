@@ -20874,10 +20874,31 @@ CREATE TRIGGER historico AFTER INSERT OR DELETE OR UPDATE ON public.compras_prop
 
 
 --
+-- Name: familias historico; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER historico AFTER INSERT OR DELETE OR UPDATE ON public.familias FOR EACH ROW EXECUTE FUNCTION public.historico_registrar('familia', 'id', '', 'ignorar', 'nome', 'codigo', 'inativo');
+
+
+--
 -- Name: fornecedores historico; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER historico AFTER INSERT OR DELETE OR UPDATE ON public.fornecedores FOR EACH ROW EXECUTE FUNCTION public.historico_registrar('fornecedor', 'id', '', 'gravar', 'razao_social', 'nome_fantasia', 'cnpj_cpf', 'pessoa_fisica', 'inscricao_estadual', 'inscricao_municipal', 'email', 'telefone', 'cep', 'uf', 'cidade', 'bairro', 'logradouro', 'numero', 'complemento', 'inativo');
+
+
+--
+-- Name: grupos_produto historico; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER historico AFTER INSERT OR DELETE OR UPDATE ON public.grupos_produto FOR EACH ROW EXECUTE FUNCTION public.historico_registrar('grupo', 'id', '', 'ignorar', 'nome', 'pai_id', 'ordem', 'ativo');
+
+
+--
+-- Name: local_estoques historico; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER historico AFTER INSERT OR DELETE OR UPDATE ON public.local_estoques FOR EACH ROW EXECUTE FUNCTION public.historico_registrar('local', 'id', '', 'ignorar', 'descricao', 'codigo', 'tipo', 'padrao', 'inativo');
 
 
 --

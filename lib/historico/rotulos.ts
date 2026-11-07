@@ -1,7 +1,7 @@
 // Rótulos dos campos rastreados pela migration 220 (gatilho historico_registrar), por entidade.
 import type { RotulosEntidade } from './historico-puro'
 
-export type EntidadeHistorico = 'produto' | 'fornecedor' | 'cliente' | 'nota_entrada' | 'pedido_compra' | 'op'
+export type EntidadeHistorico = 'produto' | 'fornecedor' | 'cliente' | 'grupo' | 'familia' | 'local' | 'nota_entrada' | 'pedido_compra' | 'op'
 
 const sim = (rotulo: string) => ({ rotulo })
 const num = (rotulo: string) => ({ rotulo, formato: 'numero' as const })
@@ -39,6 +39,9 @@ export const ROTULOS_HISTORICO: Record<EntidadeHistorico, RotulosEntidade> = {
       bairro: sim('Bairro'), logradouro: sim('Endereço'), numero: cod('Número'), complemento: sim('Complemento'), rntrc: cod('RNTRC'), inativo: sim('Inativo'),
     },
   },
+  grupo: { tabelaPrincipal: 'grupos_produto', campos: { nome: sim('Nome'), pai_id: cod('Grupo pai'), ordem: num('Ordem'), ativo: sim('Ativo') } },
+  familia: { tabelaPrincipal: 'familias', campos: { nome: sim('Nome'), codigo: cod('Código'), inativo: sim('Inativa') } },
+  local: { tabelaPrincipal: 'local_estoques', campos: { descricao: sim('Nome'), codigo: cod('Código'), tipo: sim('Tipo'), padrao: sim('Padrão'), inativo: sim('Inativo') } },
   nota_entrada: {
     tabelaPrincipal: 'compras_proprio',
     campos: {
