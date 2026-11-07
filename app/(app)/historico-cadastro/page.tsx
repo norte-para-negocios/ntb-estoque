@@ -78,7 +78,9 @@ export default async function HistoricoCadastroPage({ searchParams }: { searchPa
   const blocos: Bloco[] = []
   for (const [k, ls] of porRegistro) {
     const ent = ls[0].entidade
-    const info = nomeDe.get(k) ?? { nome: `${NOME[ent]} ${ls[0].entidade_id} (apagado)`, href: null }
+    // registro apagado: o nome que ficou guardado no próprio histórico (razão social, descrição ou nome)
+    const guardado = ls.find((l) => ['razao_social', 'descricao', 'nome'].includes(l.campo ?? '') && (l.valor_de || l.valor_para))
+    const info = nomeDe.get(k) ?? { nome: `${guardado?.valor_de || guardado?.valor_para || `${NOME[ent]} ${ls[0].entidade_id}`} (apagado)`, href: null }
     for (const m of consolidarHistorico(ls, ROTULOS_HISTORICO[ent as EntidadeHistorico], (linha) => `Item ${linha}`)) {
       blocos.push({ chave: `${k}:${m.quando}`, entidade: ent, nome: info.nome, href: info.href, momento: m })
     }
