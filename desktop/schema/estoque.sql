@@ -20846,7 +20846,7 @@ CREATE TRIGGER grupos_produto_arvore BEFORE INSERT OR UPDATE OF pai_id ON public
 -- Name: grupos_produto grupos_produto_sync_outbox; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER grupos_produto_sync_outbox AFTER INSERT OR UPDATE ON public.grupos_produto FOR EACH ROW EXECUTE FUNCTION public.trg_sync_outbox_catalogo();
+CREATE TRIGGER grupos_produto_sync_outbox AFTER INSERT OR DELETE OR UPDATE ON public.grupos_produto FOR EACH ROW EXECUTE FUNCTION public.trg_sync_outbox_catalogo();
 
 
 --

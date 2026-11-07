@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { compararCatalogo, planoDivergencias, type ProdutoEstoque, type ProdutoVendas } from './catalogo-divergencias-puro.ts'
+import { compararCatalogo, gruposApagadosDaFila, planoDivergencias, type ProdutoEstoque, type ProdutoVendas } from './catalogo-divergencias-puro.ts'
 
 const e = (o: Partial<ProdutoEstoque>): ProdutoEstoque => ({ codigo: '90001', vendas_ref: 'v1', descricao: 'Moqueca', valor_unitario: 100, inativo: false, pdv: true, ncm: '21069090', tipo_item: '04', ...o })
 const v = (o: Partial<ProdutoVendas>): ProdutoVendas => ({ vendas_ref: 'v1', codigo: '90001', nome: 'Moqueca', preco: 100, ativo: true, ncm: '21069090', ...o })
@@ -39,4 +39,16 @@ test('plano: insere novas, atualiza texto, resolve as que sumiram', () => {
   assert.deepEqual(p.inserir.map((d) => d.ref), ['90005'])
   assert.deepEqual(p.atualizar, [{ id: 1, detalhe: 'novo' }])
   assert.deepEqual(p.resolver, [2])
+})
+
+test('gruposApagadosDaFila: só delete de grupo, sem repetir, fora do payload', () => {
+  const fila = [
+    { entidade: 'grupo', operacao: 'delete', ref: '12' },
+    { entidade: 'grupo', operacao: 'delete', ref: '12' },
+    { entidade: 'grupo', operacao: 'upsert', ref: '13' },
+    { entidade: 'produto', operacao: 'delete', ref: '90001' },
+    { entidade: 'grupo', operacao: 'delete', ref: '14' },
+    { entidade: 'grupo', operacao: 'delete', ref: 'x' },
+  ]
+  assert.deepEqual(gruposApagadosDaFila(fila, new Set([14])), [12])
 })

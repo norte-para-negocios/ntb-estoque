@@ -55,3 +55,10 @@ export function planoDivergencias(abertas: { id: number; ref: string; tipo: stri
     resolver: abertas.filter((a) => !atuaisPorChave.has(chave(a.ref, a.tipo))).map((a) => a.id),
   }
 }
+
+/** Ids dos grupos apagados na fila que não vão no payload como grupo existente (puro, testado). */
+export function gruposApagadosDaFila(fila: { entidade: unknown; operacao: unknown; ref: unknown }[], noPayload: Set<number>): number[] {
+  const ids = fila.filter((f) => f.entidade === 'grupo' && f.operacao === 'delete').map((f) => Number(f.ref))
+    .filter((n) => Number.isSafeInteger(n) && n > 0 && !noPayload.has(n))
+  return [...new Set(ids)]
+}

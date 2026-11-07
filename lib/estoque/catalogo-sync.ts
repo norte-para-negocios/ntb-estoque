@@ -4,7 +4,7 @@
 //   - o que chega do Vendas entra por `aplicar_catalogo_vendas` (sem eco);
 //   - preço de venda: o Vendas manda; código/unidade/tipo/NCM/custo: o Estoque manda; nome/ativo/grupo: o mais novo.
 import { createServiceClient } from '@/lib/supabase/server'
-import { compararCatalogo, planoDivergencias, type ProdutoEstoque, type ProdutoVendas } from './catalogo-divergencias-puro'
+import { compararCatalogo, gruposApagadosDaFila, planoDivergencias, type ProdutoEstoque, type ProdutoVendas } from './catalogo-divergencias-puro'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 
 const MAX_TENTATIVAS = 8
@@ -234,10 +234,15 @@ export async function drenarOutbox(lojaId: number, limite = 100): Promise<{ entr
     }
   }
 
+  // grupo apagado no Estoque (migration 440): vai como id em `grupos_apagados`; o Vendas apaga a categoria vazia ou só desliga a que
+  // ainda tem produto (migration 194 de lá). Se o id voltou a existir (não acontece: id é identity), vai como upsert normal.
+  const gruposNoPayload = new Set(payload.grupos.map((g) => g.estoque_id))
+  const gruposApagados = gruposApagadosDaFila(fila, gruposNoPayload)
+
   let resposta: RespostaVendas | null = null
   let erro: string | null = null
   try {
-    const r = await postJson(`${base}/api/integracao/catalogo`, loja.integracao_api_key as string, { origem: 'estoque', ...payload })
+    const r = await postJson(`${base}/api/integracao/catalogo`, loja.integracao_api_key as string, { origem: 'estoque', ...payload, ...(gruposApagados.length ? { grupos_apagados: gruposApagados } : {}) })
     resposta = r.json as RespostaVendas
     if (r.status >= 300 || !resposta?.ok) erro = resposta?.error || `Vendas respondeu HTTP ${r.status}`
   } catch (e) {
