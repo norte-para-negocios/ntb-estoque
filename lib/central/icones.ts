@@ -137,6 +137,7 @@ export const ICONE_POR_ROTA: Record<string, Icone> = {
   '/devolucao-fornecedor': [Undo2, 'marca'],
   '/sintegra': [ScanSearch, 'marca'],
   '/fornecedor': [Truck, 'marca'],
+  '/cliente': [Users, 'marca'],
   '/fornecedor/importar': [FileSpreadsheet, 'importar'],
   '/compras-cadastros': [UserCog, 'marca'],
   '/relatorio-compras': [ChartBar, 'relatorio'],

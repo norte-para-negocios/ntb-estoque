@@ -1,7 +1,7 @@
 // Rótulos dos campos rastreados pela migration 220 (gatilho historico_registrar), por entidade.
 import type { RotulosEntidade } from './historico-puro'
 
-export type EntidadeHistorico = 'produto' | 'fornecedor' | 'nota_entrada' | 'pedido_compra' | 'op'
+export type EntidadeHistorico = 'produto' | 'fornecedor' | 'cliente' | 'nota_entrada' | 'pedido_compra' | 'op'
 
 const sim = (rotulo: string) => ({ rotulo })
 const num = (rotulo: string) => ({ rotulo, formato: 'numero' as const })
@@ -29,6 +29,14 @@ export const ROTULOS_HISTORICO: Record<EntidadeHistorico, RotulosEntidade> = {
       inscricao_estadual: cod('Inscrição estadual'), inscricao_municipal: cod('Inscrição municipal'), email: sim('E-mail'), telefone: cod('Telefone'),
       cep: cod('CEP'), uf: sim('UF'), cidade: sim('Cidade'), bairro: sim('Bairro'), logradouro: sim('Endereço'), numero: cod('Número'),
       complemento: sim('Complemento'), inativo: sim('Inativo'),
+    },
+  },
+  cliente: {
+    tabelaPrincipal: 'clientes',
+    campos: {
+      papel: sim('Tipo'), razao_social: sim('Razão social'), nome_fantasia: sim('Nome fantasia'), cnpj_cpf: cod('CNPJ/CPF'), pessoa_fisica: sim('Pessoa física'),
+      inscricao_estadual: cod('Inscrição estadual'), email: sim('E-mail'), telefone: cod('Telefone'), cep: cod('CEP'), uf: sim('UF'), cidade: sim('Cidade'),
+      bairro: sim('Bairro'), logradouro: sim('Endereço'), numero: cod('Número'), complemento: sim('Complemento'), rntrc: cod('RNTRC'), inativo: sim('Inativo'),
     },
   },
   nota_entrada: {

@@ -12086,7 +12086,10 @@ CREATE TABLE public.clientes (
     origem character varying(10) DEFAULT 'local'::character varying NOT NULL,
     full_object jsonb,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    papel text DEFAULT 'cliente'::text NOT NULL,
+    rntrc character varying(20),
+    CONSTRAINT clientes_papel_check CHECK ((papel = ANY (ARRAY['cliente'::text, 'transportadora'::text, 'ambos'::text])))
 );
 
 
@@ -20850,6 +20853,13 @@ CREATE TRIGGER grupos_produto_sync_outbox AFTER INSERT OR DELETE OR UPDATE ON pu
 
 
 --
+-- Name: clientes historico; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER historico AFTER INSERT OR DELETE OR UPDATE ON public.clientes FOR EACH ROW EXECUTE FUNCTION public.historico_registrar('cliente', 'id', '', 'ignorar', 'papel', 'razao_social', 'nome_fantasia', 'cnpj_cpf', 'pessoa_fisica', 'inscricao_estadual', 'email', 'telefone', 'cep', 'uf', 'cidade', 'bairro', 'logradouro', 'numero', 'complemento', 'rntrc', 'inativo');
+
+
+--
 -- Name: compras_proprio historico; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -28417,6 +28427,20 @@ GRANT ALL ON SEQUENCE public.central_problema_estado_id_seq TO service_role;
 
 GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE public.clientes TO authenticated;
 GRANT ALL ON TABLE public.clientes TO service_role;
+
+
+--
+-- Name: COLUMN clientes.papel; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(papel) ON TABLE public.clientes TO authenticated;
+
+
+--
+-- Name: COLUMN clientes.rntrc; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(rntrc) ON TABLE public.clientes TO authenticated;
 
 
 --

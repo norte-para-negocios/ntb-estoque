@@ -178,6 +178,11 @@ export const MODULOS: ModuloCentral[] = [
           { label: 'Exibir todos', href: '/fornecedor' },
         ],
       },
+      {
+        nome: 'Clientes e transportadoras',
+        desc: 'Quem compra da loja e quem entrega as mercadorias',
+        itens: [{ label: 'Exibir todos', href: '/cliente', soEstoqueProprio: true }],
+      },
       { nome: 'Compradores e prazos', desc: 'Quem compra e em quantos dias chega', itens: [{ label: 'Exibir todos', href: '/compras-cadastros' }] },
       {
         nome: 'Relatórios',

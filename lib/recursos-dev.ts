@@ -25,6 +25,8 @@ export const ROTAS_SO_DEV = [
   '/relatorio-variacao-preco',
   // Fase 8: engenharia de cardápio (popularidade × margem). Só estoque próprio.
   '/relatorio-engenharia-cardapio',
+  // Fase 6 (migration 450): clientes e transportadoras. Só estoque próprio.
+  '/cliente',
 ] as const
 
 export async function ehDesenvolvedor(): Promise<boolean> {

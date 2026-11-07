@@ -121,6 +121,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/sync-catalogo', label: 'Sincronização Vendas', icon: RefreshCw, group: 'Cadastros', soEstoqueProprio: true },
   { href: '/categoria-contabil', label: 'Categorias Contábeis', icon: Tags, group: 'Cadastros' },
   { href: '/fornecedor', label: 'Fornecedores', icon: Truck, group: 'Cadastros' },
+  { href: '/cliente', label: 'Clientes e transportadoras', icon: Users, group: 'Cadastros', soEstoqueProprio: true, superAdmin: true },
   { href: '/compras-cadastros', label: 'Compradores e prazos', icon: UserCog, group: 'Cadastros', soEstoqueProprio: true },
   { href: '/sintegra', label: 'SINTEGRA', icon: ScanLine, group: 'Cadastros' },
   { href: '/sync-status', label: 'Saúde da integração', icon: Activity, group: 'Cadastros', admin: true },
