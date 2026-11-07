@@ -8086,9 +8086,11 @@ select jsonb_build_object(
     'linhas', (select count(*) from kardex_omie where loja_id = p_loja),
     'comparados', (select count(*) from cmp),
     'batem', (select count(*) from cmp where saldo_apos is not null and abs(saldo - saldo_apos) <= 0.001),
-    'diferem', (select count(*) from cmp where saldo_apos is not null and abs(saldo - saldo_apos) > 0.001),
+    'diferem', (select count(*) from cmp, foto where saldo_apos is not null and abs(saldo - saldo_apos) > 0.001 and data_mov < foto.d),
+    'mexeu_no_dia', (select count(*) from cmp, foto where saldo_apos is not null and abs(saldo - saldo_apos) > 0.001 and data_mov >= foto.d)
+                  + (select count(*) from so_k, foto where so_k.data_mov >= foto.d),
     'sem_kardex', (select count(*) from cmp where saldo_apos is null),
-    'so_kardex', (select count(*) from so_k)
+    'so_kardex', (select count(*) from so_k, foto where so_k.data_mov < foto.d)
   ),
   'pendencias', jsonb_build_object(
     'ops_abertas', (select count(*) from ordens_producao where loja_id = p_loja and aberta_omie),
@@ -8107,7 +8109,7 @@ select jsonb_build_object(
         order by pos.cmc desc limit 15) t),
     'diferem', (select coalesce(jsonb_agg(x), '[]') from (
         select jsonb_build_object('produto', coalesce(nome.n, cmp.n_cod_prod::text), 'local', cmp.loc, 'posicao', cmp.saldo, 'kardex', cmp.saldo_apos, 'ultimo_mov', cmp.data_mov) x
-        from cmp left join nome on nome.codigo_produto = cmp.n_cod_prod where cmp.saldo_apos is not null and abs(cmp.saldo - cmp.saldo_apos) > 0.001
+        from cmp cross join foto left join nome on nome.codigo_produto = cmp.n_cod_prod where cmp.saldo_apos is not null and abs(cmp.saldo - cmp.saldo_apos) > 0.001 and cmp.data_mov < foto.d
         order by abs(cmp.saldo - cmp.saldo_apos) desc limit 15) t)
   )
 )

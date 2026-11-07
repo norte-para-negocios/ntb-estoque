@@ -6,7 +6,7 @@ export type Prontidao = {
   cadastro: { produtos: number; sem_unidade: number; ncm_invalido: number; sem_familia: number; familias: number; locais: number; fornecedores: number }
   fichas: { producao: number; lidas: number }
   saldo: { linhas: number; negativos: number; custo_zero: number; custo_absurdo: number; valor: number }
-  kardex: { desde: string | null; linhas: number; comparados: number; batem: number; diferem: number; sem_kardex: number; so_kardex?: number }
+  kardex: { desde: string | null; linhas: number; comparados: number; batem: number; diferem: number; sem_kardex: number; so_kardex?: number; mexeu_no_dia?: number }
   pendencias: { ops_abertas: number; notas_pendentes: number }
 }
 
@@ -54,10 +54,11 @@ export function avaliarProntidao(p: Prontidao, hoje: string): { itens: ItemPront
 
   const k = p.kardex
   const soK = k.so_kardex ?? 0
+  const noDia = k.mexeu_no_dia ?? 0
   const semHistorico = k.linhas === 0
   add({ chave: 'kardex', titulo: 'Saldo provado igual ao Omie (posição × kardex)', estado: semHistorico ? 'bloqueia' : k.diferem > 0 || k.sem_kardex > 0 || soK > 0 ? 'atencao' : 'ok',
     detalhe: semHistorico ? 'kardex do Omie ainda não copiado para esta loja'
-      : `${n(k.batem)} de ${n(k.comparados)} produto×local batem (${pct(k.batem, k.comparados)}%); ${n(k.diferem)} diferem; ${n(k.sem_kardex)} sem movimento lido${soK ? `; ${n(soK)} com saldo só no kardex (o Omie diz zero)` : ''} · kardex desde ${k.desde?.split('-').reverse().join('/') ?? '—'}`,
+      : `${n(k.batem)} de ${n(k.comparados)} produto×local batem (${pct(k.batem, k.comparados)}%); ${n(k.diferem)} diferem; ${n(k.sem_kardex)} sem movimento lido${soK ? `; ${n(soK)} com saldo só no kardex (o Omie diz zero)` : ''}${noDia ? `; ${n(noDia)} mexeram no dia da foto (conferir de novo com o dia fechado)` : ''} · kardex desde ${k.desde?.split('-').reverse().join('/') ?? '—'}`,
     acao: semHistorico ? 'Ligar a cópia completa (espelho_completo) e esperar o kardex do ano.' : k.diferem || k.sem_kardex || soK ? 'Reler o kardex dos produtos que diferem (o espelho pode estar atrasado) e só então comparar de novo.' : null })
 
   add({ chave: 'pendencias', titulo: 'Nada aberto no Omie no dia da troca', estado: p.pendencias.ops_abertas > 0 || p.pendencias.notas_pendentes > 0 ? 'atencao' : 'ok',

@@ -43,3 +43,9 @@ test('par com saldo só no kardex conta como atenção', () => {
   const k = r.itens.find((i) => i.chave === 'kardex')!
   assert.equal(k.estado, 'atencao'); assert.match(k.detalhe, /5 com saldo só no kardex/)
 })
+
+test('mexeu no dia da foto aparece à parte (inconclusivo)', () => {
+  const r = avaliarProntidao({ ...pronta, kardex: { ...pronta.kardex, mexeu_no_dia: 12 } }, '2026-11-07')
+  const k = r.itens.find((i) => i.chave === 'kardex')!
+  assert.equal(k.estado, 'ok'); assert.match(k.detalhe, /12 mexeram no dia da foto/)
+})
