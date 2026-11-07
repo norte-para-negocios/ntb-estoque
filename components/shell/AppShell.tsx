@@ -19,6 +19,7 @@ export function AppShell({
   estoqueProprio = false,
   temEstoque = false,
   pedidosOmie = false,
+  pacioli = false,
   centralUserId,
   lojaSelector,
   userMenu,
@@ -33,6 +34,8 @@ export function AppShell({
   estoqueProprio?: boolean
   temEstoque?: boolean
   pedidosOmie?: boolean
+  /** Pacioli (robô) liberado: dev ou loja que contratou (lib/pacioli.ts). */
+  pacioli?: boolean
   /** Só desenvolvedores: id do usuário (favoritos da central). */
   centralUserId?: string
   lojaSelector: React.ReactNode
@@ -45,9 +48,9 @@ export function AppShell({
   const centralCtx = React.useMemo(
     () =>
       isSuperAdmin
-        ? { ctx: { isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, desktop: process.env.NEXT_PUBLIC_DESKTOP === '1' }, userId: centralUserId ?? '' }
+        ? { ctx: { isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, pacioli, desktop: process.env.NEXT_PUBLIC_DESKTOP === '1' }, userId: centralUserId ?? '' }
         : null,
-    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, centralUserId]
+    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, pacioli, centralUserId]
   )
 
   React.useEffect(() => {
@@ -88,9 +91,9 @@ export function AppShell({
 
   return (
     <div className="flex min-h-screen bg-bg">
-      <div className="contents print:hidden"><Sidebar isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} estoqueProprio={estoqueProprio} temEstoque={temEstoque} pedidosOmie={pedidosOmie} lojaSelector={lojaSelector} userMenu={userMenu} /></div>
+      <div className="contents print:hidden"><Sidebar isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} estoqueProprio={estoqueProprio} temEstoque={temEstoque} pedidosOmie={pedidosOmie} pacioli={pacioli} lojaSelector={lojaSelector} userMenu={userMenu} /></div>
       <div className="flex-1 min-w-0 flex flex-col">
-        <div className="contents print:hidden"><MobileNav isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} estoqueProprio={estoqueProprio} temEstoque={temEstoque} pedidosOmie={pedidosOmie} lojaSelector={lojaSelector} userMenu={userMenu} onBuscar={() => setBuscaAberta(true)} /></div>
+        <div className="contents print:hidden"><MobileNav isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} estoqueProprio={estoqueProprio} temEstoque={temEstoque} pedidosOmie={pedidosOmie} pacioli={pacioli} lojaSelector={lojaSelector} userMenu={userMenu} onBuscar={() => setBuscaAberta(true)} /></div>
         {/* overflow-x-clip (NAO -hidden): clip corta overflow horizontal sem
             virar container de scroll. -hidden faria o overflow-y computar pra
             auto, tornando o <main> um scroll container SEM altura fixa -> o

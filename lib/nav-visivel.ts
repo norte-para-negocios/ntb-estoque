@@ -10,6 +10,8 @@ export type NavRegra = {
   soEstoqueProprio?: boolean
   comEstoque?: boolean
   ouPedidosOmie?: boolean
+  /** Pacioli (robô de correções): só dev (admin) e lojas que contrataram o robô. */
+  soPacioli?: boolean
   cadeadoSemAdmin?: boolean
 }
 
@@ -25,6 +27,8 @@ export type CtxVisibilidade = {
   pedidosOmie: boolean
   /** App Norte Estoque para computador (NEXT_PUBLIC_DESKTOP). */
   desktop: boolean
+  /** Loja atual contratou o Pacioli, ou o usuário é dev/admin. */
+  pacioli?: boolean
 }
 
 /** Filtro do menu lateral. `permitidas` pode vir pré-calculada (evita refazer o Set a cada item). */
@@ -39,7 +43,9 @@ export function navItemVisivel(
     (!n.superAdmin || ctx.isSuperAdmin) &&
     (!n.soEstoqueProprio || ctx.estoqueProprio || (!!n.ouPedidosOmie && ctx.pedidosOmie)) &&
     (!n.comEstoque || ctx.temEstoque) &&
-    (permitidas === null || permitidas.has(n.href))
+    (!n.soPacioli || !!ctx.pacioli) &&
+    // Pacioli não depende da permissão por perfil: a loja que paga o robô vê para todos os usuários dela
+    (permitidas === null || permitidas.has(n.href) || (!!n.soPacioli && !!ctx.pacioli))
   )
 }
 

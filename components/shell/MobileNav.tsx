@@ -47,6 +47,7 @@ export function MobileNav({
   estoqueProprio = false,
   temEstoque = false,
   pedidosOmie = false,
+  pacioli = false,
   lojaSelector,
   userMenu,
   onBuscar,
@@ -59,6 +60,8 @@ export function MobileNav({
   estoqueProprio?: boolean
   temEstoque?: boolean
   pedidosOmie?: boolean
+  /** Pacioli (robô) liberado: dev ou loja que contratou (lib/pacioli.ts). */
+  pacioli?: boolean
   lojaSelector: React.ReactNode
   userMenu: React.ReactNode
   /** Abre a busca global (o ícone fica na barra superior, não numa linha própria). */
@@ -69,8 +72,8 @@ export function MobileNav({
   // Só desenvolvedores: menu por módulos (padrão) ou o menu antigo. Não-dev: sempre false, nada muda.
   const [menuNovo, setMenuNovo, menuPronto] = useMenuNovo(isSuperAdmin)
   const ctxCentral = useMemo(
-    () => ({ isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, desktop: process.env.NEXT_PUBLIC_DESKTOP === '1' }),
-    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie]
+    () => ({ isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, pacioli, desktop: process.env.NEXT_PUBLIC_DESKTOP === '1' }),
+    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, pacioli]
   )
 
   useEffect(() => {
@@ -92,7 +95,7 @@ export function MobileNav({
   const itens = useMemo(
     () =>
       NAV_ITEMS.filter((i) => navItemVisivel(i, ctxCentral, permitidas)),
-    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, ctxCentral] // eslint-disable-line react-hooks/exhaustive-deps
+    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, pacioli, ctxCentral] // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   const gruposVisiveis = useMemo(

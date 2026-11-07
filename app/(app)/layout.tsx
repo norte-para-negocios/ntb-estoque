@@ -9,6 +9,7 @@ import { estadoPedidoCompraLoja } from '@/lib/compras/pedido-compra-loja'
 import { gravacaoPedidosOmieLigada } from '@/lib/compras/pedido-omie-gravar-puro'
 import { leituraPedidosOmieLigada } from '@/lib/compras/pedidos-omie-puro'
 import { ModoEstoqueProvider } from '@/components/estoque-proprio/ModoEstoque'
+import { pacioliLiberado } from '@/lib/pacioli'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await getProfile()
@@ -70,6 +71,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       estoqueProprio={estoqueProprio}
       temEstoque={temEstoque}
       pedidosOmie={pedidosOmie}
+      pacioli={pacioliLiberado(profile.current_loja_id, isAdmin, superAdmin)}
       centralUserId={superAdmin ? profile.id : undefined}
       lojaSelector={<LojaSelector lojas={lojas ?? []} currentLojaId={profile.current_loja_id} />}
       userMenu={<UserMenu nome={profile.name} perfil={profile.perfil} />}

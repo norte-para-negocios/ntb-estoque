@@ -97,6 +97,7 @@ export const ICONE_POR_ROTA: Record<string, Icone> = {
   '/estoque': [Boxes, 'marca'],
   '/estoque/correcoes': [Stethoscope, 'alerta'],
   '/movimentacoes': [ArrowDownUp, 'marca'],
+  '/pacioli': [Bot, 'marca'],
   '/inventario': [ClipboardList, 'marca'],
   '/transferencia': [ArrowLeftRight, 'marca'],
   '/validade': [CalendarClock, 'alerta'],

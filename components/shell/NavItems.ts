@@ -44,6 +44,7 @@ import {
   Sigma,
   Trash2,
   ChartSpline,
+  Bot,
 } from 'lucide-react'
 
 export type NavItem = {
@@ -65,11 +66,14 @@ export type NavItem = {
   comEstoque?: boolean
   // ouPedidosOmie: item soEstoqueProprio que também aparece na loja Omie com pedido de compra liberado (C1).
   ouPedidosOmie?: boolean
+  // soPacioli: Pacioli (robô de correções), só dev (admin) e lojas que contrataram o robô (lib/pacioli.ts).
+  soPacioli?: boolean
 }
 
 export const NAV_ITEMS: NavItem[] = [
   { href: '/home', label: 'Início', icon: LayoutDashboard, group: 'Operação' },
   { href: '/estoque', label: 'Estoque', icon: Boxes, group: 'Operação', comEstoque: true },
+  { href: '/pacioli', label: 'Pacioli', icon: Bot, group: 'Operação', soPacioli: true },
   { href: '/reposicao', label: 'Reposição', icon: ShoppingCart, group: 'Operação', soEstoqueProprio: true },
   { href: '/sugestao-compra', label: 'Sugestão de compra', icon: ShoppingCart, group: 'Operação', comEstoque: true, superAdmin: true },
   { href: '/tarefas-compras', label: 'Tarefas de compras', icon: ListTodo, group: 'Operação', soEstoqueProprio: true, superAdmin: true },

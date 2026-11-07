@@ -247,7 +247,8 @@ test('navItemVisivel equivale ao filtro original do menu para todo NAV_ITEMS', (
       (!i.superAdmin || c.isSuperAdmin) &&
       (!i.soEstoqueProprio || c.estoqueProprio || (i.ouPedidosOmie && c.pedidosOmie)) &&
       (!i.comEstoque || c.temEstoque) &&
-      (permitidas === null || permitidas.has(i.href))
+      (!i.soPacioli || !!c.pacioli) &&
+      (permitidas === null || permitidas.has(i.href) || (!!i.soPacioli && !!c.pacioli))
     )
   }
   const bool = [false, true]

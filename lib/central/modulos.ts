@@ -101,6 +101,7 @@ export const MODULOS: ModuloCentral[] = [
     telas: [
       { label: 'Estoque', href: '/estoque', desc: 'Saldo e custo de cada produto', principal: true },
       { label: 'Movimentações', href: '/movimentacoes', desc: 'Todas as entradas e saídas' },
+      { label: 'Pacioli', href: '/pacioli', desc: 'Robô que confere e corrige o estoque no Omie' },
       { label: 'Inventários', href: '/inventario', desc: 'Contagens feitas e em andamento' },
       { label: 'Transferências', href: '/transferencia', desc: 'Entre locais da loja' },
       { label: 'Validade', href: '/validade', desc: 'Lotes a vencer' },

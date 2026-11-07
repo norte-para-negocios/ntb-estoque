@@ -50,6 +50,7 @@ export function Sidebar({
   estoqueProprio = false,
   temEstoque = false,
   pedidosOmie = false,
+  pacioli = false,
   lojaSelector,
   userMenu,
 }: {
@@ -61,6 +62,8 @@ export function Sidebar({
   estoqueProprio?: boolean
   temEstoque?: boolean
   pedidosOmie?: boolean
+  /** Pacioli (robô) liberado: dev ou loja que contratou (lib/pacioli.ts). */
+  pacioli?: boolean
   lojaSelector: React.ReactNode
   userMenu: React.ReactNode
 }) {
@@ -68,8 +71,8 @@ export function Sidebar({
   // Só desenvolvedores: menu por módulos (padrão) ou o menu antigo. Não-dev: sempre false, nada muda.
   const [menuNovo, setMenuNovo, menuPronto] = useMenuNovo(isSuperAdmin)
   const ctxCentral = React.useMemo(
-    () => ({ isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, desktop: process.env.NEXT_PUBLIC_DESKTOP === '1' }),
-    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie]
+    () => ({ isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, pacioli, desktop: process.env.NEXT_PUBLIC_DESKTOP === '1' }),
+    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, pacioli]
   )
 
   // Filtro de permissão (4.2) intacto: mesma regra de antes.
@@ -78,7 +81,7 @@ export function Sidebar({
   const itens = React.useMemo(
     () =>
       NAV_ITEMS.filter((i) => navItemVisivel(i, ctxCentral, permitidas)),
-    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, ctxCentral] // eslint-disable-line react-hooks/exhaustive-deps
+    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, pacioli, ctxCentral] // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   // Só os grupos que sobraram itens depois do filtro.
