@@ -2,15 +2,22 @@
 import ExcelJS from 'exceljs'
 import { COLUNAS, type TipoImportacao } from './planilha-puro'
 
+/** Modelo vazio: cabeçalho + 1 linha de exemplo. */
 export async function modeloPlanilha(tipo: TipoImportacao): Promise<Buffer> {
+  return planilhaCadastro(tipo, [Object.fromEntries(COLUNAS[tipo].map((c) => [c.chave, c.exemplo]))])
+}
+
+/** Mesma planilha do modelo, com as linhas dadas (exportar o cadastro atual = linhasExport*, lib/importacao/exportar-puro.ts). */
+export async function planilhaCadastro(tipo: TipoImportacao, linhas: Record<string, string>[]): Promise<Buffer> {
   const wb = new ExcelJS.Workbook()
   const cols = COLUNAS[tipo]
   const ws = wb.addWorksheet(tipo === 'produtos' ? 'Produtos' : 'Fornecedores')
   ws.columns = cols.map((c) => ({ header: c.titulo, key: c.chave, width: Math.max(14, c.titulo.length + 4) }))
   ws.getRow(1).font = { bold: true }
-  ws.addRow(Object.fromEntries(cols.map((c) => [c.chave, c.exemplo])))
   // códigos com zero à esquerda (NCM, EAN, CEST, CNPJ, CEP) ficam como texto
   for (const c of cols) ws.getColumn(c.chave).numFmt = '@'
+  for (const l of linhas) ws.addRow(l)
+  ws.views = [{ state: 'frozen', ySplit: 1 }]
   const inst = wb.addWorksheet('Instruções')
   inst.columns = [{ header: 'Coluna', key: 'coluna', width: 22 }, { header: 'Obrigatória', key: 'obrigatoria', width: 14 }, { header: 'Como preencher', key: 'ajuda', width: 90 }]
   inst.getRow(1).font = { bold: true }
@@ -24,11 +31,11 @@ export async function modeloPlanilha(tipo: TipoImportacao): Promise<Buffer> {
   return Buffer.from(await wb.xlsx.writeBuffer())
 }
 
-export function respostaModelo(tipo: TipoImportacao, buffer: Buffer): Response {
+export function respostaModelo(tipo: TipoImportacao, buffer: Buffer, nomeArquivo = `modelo-importacao-${tipo}.xlsx`): Response {
   return new Response(new Uint8Array(buffer), {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'Content-Disposition': `attachment; filename="modelo-importacao-${tipo}.xlsx"`,
+      'Content-Disposition': `attachment; filename="${nomeArquivo}"`,
       'Cache-Control': 'private, no-store',
     },
   })

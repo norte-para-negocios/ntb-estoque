@@ -22,7 +22,7 @@ function resumoDados(d: Record<string, string | number | boolean | null>): strin
 }
 
 /** Enviar planilha → prévia linha a linha → confirmar (Fase G [K10/O6]; só estoque próprio). */
-export function ImportarPlanilha({ tipo, voltar }: { tipo: TipoImportacao; voltar: string }) {
+export function ImportarPlanilha({ tipo, voltar, exportarCadastro = false }: { tipo: TipoImportacao; voltar: string; exportarCadastro?: boolean }) {
   const [arquivo, setArquivo] = useState<File | null>(null)
   const [previa, setPrevia] = useState<PreviaImportacao | null>(null)
   const [resultado, setResultado] = useState<{ criados: number; atualizados: number } | null>(null)
@@ -68,6 +68,11 @@ export function ImportarPlanilha({ tipo, voltar }: { tipo: TipoImportacao; volta
         </ol>
         <div className="flex flex-wrap items-center gap-2">
           <a href={`${voltar}/importar/modelo`} className={btnClass('outline')}><Download className="size-4" /> Baixar modelo</a>
+          {exportarCadastro && (
+            <a href={`${voltar}/importar/cadastro`} className={btnClass('outline')} title="O cadastro de hoje neste mesmo formato: edite e importe de volta">
+              <Download className="size-4" /> Baixar cadastro atual
+            </a>
+          )}
           <input id="planilha" type="file" accept=".xlsx,.csv" className="sr-only" onChange={(e) => { setArquivo(e.target.files?.[0] ?? null); setPrevia(null) }} />
           <label htmlFor="planilha" className={`${btnClass('outline')} cursor-pointer`}><FileSpreadsheet className="size-4" /> {arquivo ? arquivo.name : 'Escolher planilha'}</label>
           <button type="button" onClick={verPrevia} disabled={!arquivo || pending} className={btnClass('primary')}>
