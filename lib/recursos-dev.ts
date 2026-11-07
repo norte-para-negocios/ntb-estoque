@@ -29,6 +29,8 @@ export const ROTAS_SO_DEV = [
   '/cliente',
   // Fase 9: histórico de cadastros (quem mudou o quê).
   '/historico-cadastro',
+  // Fase 10: prontidão de cada loja Omie para ir ao Norte ERP (só leitura).
+  '/migracao-omie',
 ] as const
 
 export async function ehDesenvolvedor(): Promise<boolean> {

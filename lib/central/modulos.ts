@@ -308,6 +308,7 @@ export const MODULOS: ModuloCentral[] = [
       { label: 'Saúde do Banco', href: '/saude-banco', desc: 'Espaço, lentidão e erros do banco' },
       { label: 'Sincronização', href: '/sincronizacao', soDesktop: true, desc: 'Dados do computador com a nuvem' },
       { label: 'Minha loja', href: '/minha-loja', desc: 'Dados e preferências desta loja' },
+      { label: 'Prontidão para sair do Omie', href: '/migracao-omie', desc: 'O que falta em cada loja para ir ao Norte ERP' },
     ],
     secoes: [
       { nome: 'Usuários', desc: 'Quem acessa o sistema', itens: [criar('Incluir', '/usuario'), { label: 'Exibir todos', href: '/usuario' }] },
