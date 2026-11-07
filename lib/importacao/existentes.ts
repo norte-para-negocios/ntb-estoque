@@ -36,10 +36,11 @@ export async function fornecedoresExistentes(lojaId: number): Promise<Fornecedor
   }))
 }
 
-/** Todas as famílias da loja (ativas e inativas), para pôr o NOME da família na planilha exportada. */
+/** Famílias ATIVAS da loja, para pôr o nome da família na planilha exportada. A importação só aceita família ativa: produto numa
+ *  família inativa sai com a coluna em branco (= não muda), senão a planilha devolvida daria erro nessa linha (loja 19, 07/11: 19 de 572). */
 export async function familiasDaLoja(lojaId: number): Promise<{ codigo: number; descricao: string }[]> {
   const sb = createServiceClient()
-  const { data, error } = await sb.from('familias').select('codigo_familia, nome').eq('loja_id', lojaId)
+  const { data, error } = await sb.from('familias').select('codigo_familia, nome, inativo').eq('loja_id', lojaId)
   if (error) falhou(error)
-  return (data ?? []).filter((f) => f.nome).map((f) => ({ codigo: Number(f.codigo_familia), descricao: String(f.nome) }))
+  return (data ?? []).filter((f) => f.nome && !f.inativo).map((f) => ({ codigo: Number(f.codigo_familia), descricao: String(f.nome) }))
 }
