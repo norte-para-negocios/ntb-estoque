@@ -6,7 +6,7 @@ export type Prontidao = {
   cadastro: { produtos: number; sem_unidade: number; ncm_invalido: number; sem_familia: number; familias: number; locais: number; fornecedores: number }
   fichas: { producao: number; lidas: number }
   saldo: { linhas: number; negativos: number; custo_zero: number; custo_absurdo: number; valor: number }
-  kardex: { desde: string | null; linhas: number; comparados: number; batem: number; diferem: number; sem_kardex: number }
+  kardex: { desde: string | null; linhas: number; comparados: number; batem: number; diferem: number; sem_kardex: number; so_kardex?: number }
   pendencias: { ops_abertas: number; notas_pendentes: number }
 }
 
@@ -53,11 +53,12 @@ export function avaliarProntidao(p: Prontidao, hoje: string): { itens: ItemPront
     acao: s.custo_absurdo || s.custo_zero ? 'Corrigir o custo no Omie (ou definir o custo de entrada com o dono) antes de copiar o saldo inicial.' : null })
 
   const k = p.kardex
+  const soK = k.so_kardex ?? 0
   const semHistorico = k.linhas === 0
-  add({ chave: 'kardex', titulo: 'Saldo provado igual ao Omie (posição × kardex)', estado: semHistorico ? 'bloqueia' : k.diferem > 0 || k.sem_kardex > 0 ? 'atencao' : 'ok',
+  add({ chave: 'kardex', titulo: 'Saldo provado igual ao Omie (posição × kardex)', estado: semHistorico ? 'bloqueia' : k.diferem > 0 || k.sem_kardex > 0 || soK > 0 ? 'atencao' : 'ok',
     detalhe: semHistorico ? 'kardex do Omie ainda não copiado para esta loja'
-      : `${n(k.batem)} de ${n(k.comparados)} produto×local batem (${pct(k.batem, k.comparados)}%); ${n(k.diferem)} diferem; ${n(k.sem_kardex)} sem movimento lido · kardex desde ${k.desde?.split('-').reverse().join('/') ?? '—'}`,
-    acao: semHistorico ? 'Ligar a cópia completa (espelho_completo) e esperar o kardex do ano.' : k.diferem || k.sem_kardex ? 'Reler o kardex dos produtos que diferem (o espelho pode estar atrasado) e só então comparar de novo.' : null })
+      : `${n(k.batem)} de ${n(k.comparados)} produto×local batem (${pct(k.batem, k.comparados)}%); ${n(k.diferem)} diferem; ${n(k.sem_kardex)} sem movimento lido${soK ? `; ${n(soK)} com saldo só no kardex (o Omie diz zero)` : ''} · kardex desde ${k.desde?.split('-').reverse().join('/') ?? '—'}`,
+    acao: semHistorico ? 'Ligar a cópia completa (espelho_completo) e esperar o kardex do ano.' : k.diferem || k.sem_kardex || soK ? 'Reler o kardex dos produtos que diferem (o espelho pode estar atrasado) e só então comparar de novo.' : null })
 
   add({ chave: 'pendencias', titulo: 'Nada aberto no Omie no dia da troca', estado: p.pendencias.ops_abertas > 0 || p.pendencias.notas_pendentes > 0 ? 'atencao' : 'ok',
     detalhe: `${n(p.pendencias.ops_abertas)} OP(s) aberta(s); ${n(p.pendencias.notas_pendentes)} nota(s) de entrada pendente(s) (90 dias)`,

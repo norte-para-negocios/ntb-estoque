@@ -37,3 +37,9 @@ test('sem kardex copiado e posição velha', () => {
   const e = Object.fromEntries(r.itens.map((i) => [i.chave, i.estado]))
   assert.equal(e.kardex, 'bloqueia'); assert.equal(e.foto, 'atencao')
 })
+
+test('par com saldo só no kardex conta como atenção', () => {
+  const r = avaliarProntidao({ ...pronta, kardex: { ...pronta.kardex, so_kardex: 5 } }, '2026-11-07')
+  const k = r.itens.find((i) => i.chave === 'kardex')!
+  assert.equal(k.estado, 'atencao'); assert.match(k.detalhe, /5 com saldo só no kardex/)
+})

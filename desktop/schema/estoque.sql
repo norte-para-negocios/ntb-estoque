@@ -8030,16 +8030,33 @@ pos as (
   from posicao_estoques pe, foto where pe.loja_id = p_loja and pe.data_posicao = foto.d and pe.codigo_local_estoque <> 0
 ),
 prod as (select codigo_produto, codigo, descricao, unidade, ncm, tipo_item, codigo_familia from produtos where loja_id = p_loja and not coalesce(inativo, false)),
-ult as (  -- último movimento do kardex do Omie por produto x local
-  select distinct on (n_cod_prod, codigo_local_estoque) n_cod_prod, codigo_local_estoque, saldo_apos::numeric saldo_apos, data_mov
-  from kardex_omie where loja_id = p_loja and not cancelado
-  order by n_cod_prod, codigo_local_estoque, data_mov desc, id_mov desc
+cmp as (  -- cada produto x local da posição contra o último movimento do kardex do Omie (busca pelo índice, 1 linha por par)
+  select pos.n_cod_prod, pos.codigo_local_estoque loc, pos.saldo, u.saldo_apos, u.data_mov
+  from pos left join lateral (
+    select k.saldo_apos::numeric saldo_apos, k.data_mov from kardex_omie k
+    where k.loja_id = p_loja and k.n_cod_prod = pos.n_cod_prod and k.codigo_local_estoque = pos.codigo_local_estoque and not k.cancelado
+    order by k.data_mov desc, k.id_mov desc limit 1) u on true
+  where pos.saldo <> 0 or coalesce(u.saldo_apos, 0) <> 0
 ),
-cmp as (
-  select coalesce(p.n_cod_prod, u.n_cod_prod) n_cod_prod, coalesce(p.codigo_local_estoque, u.codigo_local_estoque) loc,
-         coalesce(p.saldo, 0) saldo, u.saldo_apos, u.data_mov
-  from pos p full join ult u on u.n_cod_prod = p.n_cod_prod and u.codigo_local_estoque = p.codigo_local_estoque
-  where coalesce(p.saldo, 0) <> 0 or coalesce(u.saldo_apos, 0) <> 0
+pares as materialized (  -- pares produto x local do kardex, pulando pelo índice (loose index scan): sem varrer as linhas
+  with recursive t(n_cod_prod, codigo_local_estoque) as (
+    (select n_cod_prod, codigo_local_estoque from kardex_omie where loja_id = p_loja order by n_cod_prod, codigo_local_estoque limit 1)
+    union all
+    select x.n_cod_prod, x.codigo_local_estoque from t, lateral (
+      select k.n_cod_prod, k.codigo_local_estoque from kardex_omie k
+      where k.loja_id = p_loja and (k.n_cod_prod, k.codigo_local_estoque) > (t.n_cod_prod, t.codigo_local_estoque)
+      order by k.n_cod_prod, k.codigo_local_estoque limit 1) x
+  )
+  select * from t
+),
+so_k as (  -- pares que só o kardex tem (sem linha na posição) e cujo último saldo não é zero: o Omie diz que não há, o kardex diz que há
+  select pr.n_cod_prod, pr.codigo_local_estoque loc, u.saldo_apos, u.data_mov
+  from pares pr
+  join lateral (
+    select k.saldo_apos::numeric saldo_apos, k.data_mov from kardex_omie k
+    where k.loja_id = p_loja and k.n_cod_prod = pr.n_cod_prod and k.codigo_local_estoque = pr.codigo_local_estoque and not k.cancelado
+    order by k.data_mov desc, k.id_mov desc limit 1) u on true
+  where u.saldo_apos <> 0 and not exists (select 1 from pos where pos.n_cod_prod = pr.n_cod_prod and pos.codigo_local_estoque = pr.codigo_local_estoque)
 ),
 nome as (select codigo_produto, coalesce(descricao, '') || coalesce(' (' || codigo || ')', '') n from produtos where loja_id = p_loja)
 select jsonb_build_object(
@@ -8070,7 +8087,8 @@ select jsonb_build_object(
     'comparados', (select count(*) from cmp),
     'batem', (select count(*) from cmp where saldo_apos is not null and abs(saldo - saldo_apos) <= 0.001),
     'diferem', (select count(*) from cmp where saldo_apos is not null and abs(saldo - saldo_apos) > 0.001),
-    'sem_kardex', (select count(*) from cmp where saldo_apos is null)
+    'sem_kardex', (select count(*) from cmp where saldo_apos is null),
+    'so_kardex', (select count(*) from so_k)
   ),
   'pendencias', jsonb_build_object(
     'ops_abertas', (select count(*) from ordens_producao where loja_id = p_loja and aberta_omie),
