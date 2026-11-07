@@ -6,7 +6,8 @@ import { viaDesktop } from '@/lib/offline/via-desktop'
 // ver) e marca como lida por usuário. Nada aqui gera notificação (isso é o cron gerar-notificacoes).
 import { createServiceClient } from '@/lib/supabase/server'
 import { getProfile, requirePermissao } from '@/lib/auth'
-import { PERMISSAO_DO_TIPO, TIPOS_NOTIFICACAO, type Gravidade, type TipoNotificacao } from '@/lib/notificacoes/regras-puro'
+import { ehDesenvolvedor } from '@/lib/recursos-dev'
+import { PERMISSAO_DO_TIPO, TIPOS_NOTIFICACAO, TIPOS_SO_DEV, type Gravidade, type TipoNotificacao } from '@/lib/notificacoes/regras-puro'
 import { tabelaAusente } from '@/lib/supabase/tabela-ausente'
 
 export type NotificacaoTela = {
@@ -35,7 +36,8 @@ async function visiveis(): Promise<{ userId: string; itens: Omit<NotificacaoTela
   }
   const tipos = [...new Set((data ?? []).map((n) => n.tipo as string).filter(ehTipo))]
   const pode = new Map<string, boolean>()
-  for (const t of tipos) pode.set(t, await requirePermissao(lojaId, PERMISSAO_DO_TIPO[t]))
+  const dev = tipos.some((t) => TIPOS_SO_DEV.includes(t)) ? await ehDesenvolvedor() : false
+  for (const t of tipos) pode.set(t, (!TIPOS_SO_DEV.includes(t) || dev) && await requirePermissao(lojaId, PERMISSAO_DO_TIPO[t]))
   const itens = (data ?? [])
     .filter((n) => ehTipo(n.tipo as string) && pode.get(n.tipo as string))
     .map((n) => ({

@@ -86,11 +86,35 @@ async function bloqueios(sb: Sb, lojaId: number): Promise<DadosNotificacao['bloq
   return { quantidade: count ?? 0, metodo }
 }
 
+/** Fase 9: validade do A1 da loja ('' = sem certificado). Só a coluna de data; o certificado em si nunca é lido aqui. */
+async function certificadoA1(sb: Sb, lojaId: number): Promise<string | null> {
+  const { data, error } = await sb.from('lojas').select('certificado_validade').eq('id', lojaId).maybeSingle()
+  if (error) { console.error(`notificacoes: loja ${lojaId}, consulta "certificado" falhou: ${error.message}`); return null }
+  return ((data?.certificado_validade as string | null) ?? '').slice(0, 10)
+}
+
+/** Fase 9: contas a pagar em aberto vencidas (com o valor que falta) e as que vencem hoje (estoque próprio). */
+async function contasPagar(sb: Sb, lojaId: number, hoje: string): Promise<DadosNotificacao['contasPagar']> {
+  const [venc, hj] = await Promise.all([
+    sb.from('fin_titulos_pagar').select('valor, valor_quitado').eq('loja_id', lojaId).in('status', ['aberto', 'parcial']).lt('data_vencimento', hoje).limit(5000),
+    contar(sb.from('fin_titulos_pagar').select('id', { count: 'exact', head: true }).eq('loja_id', lojaId).in('status', ['aberto', 'parcial'])
+      .eq('data_vencimento', hoje), 'contas que vencem hoje', lojaId),
+  ])
+  if (venc.error || hj == null) {
+    if (venc.error && !/fin_titulos_pagar/.test(venc.error.message)) console.error(`notificacoes: loja ${lojaId}, consulta "contas vencidas" falhou: ${venc.error.message}`)
+    return null
+  }
+  const linhas = venc.data ?? []
+  const valorVencido = Math.round(linhas.reduce((t, l) => t + Math.max(0, Number(l.valor) - Number(l.valor_quitado ?? 0)), 0) * 100) / 100
+  return { vencidas: linhas.length, valorVencido, hoje: hj }
+}
+
 export async function coletarDados(sb: Sb, lojaId: number, modo: DadosNotificacao['modo'], hoje = hojeBahiaISO()): Promise<DadosNotificacao> {
   const omie = modo === 'omie'
   const catorzeDias = new Date(Date.now() - 14 * 86_400_000).toISOString()
   const seteDias = new Date(Date.now() - 7 * 86_400_000).toISOString()
-  const [val, minimo, notas, opsCorrigir, teto, bloq, fila, pedidos] = await Promise.all([
+  const proprio = modo === 'proprio'
+  const [val, minimo, notas, opsCorrigir, teto, bloq, fila, pedidos, a1, catalogo, contas] = await Promise.all([
     modo === 'nenhum' ? Promise.resolve(null) : validade(sb, lojaId, modo, hoje),
     modo === 'nenhum' ? Promise.resolve(null) : abaixoMinimo(sb, lojaId, modo),
     notasParadas(sb, lojaId, hoje),
@@ -103,10 +127,15 @@ export async function coletarDados(sb: Sb, lojaId: number, modo: DadosNotificaca
       .eq('status', 'Erro').gte('updated_at', seteDias), 'fila do Vendas', lojaId) : Promise.resolve(null),
     modo === 'proprio' ? contar(sb.from('pedidos_compra').select('id', { count: 'exact', head: true }).eq('loja_id', lojaId)
       .eq('etapa', 'aguardando_aprovacao'), 'pedidos aguardando', lojaId) : Promise.resolve(null),
+    certificadoA1(sb, lojaId),
+    proprio ? contar(sb.from('sync_divergencias').select('id', { count: 'exact', head: true }).eq('loja_id', lojaId)
+      .eq('tipo', 'erro_entrega').is('resolvido_em', null), 'catálogo do Vendas', lojaId) : Promise.resolve(null),
+    proprio ? contasPagar(sb, lojaId, hoje) : Promise.resolve(null),
   ])
   return {
     modo, hoje, validade: val, abaixoMinimo: minimo, notasParadas: notas, opsCorrigirOmie: opsCorrigir, movimentosTeto: teto,
     bloqueiosOmie: bloq, vendasFilaErro: fila, pedidosAguardando: pedidos,
+    certificadoValidade: a1, catalogoErros: catalogo, contasPagar: contas,
   }
 }
 

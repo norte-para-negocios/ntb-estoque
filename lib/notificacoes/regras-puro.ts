@@ -8,6 +8,7 @@
 export const TIPOS_NOTIFICACAO = [
   'validade_vencida', 'validade_proxima', 'estoque_minimo', 'nota_parada',
   'op_corrigir_omie', 'movimento_teto', 'bloqueio_omie', 'vendas_fila_erro', 'pedido_aprovacao',
+  'certificado_a1', 'catalogo_vendas_erro', 'contas_pagar_vencidas',
 ] as const
 export type TipoNotificacao = (typeof TIPOS_NOTIFICACAO)[number]
 export type Gravidade = 'err' | 'warn' | 'info'
@@ -23,7 +24,16 @@ export const PERMISSAO_DO_TIPO: Record<TipoNotificacao, string> = {
   bloqueio_omie: 'Movimentacoes',
   vendas_fila_erro: 'Ordens de Producao',
   pedido_aprovacao: 'Compras - Aprovar pedidos',
+  certificado_a1: 'Notas Fiscais',
+  catalogo_vendas_erro: 'Produtos',
+  contas_pagar_vencidas: 'Financeiro - Contas a pagar',
 }
+
+/** Fase 9 (07/11): tipos novos só aparecem para os logins de desenvolvedor até o dono liberar (regra do layout novo). */
+export const TIPOS_SO_DEV: readonly TipoNotificacao[] = ['certificado_a1', 'catalogo_vendas_erro', 'contas_pagar_vencidas']
+
+/** A1: avisa a partir de 30 dias; erro com 7 dias ou menos (ou vencido). */
+export const DIAS_AVISO_A1 = 30
 
 export type DadosNotificacao = {
   modo: 'omie' | 'proprio' | 'nenhum'
@@ -36,6 +46,10 @@ export type DadosNotificacao = {
   bloqueiosOmie: { quantidade: number; metodo: string | null } | null
   vendasFilaErro: number | null
   pedidosAguardando: number | null
+  /** Validade do certificado A1 (YYYY-MM-DD) ou '' quando a loja não tem certificado; null = consulta falhou. */
+  certificadoValidade: string | null
+  catalogoErros: number | null
+  contasPagar: { vencidas: number; valorVencido: number; hoje: number } | null
 }
 
 export type NotificacaoNova = {
@@ -50,6 +64,11 @@ export type NotificacaoNova = {
 
 /** Janela das notas paradas: 45 dias para trás (nota mais velha que isso já foi resolvida por fora, ver painel de ação). */
 export const JANELA_NOTAS_DIAS = 45
+
+/** Dias de b até a (a - b); negativo = a está antes de b. */
+function diasAte(a: string, b: string): number {
+  return Math.round((new Date(`${a}T00:00:00Z`).getTime() - new Date(`${b}T00:00:00Z`).getTime()) / 86_400_000)
+}
 
 const plural = (n: number, um: string, varios: string) => `${n.toLocaleString('pt-BR')} ${n === 1 ? um : varios}`
 
@@ -67,7 +86,11 @@ function aplica(tipo: TipoNotificacao, modo: DadosNotificacao['modo']): boolean 
     case 'vendas_fila_erro':
       return modo === 'omie'
     case 'pedido_aprovacao':
+    case 'catalogo_vendas_erro':
+    case 'contas_pagar_vencidas':
       return modo === 'proprio'
+    case 'certificado_a1':
+      return true
     case 'nota_parada':
       return true
     default:
@@ -80,6 +103,7 @@ export function montarNotificacoes(d: DadosNotificacao): { avaliados: TipoNotifi
     validade_vencida: d.validade != null, validade_proxima: d.validade != null, estoque_minimo: d.abaixoMinimo != null,
     nota_parada: d.notasParadas != null, op_corrigir_omie: d.opsCorrigirOmie != null, movimento_teto: d.movimentosTeto != null,
     bloqueio_omie: d.bloqueiosOmie != null, vendas_fila_erro: d.vendasFilaErro != null, pedido_aprovacao: d.pedidosAguardando != null,
+    certificado_a1: d.certificadoValidade != null, catalogo_vendas_erro: d.catalogoErros != null, contas_pagar_vencidas: d.contasPagar != null,
   }
   const avaliados = TIPOS_NOTIFICACAO.filter((t) => !aplica(t, d.modo) || conhecido[t])
   const itens: NotificacaoNova[] = []
@@ -144,5 +168,37 @@ export function montarNotificacoes(d: DadosNotificacao): { avaliados: TipoNotifi
     titulo: `${plural(d.pedidosAguardando ?? 0, 'pedido de compra aguardando', 'pedidos de compra aguardando')} aprovação`,
     mensagem: 'Aprove ou devolva ao comprador.',
   })
+
+  // Certificado A1 (nota fiscal): a partir de 30 dias. `nivel` sobe conforme a data chega (volta a ficar "não lida" em 15/7 dias).
+  if (d.certificadoValidade) {
+    const dias = -diasAte(d.hoje, d.certificadoValidade)
+    const venc = d.certificadoValidade.split('-').reverse().join('/')
+    if (dias <= DIAS_AVISO_A1) {
+      const nivel = dias < 0 ? 100 : dias <= 7 ? 3 : dias <= 15 ? 2 : 1
+      add('certificado_a1', {
+        gravidade: dias <= 7 ? 'err' : 'warn', nivel, link: '/loja',
+        titulo: dias < 0 ? `Certificado digital A1 vencido em ${venc}` : dias === 0 ? 'Certificado digital A1 vence hoje'
+          : `Certificado digital A1 vence em ${plural(dias, 'dia', 'dias')} (${venc})`,
+        mensagem: 'Sem o certificado em dia a loja não emite nem recebe nota pela SEFAZ. Renove e envie o novo em Minha loja.',
+      })
+    }
+  }
+  if (d.catalogoErros != null) {
+    add('catalogo_vendas_erro', {
+      gravidade: 'err', nivel: d.catalogoErros, link: '/sync-catalogo',
+      titulo: `${plural(d.catalogoErros, 'item do cadastro não chegou', 'itens do cadastro não chegaram')} ao Norte Vendas`,
+      mensagem: 'O envio falhou várias vezes. Veja o motivo e corrija o cadastro (o envio tenta de novo sozinho).',
+    })
+  }
+  if (d.contasPagar) {
+    const { vencidas, valorVencido, hoje } = d.contasPagar
+    const brl = valorVencido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+    add('contas_pagar_vencidas', {
+      gravidade: vencidas > 0 ? 'err' : 'warn', nivel: vencidas * 1000 + hoje, link: '/financeiro/contas-pagar',
+      titulo: vencidas > 0 ? `${plural(vencidas, 'conta a pagar vencida', 'contas a pagar vencidas')} (${brl})`
+        : `${plural(hoje, 'conta a pagar vence', 'contas a pagar vencem')} hoje`,
+      mensagem: vencidas > 0 && hoje > 0 ? `E mais ${plural(hoje, 'vence', 'vencem')} hoje. Pague ou renegocie.` : vencidas > 0 ? 'Pague ou renegocie.' : 'Confira se já estão programadas.',
+    })
+  }
   return { avaliados, itens }
 }
