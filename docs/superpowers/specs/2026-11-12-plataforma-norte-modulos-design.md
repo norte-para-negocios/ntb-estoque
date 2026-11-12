@@ -139,7 +139,7 @@ Cada fase entra em produção sozinha, só para desenvolvedores primeiro, depois
 
 - Como o Vendas lê as assinaturas (API interna com cache ou cópia sincronizada), desde que valha a falha aberta.
 - Formato exato do passe entre ERP e Vendas (JWT com segredo compartilhado é o padrão esperado).
-- Nomes de tabelas e colunas, desde que fiquem no esquema `plataforma`.
+- Nomes de tabelas e colunas. Decidido no plano da fase 1: esquema `public` com prefixo `plataforma_`, porque o PostgREST do ERP só expõe `public`.
 - Como o app desktop offline do ERP e o app do Vendas guardam a assinatura para funcionar sem internet.
 
 ## Riscos conhecidos
