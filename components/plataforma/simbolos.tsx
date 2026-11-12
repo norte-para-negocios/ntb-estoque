@@ -43,11 +43,12 @@ export const SimboloPacioli = ({ className }: P) => (
   </svg>
 )
 
-/** Identidade de cada módulo: cor do bloco (fundo), cor de texto/realce sobre fundo claro e o símbolo. */
+/** Identidade de cada módulo: cor do bloco (fundo e quadrado do símbolo), cor do realce sobre fundo claro e o símbolo.
+ *  ERP = #168E9A (cor oficial); o #117C87 (preenchimento) fica só para texto branco pequeno que precise de contraste. */
 export const IDENTIDADE: Record<ModuloId, { cor: string; corTexto: string; Simbolo: (p: P) => React.JSX.Element }> = {
   dashboard: { cor: '#14163A', corTexto: '#14163A', Simbolo: SimboloNorte },
   vendas: { cor: '#484DB5', corTexto: '#484DB5', Simbolo: SimboloVendas },
-  erp: { cor: '#117C87', corTexto: '#117C87', Simbolo: SimboloErp },
+  erp: { cor: '#168E9A', corTexto: '#168E9A', Simbolo: SimboloErp },
   cozinha: { cor: '#B03A22', corTexto: '#B03A22', Simbolo: SimboloCozinha },
   pacioli: { cor: '#6E72E0', corTexto: '#5459C9', Simbolo: SimboloPacioli },
 }

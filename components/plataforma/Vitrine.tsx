@@ -93,7 +93,7 @@ export function Vitrine({ modulo, loja }: { modulo: ModuloId; loja: string }) {
         >
           {c.titulo}
         </h1>
-        <p className="mx-auto mt-5 max-w-[36ch] text-[17px] leading-[1.45] text-white/90 [text-wrap:pretty] sm:text-[21px]">{c.frase}</p>
+        <p className="mx-auto mt-5 max-w-[36ch] text-[17px] leading-[1.45] text-white [text-wrap:pretty] sm:text-[21px]">{c.frase}</p>
         {modulo === 'pacioli' && <MascoteVitrine fundo="#ffffff" />}
       </section>
 
