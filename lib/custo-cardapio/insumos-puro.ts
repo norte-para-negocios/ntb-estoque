@@ -80,6 +80,61 @@ export function deltaPorRaiz(
   return out
 }
 
+export type Compra = { produto: number; data: string; quantidade: number; valor: number }
+export type VarCompra = {
+  /** Custo médio ponderado (por unidade do estoque) das compras dos últimos `recenteDias`. */
+  agora: number
+  /** Custo médio ponderado das compras entre `baseDias` e `recenteDias` atrás. */
+  antes: number
+  variacao: number
+  ultimaData: string
+  nAgora: number
+  nAntes: number
+}
+
+/**
+ * Variação do preço de compra por produto: média ponderada (Σ valor ÷ Σ quantidade) das compras dos últimos
+ * `recenteDias` contra a dos `recenteDias`–`baseDias` dias antes. Produto sem compra em uma das duas janelas fica de fora.
+ */
+export function variacaoPorCompras(compras: Compra[], hoje: string, recenteDias = 30, baseDias = 120): Map<number, VarCompra> {
+  const dia = (iso: string) => Date.parse(`${iso.slice(0, 10)}T12:00:00Z`)
+  const h = dia(hoje)
+  const corte = h - recenteDias * 86_400_000
+  const inicio = h - baseDias * 86_400_000
+  type Acc = { qa: number; va: number; qb: number; vb: number; na: number; nb: number; ultima: string }
+  const acc = new Map<number, Acc>()
+  for (const c of compras) {
+    if (!(c.quantidade > 0) || !(c.valor > 0) || !c.data) continue
+    const t = dia(c.data)
+    if (!Number.isFinite(t) || t > h || t <= inicio) continue
+    const a = acc.get(c.produto) ?? { qa: 0, va: 0, qb: 0, vb: 0, na: 0, nb: 0, ultima: '' }
+    if (t > corte) { a.qa += c.quantidade; a.va += c.valor; a.na++ } else { a.qb += c.quantidade; a.vb += c.valor; a.nb++ }
+    if (c.data.slice(0, 10) > a.ultima) a.ultima = c.data.slice(0, 10)
+    acc.set(c.produto, a)
+  }
+  const out = new Map<number, VarCompra>()
+  for (const [p, a] of acc) {
+    if (!(a.qa > 0) || !(a.qb > 0)) continue
+    const agora = a.va / a.qa
+    const antes = a.vb / a.qb
+    out.set(p, { agora, antes, variacao: agora / antes - 1, ultimaData: a.ultima, nAgora: a.na, nAntes: a.nb })
+  }
+  return out
+}
+
+/**
+ * Custo médio "de antes" implícito: custo médio de hoje ÷ (1 + variação do preço de compra). Assim o impacto em R$
+ * nos pratos fica na escala do custo médio (a unidade da nota às vezes vem errada) e a variação é a das compras.
+ */
+export function custoAntesImplicito(cmc: Map<number, number | null>, variacoes: Map<number, number>): Map<number, number> {
+  const out = new Map<number, number>()
+  for (const [cod, v] of variacoes) {
+    const c = cmc.get(cod)
+    if (c != null && c > 0 && v > -1) out.set(cod, c / (1 + v))
+  }
+  return out
+}
+
 export type Alta = {
   codigo: number
   antes: number

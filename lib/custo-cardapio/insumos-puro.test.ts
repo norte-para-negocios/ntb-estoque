@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { arvoreCustoFicha, type FichaArvore } from '../estoque/arvore-custo-puro.ts'
 import {
-  agruparPorFornecedor, altasDeCusto, arredondarCompra, cmvTipicoAgoraEAntes, deltaPorRaiz, lerPreco, pratosQueMaisDeixam, pratosQueMaisPesam,
+  agruparPorFornecedor, altasDeCusto, arredondarCompra, cmvTipicoAgoraEAntes, custoAntesImplicito, variacaoPorCompras, deltaPorRaiz, lerPreco, pratosQueMaisDeixam, pratosQueMaisPesam,
   quantidadeSugerida, saltoEstranho, simularPreco, situacaoEstoque, textoWhatsApp, usosDasArvores, variacao, type PratoResumo,
 } from './insumos-puro.ts'
 
@@ -135,4 +135,33 @@ test('lista de compras por fornecedor e texto do WhatsApp', () => {
   assert.ok(t.startsWith('Lista de compras'))
   assert.ok(t.includes('*Atacadão*\n- 1,5 l de Azeite'))
   assert.ok(t.includes('*Sem fornecedor*\n- 1 kg de Sal'))
+})
+
+test('variação pelas compras: últimos 30 dias contra 30–120 dias antes, ponderada', () => {
+  const v = variacaoPorCompras([
+    { produto: 1, data: '2026-11-01', quantidade: 10, valor: 50 }, // 5,00
+    { produto: 1, data: '2026-10-25', quantidade: 10, valor: 70 }, // 7,00 → recente 6,00
+    { produto: 1, data: '2026-09-20', quantidade: 30, valor: 120 }, // 4,00
+    { produto: 1, data: '2026-10-10', quantidade: 10, valor: 60 }, // 6,00 → antes 180/40 = 4,50
+    { produto: 1, data: '2026-07-01', quantidade: 10, valor: 999 }, // fora da janela
+    { produto: 2, data: '2026-11-05', quantidade: 1, valor: 9 }, // sem compra antes: fora
+    { produto: 3, data: '2026-11-13', quantidade: 1, valor: 9 }, // futuro: fora
+    { produto: 3, data: '2026-09-01', quantidade: 0, valor: 9 }, // quantidade zero: fora
+  ], '2026-11-12')
+  const a = v.get(1)!
+  perto(a.agora, 6)
+  perto(a.antes, 4.5)
+  perto(a.variacao, 1 / 3)
+  assert.equal(a.ultimaData, '2026-11-01')
+  assert.equal(a.nAgora, 2)
+  assert.equal(a.nAntes, 2)
+  assert.equal(v.has(2), false)
+  assert.equal(v.has(3), false)
+})
+
+test('custo antes implícito leva a variação das compras para a escala do custo médio', () => {
+  const m = custoAntesImplicito(new Map<number, number | null>([[1, 12], [2, null]]), new Map([[1, 0.2], [2, 0.5], [3, 0.1]]))
+  perto(m.get(1)!, 10)
+  assert.equal(m.has(2), false)
+  assert.equal(m.has(3), false)
 })

@@ -208,7 +208,7 @@ export function PacioliChat({ temChave, meta }: { temChave: boolean; meta: strin
       </section>
 
       {/* Conversa */}
-      <section aria-label="Conversa com o Pacioli" className="flex h-[min(76dvh,720px)] min-h-[440px] flex-col overflow-hidden rounded-[var(--r-xl)] bg-surface shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1 ring-[var(--border)]">
+      <section aria-label="Conversa com o Pacioli" className="flex h-[min(76dvh,720px)] min-h-[440px] flex-col overflow-hidden rounded-[var(--r-xl)] bg-surface shadow-[var(--shadow-sm)]">
         <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-2.5">
           <p className="min-w-0 truncate text-[13px] text-text-muted">
             {modo === 'conversa' ? <>Conversa livre · meta de CMV {meta}</> : <>Modo rápido · meta de CMV {meta}</>}

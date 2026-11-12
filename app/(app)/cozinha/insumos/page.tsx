@@ -6,13 +6,13 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { DataTable } from '@/components/ui-kit/DataTable'
 import { CartaoResumo } from '@/components/faturamento/CartaoResumo'
 import { dataCurta, dataLonga } from '@/components/custo-cardapio/inicio/Secao'
-import { comprasRecentes, custoDeAntes, dadosInsumos, variacoes } from '@/lib/custo-cardapio/insumos'
+import { comprasRecentes, dadosInsumos, rotuloFonte, variacaoDeCompras, variacoes } from '@/lib/custo-cardapio/insumos'
 import { pct } from '@/lib/custo-cardapio/formato'
 import { formatCustoUnit } from '@/lib/num-br'
 
 // Norte Cozinha, Insumos: tudo o que entra nas fichas (folhas), com custo médio, quanto mudou no mês,
 // em quantos pratos entra e de quem foi comprado por último. Só leitura.
-// Consultas: carregarBase (cache), custoDeAntes (foto de ~30 dias) e a função da Sugestão de compra (1 RPC).
+// Consultas: carregarBase (cache), variacaoDeCompras (notas de compra de 120 dias) e a função da Sugestão de compra (1 RPC).
 
 type Sp = { q?: string; familia?: string; filtro?: string; ord?: string }
 const FILTROS = [
@@ -36,8 +36,8 @@ export default async function InsumosPage({ searchParams }: { searchParams: Prom
     )
   }
   const { base } = d
-  const [antes, compras] = await Promise.all([custoDeAntes(lojaId, base.modo, base.dataCusto), comprasRecentes(lojaId, base.modo)])
-  const vars = variacoes(d, antes)
+  const [vc, compras] = await Promise.all([variacaoDeCompras(lojaId, base.modo), comprasRecentes(lojaId, base.modo)])
+  const vars = variacoes(d, vc)
 
   const ativos = d.insumos.filter((i) => !i.inativo)
   const familias = [...new Set(ativos.map((i) => i.familia).filter((f): f is string => !!f))].sort((a, b) => a.localeCompare(b, 'pt-BR'))
@@ -74,7 +74,7 @@ export default async function InsumosPage({ searchParams }: { searchParams: Prom
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <CartaoResumo titulo="Insumos nas fichas" valor={daFamilia.length} sub={`custo ${base.modo === 'omie' ? `médio do Omie${base.dataCusto ? ` em ${dataLonga(base.dataCusto)}` : ''}` : 'médio do estoque'}`} />
-        <CartaoResumo titulo="Subiram no mês" valor={antes ? subiram : '—'} sub={antes ? `3% ou mais desde ${dataLonga(antes.data)}` : 'sem foto de 30 dias atrás'} />
+        <CartaoResumo titulo="Subiram no mês" valor={vars.size ? subiram : '—'} sub={vars.size ? `3% ou mais, ${rotuloFonte(vc)}` : 'sem compras para comparar'} />
         <CartaoResumo titulo="Sem custo" valor={daFamilia.filter((i) => i.custo == null).length} sub="o prato que usa fica mais barato do que é" />
         <CartaoResumo titulo="Custo a conferir" valor={daFamilia.filter((i) => i.suspeito).length} sub="custo fora do normal para a unidade" />
       </div>
@@ -149,8 +149,7 @@ export default async function InsumosPage({ searchParams }: { searchParams: Prom
         </DataTable>
       )}
       <p className="text-[12px] text-text-muted">
-        Insumo = produto usado em alguma ficha técnica que não tem ficha própria. &quot;No mês&quot; compara o custo médio de hoje com o de{' '}
-        {antes ? dataLonga(antes.data) : '30 dias atrás'}; saltos de 5 vezes ou mais ficam de fora (quase sempre unidade trocada na entrada).
+        Insumo = produto usado em alguma ficha técnica que não tem ficha própria. &quot;No mês&quot; compara o preço médio de compra dos últimos 30 dias com o dos 90 dias anteriores ({rotuloFonte(vc)}, por unidade do estoque); saltos de 5 vezes ou mais ficam de fora (quase sempre unidade trocada na entrada).
         Último custo = valor da nota ÷ quantidade que entrou no estoque.
       </p>
     </div>

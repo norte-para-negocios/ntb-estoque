@@ -6,15 +6,15 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Secao, Lista, Linha, Vazio, dataLonga } from '@/components/custo-cardapio/inicio/Secao'
 import { linhasDoCardapio } from '@/lib/custo-cardapio/carregar'
 import { saldosDaLoja } from '@/lib/custo-cardapio/saldos'
-import { custoDeAntes, dadosInsumos } from '@/lib/custo-cardapio/insumos'
+import { dadosInsumos, rotuloFonte, variacaoDeCompras, variacoes } from '@/lib/custo-cardapio/insumos'
 import { arredondarPreco, custoSuspeito, resumir } from '@/lib/custo-cardapio/preco-puro'
-import { altasDeCusto, cmvTipicoAgoraEAntes, deltaPorRaiz, pratosQueMaisDeixam, pratosQueMaisPesam, precisaComprar, quantidadeTexto } from '@/lib/custo-cardapio/insumos-puro'
+import { altasDeCusto, cmvTipicoAgoraEAntes, custoAntesImplicito, deltaPorRaiz, pratosQueMaisDeixam, pratosQueMaisPesam, precisaComprar, quantidadeTexto } from '@/lib/custo-cardapio/insumos-puro'
 import { brl, pct } from '@/lib/custo-cardapio/formato'
 import { formatCustoUnit } from '@/lib/num-br'
 
 // Norte Cozinha, Início: o retrato do custo do cardápio em 10 segundos. Só leitura.
 // Consultas: carregarBase (taxas, produtos, fichas, foto do custo; cache por request), saldosDaLoja (foto dos saldos)
-// e custoDeAntes (foto de ~30 dias atrás). Nada mais.
+// e variacaoDeCompras (notas de compra de 120 dias, itens em lotes de ≤200 notas). Nada mais.
 
 const pontos = (v: number) => `${(Math.abs(v) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} ${Math.abs(v * 100) >= 1.95 ? 'pontos' : 'ponto'}`
 
@@ -31,16 +31,21 @@ export default async function InicioCozinhaPage() {
   }
   const { base } = d
   const t = base.taxas
-  const [antes, saldos] = await Promise.all([custoDeAntes(lojaId, base.modo, base.dataCusto), saldosDaLoja(lojaId, base.modo)])
+  const [vc, saldos] = await Promise.all([variacaoDeCompras(lojaId, base.modo), saldosDaLoja(lojaId, base.modo)])
+  const vars = variacoes(d, vc)
+  const temCompras = vars.size > 0
+  // Impacto em R$ na escala do custo médio de hoje, com a variação do preço de compra.
+  const antesImpl = custoAntesImplicito(base.cmc, vars)
 
   const linhas = linhasDoCardapio(base)
   const pratos = linhas.filter((l) => l.tipo === 'prato')
   const resumo = resumir(pratos)
   const suspeitoAgora = (cod: number) => custoSuspeito(base.cmc.get(cod) ?? null, d.unidade(cod))
-  const ignorar = (cod: number) => suspeitoAgora(cod) || custoSuspeito(antes?.cmc.get(cod) ?? null, d.unidade(cod))
-  const delta = antes ? deltaPorRaiz(d.usos, base.cmc, antes.cmc, ignorar) : new Map<number, number>()
+  const ignorar = suspeitoAgora
+  const delta = deltaPorRaiz(d.usos, base.cmc, antesImpl, ignorar)
   const tipico = cmvTipicoAgoraEAntes(pratos, delta)
-  const altas = antes ? altasDeCusto(d.usos, base.cmc, antes.cmc, { ehPrato: d.ehPrato, ignorar }) : []
+  const altas = altasDeCusto(d.usos, base.cmc, antesImpl, { ehPrato: d.ehPrato, ignorar })
+  const nSubiram = d.insumos.filter((i) => !i.inativo && (vars.get(i.codigo) ?? 0) >= 0.03).length
   const pesam = pratosQueMaisPesam(pratos, t.metaCmv)
   const deixam = pratosQueMaisDeixam(pratos)
 
@@ -62,7 +67,7 @@ export default async function InicioCozinhaPage() {
   const mudou = tipico.agora != null && tipico.antes != null ? tipico.agora - tipico.antes : null
   const fatos = [
     { n: resumo.acima, txt: resumo.acima === 1 ? 'prato acima da meta' : 'pratos acima da meta', href: '/cozinha/pratos?filtro=acima', tom: 'text-err' },
-    ...(antes ? [{ n: altas.length, txt: altas.length === 1 ? 'insumo subiu no mês' : 'insumos subiram no mês', href: '/cozinha/insumos?filtro=subiu', tom: 'text-warn' }] : []),
+    ...(temCompras ? [{ n: nSubiram, txt: nSubiram === 1 ? 'insumo subiu no mês' : 'insumos subiram no mês', href: '/cozinha/insumos?filtro=subiu', tom: 'text-warn' }] : []),
     { n: abaixo.length, txt: abaixo.length === 1 ? 'insumo abaixo do mínimo' : 'insumos abaixo do mínimo', href: '/cozinha/estoque?filtro=abaixo', tom: 'text-warn' },
     { n: totalProblemas, txt: 'dados para arrumar', href: '#arrumar', tom: 'text-text' },
   ]
@@ -84,9 +89,9 @@ export default async function InicioCozinhaPage() {
             <p className={`num text-[56px] font-semibold leading-none tracking-[-0.04em] ${acima ? 'text-err' : 'text-ok'}`}>{pct(tipico.agora)}</p>
             <p className="max-w-[46ch] pb-1.5 text-[15px] leading-snug text-text-muted">
               {acima ? `${pontos(tipico.agora - t.metaCmv)} acima da meta de ${pct(t.metaCmv, 0)}.` : `Dentro da meta de ${pct(t.metaCmv, 0)}.`}{' '}
-              {mudou != null && antes && (Math.abs(mudou) < 0.0005
-                ? `Igual a ${antes.dias} dias atrás.`
-                : `${mudou > 0 ? 'Subiu' : 'Caiu'} ${pontos(mudou)} desde ${dataLonga(antes.data)}, só pelo custo dos insumos.`)}
+              {mudou != null && temCompras && (Math.abs(mudou) < 0.0005
+                ? `Sem mudança pelo preço de compra dos últimos 30 dias.`
+                : `${mudou > 0 ? 'Subiu' : 'Caiu'} ${pontos(mudou)} com o preço de compra dos últimos 30 dias (${rotuloFonte(vc)}).`)}
             </p>
           </div>
         )}
@@ -116,14 +121,15 @@ export default async function InicioCozinhaPage() {
           )}
         </Secao>
 
-        <Secao titulo="Insumos que subiram" sub={antes ? `Custo médio de hoje contra ${dataLonga(antes.data)}.` : undefined} acao={antes ? { href: '/cozinha/insumos?filtro=subiu', rotulo: 'Ver todos' } : undefined}>
-          {!antes ? <Vazio>Ainda não há foto do custo de 30 dias atrás para comparar.</Vazio> : altas.length === 0 ? <Vazio>Nenhum insumo subiu 3% ou mais.</Vazio> : (
+        <Secao titulo="Insumos que subiram" sub={`Preço médio de compra dos últimos 30 dias contra os 90 dias anteriores, ${rotuloFonte(vc)}.`} acao={temCompras ? { href: '/cozinha/insumos?filtro=subiu', rotulo: 'Ver todos' } : undefined}>
+          {!temCompras ? <Vazio>Nenhum insumo foi comprado nas duas janelas (últimos 30 dias e os 90 antes), então não há o que comparar.</Vazio> : altas.length === 0 ? <Vazio>Nenhum insumo subiu 3% ou mais.</Vazio> : (
             <Lista>
               {altas.slice(0, 5).map((a) => {
                 const ins = d.insumos.find((i) => i.codigo === a.codigo)
+                const c = vc.porProduto.get(a.codigo)
                 return (
                   <Linha key={a.codigo} href={`/cozinha/insumos/${a.codigo}`} titulo={ins?.descricao ?? `Produto ${a.codigo}`}
-                    detalhe={`${formatCustoUnit(a.antes, ins?.unidade)} para ${formatCustoUnit(a.agora, ins?.unidade)}`}
+                    detalhe={c ? `Compra de ${formatCustoUnit(c.antes, ins?.unidade)} para ${formatCustoUnit(c.agora, ins?.unidade)}` : undefined}
                     valor={`+${pct(a.variacao)}`} tomValor="err"
                     valorDetalhe={!a.pratos ? 'só em preparações' : a.impactoMedio < 0.01 ? `${a.pratos} pratos, menos de R$ 0,01 cada` : `+${brl(a.impactoMedio)} em ${a.pratos} ${a.pratos === 1 ? 'prato' : 'pratos'}`} />
                 )

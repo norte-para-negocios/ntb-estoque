@@ -9,13 +9,13 @@ import { CartaoResumo } from '@/components/faturamento/CartaoResumo'
 import { GraficoCusto } from '@/components/estoque-proprio/CustoProduto'
 import { Secao, Vazio, dataLonga } from '@/components/custo-cardapio/inicio/Secao'
 import { SimularPreco, type UsoSimulavel } from '@/components/custo-cardapio/insumos/SimularPreco'
-import { custoDeAntes, dadosInsumos, historicoCusto, ultimasNotas, variacoes } from '@/lib/custo-cardapio/insumos'
+import { dadosInsumos, historicoCusto, rotuloFonte, ultimasNotas, variacaoDeCompras, variacoes } from '@/lib/custo-cardapio/insumos'
 import { precoReal } from '@/lib/custo-cardapio/preco-puro'
 import { brl, pct, qtd } from '@/lib/custo-cardapio/formato'
 import { formatCustoUnit } from '@/lib/num-br'
 
 // Norte Cozinha, um insumo: custo no tempo, últimas compras, onde é usado (e quanto pesa em cada prato) e o "e se".
-// Consultas: carregarBase (cache), custoDeAntes (foto de ~30 dias), histórico do custo (1 consulta; Omie sem
+// Consultas: carregarBase (cache), variacaoDeCompras (notas de compra de 120 dias, cache), histórico do custo (1 consulta; Omie sem
 // fotos suficientes: + kardex) e últimas notas (1 consulta).
 
 export default async function InsumoPage({ params }: { params: Promise<{ codigo: string }> }) {
@@ -39,11 +39,17 @@ export default async function InsumoPage({ params }: { params: Promise<{ codigo:
     )
   }
 
-  const [antes, historico, notas] = await Promise.all([
-    custoDeAntes(lojaId, base.modo, base.dataCusto), historicoCusto(lojaId, base.modo, codigo), ultimasNotas(lojaId, codigo),
+  const [vc, historico, notas] = await Promise.all([
+    variacaoDeCompras(lojaId, base.modo), historicoCusto(lojaId, base.modo, codigo), ultimasNotas(lojaId, codigo),
   ])
-  const v = variacoes(d, antes).get(codigo) ?? null
-  const custoAntes = antes?.cmc.get(codigo) ?? null
+  const v = variacoes(d, vc).get(codigo) ?? null
+  const compra = vc.porProduto.get(codigo)
+  // Sem fotos de custo médio no tempo: o gráfico usa o custo das compras (nota a nota).
+  const pelasCompras = historico.length < 2
+  const serie = pelasCompras
+    ? [...notas.reduce((m, n) => (n.emissao && n.custoEstoque != null ? m.set(n.emissao, n.custoEstoque) : m), new Map<string, number>())] // um ponto por dia
+      .map(([data, cmc]) => ({ data, cmc })).sort((x, y) => x.data.localeCompare(y.data))
+    : historico
 
   const usos: UsoSimulavel[] = (d.usos.get(codigo) ?? []).map((u) => {
     const p = base.produtos.get(u.raiz)
@@ -64,7 +70,7 @@ export default async function InsumoPage({ params }: { params: Promise<{ codigo:
           sub={ins.suspeito ? 'fora do normal para a unidade: confira a última entrada' : base.modo === 'omie' ? `Omie${base.dataCusto ? ` em ${dataLonga(base.dataCusto)}` : ''}` : 'custo médio do estoque'} />
         <CartaoResumo titulo="No mês"
           valor={<span className={v == null ? 'text-text-muted' : v >= 0.03 ? 'text-err' : v <= -0.03 ? 'text-ok' : ''}>{v == null ? '—' : `${v > 0 ? '+' : ''}${pct(v)}`}</span>}
-          sub={antes ? (custoAntes != null ? `era ${formatCustoUnit(custoAntes, ins.unidade)} em ${dataLonga(antes.data)}` : `sem custo em ${dataLonga(antes.data)}`) : 'sem foto de 30 dias atrás'} />
+          sub={compra ? `compra de ${formatCustoUnit(compra.antes, ins.unidade)} para ${formatCustoUnit(compra.agora, ins.unidade)}, ${rotuloFonte(vc)}` : 'sem compras nos últimos 30 dias e nos 90 antes'} />
         <CartaoResumo titulo="Última compra"
           valor={ultima ? (ultima.custoEstoque != null ? formatCustoUnit(ultima.custoEstoque, ins.unidade) : ultima.precoNota != null ? `${formatCustoUnit(ultima.precoNota)}/${(ultima.unidadeNota ?? 'un').toLowerCase()}` : '—') : '—'}
           sub={ultima ? `${ultima.fornecedor ?? 'fornecedor não informado'} · ${dataLonga(ultima.emissao)}` : 'nenhuma nota de entrada encontrada'} />
@@ -114,9 +120,9 @@ export default async function InsumoPage({ params }: { params: Promise<{ codigo:
         )}
       </Secao>
 
-      <Secao titulo="Custo médio no tempo" sub="Últimos seis meses.">
+      <Secao titulo={pelasCompras ? 'Custo das compras no tempo' : 'Custo médio no tempo'} sub={pelasCompras ? 'Custo por unidade do estoque em cada nota de entrada recente.' : 'Últimos seis meses.'}>
         <div className="rounded-[var(--r-lg)] bg-surface p-4 shadow-[var(--shadow-sm)]">
-          <GraficoCusto series={new Map([[0, historico]])} nomeLocal={new Map([[0, 'Custo médio']])} />
+          <GraficoCusto series={new Map([[0, serie]])} nomeLocal={new Map([[0, pelasCompras ? 'Custo na nota' : 'Custo médio']])} />
         </div>
       </Secao>
 

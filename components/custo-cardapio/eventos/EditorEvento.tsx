@@ -119,7 +119,7 @@ export function EditorEvento({ evento, itens, opcoes, metaCmv }: { evento: Cabec
             <input inputMode="decimal" value={f.preco} onChange={(e) => setF((s) => ({ ...s, preco: e.target.value }))} placeholder={r.precoSugeridoPorPessoa > 0 ? fmtPreco(r.precoSugeridoPorPessoa) : '0,00'} className={`${campo} num text-right`} />
             <span className="mt-1 block text-[12px] text-text-muted">O que o cliente paga por convidado.</span>
           </label>
-          <div>
+          <div className="min-w-0 overflow-x-auto">
             <span className="mb-1 block text-[13px] font-medium">Situação</span>
             <SegmentedControl aria-label="Situação" value={f.status} onChange={(v) => setF((s) => ({ ...s, status: v as StatusEvento }))}
               opcoes={STATUS_EVENTO.map((s) => ({ value: s, label: NOME_STATUS[s] }))} />

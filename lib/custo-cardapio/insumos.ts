@@ -1,4 +1,5 @@
 import 'server-only'
+import { limparTexto } from './formato'
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
@@ -7,12 +8,13 @@ import { serieCustoMedio, type PontoCusto } from '@/lib/estoque/custo-produto-pu
 import type { LinhaBruta } from '@/lib/compras/sugestao-puro'
 import { hojeBahiaISO } from '@/lib/data-bahia'
 import { carregarBase, ehPreparacao, type BaseCusto } from './carregar'
-import { cmcDaFoto, custoSuspeito } from './preco-puro'
-import { saltoEstranho, usosDasArvores, variacao, type Uso } from './insumos-puro'
+import { custoSuspeito } from './preco-puro'
+import { saltoEstranho, usosDasArvores, variacaoPorCompras, type Compra, type Uso, type VarCompra } from './insumos-puro'
 
 // Norte Cozinha: dados de Insumos, Início e Estoque da cozinha. Só leitura.
-// Insumo = folha das fichas (usado em alguma ficha, sem ficha própria). Custo agora = o de carregarBase;
-// custo de ~30 dias atrás = foto de posicao_estoques (Omie: linha do local 0, que traz o CMC; próprio: todos os locais).
+// Insumo = folha das fichas (usado em alguma ficha, sem ficha própria). Custo agora = o de carregarBase.
+// "Subiu no mês" = preço de compra (notas fiscais ou entradas de compra), não fotos de posicao_estoques:
+// a posição só guarda as 2 fotos mais recentes.
 
 type Pg<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>
 
@@ -70,50 +72,80 @@ export const dadosInsumos = cache(async (lojaId: number): Promise<DadosInsumos |
 })
 
 const somarDias = (iso: string, dias: number) => new Date(Date.parse(`${iso}T12:00:00Z`) + dias * 86_400_000).toISOString().slice(0, 10)
-const diasEntre = (a: string, b: string) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86_400_000)
 
-export type CustoAntes = { data: string; dias: number; cmc: Map<number, number> }
+export type VariacaoCompras = {
+  porProduto: Map<number, VarCompra>
+  /** notas = notas fiscais de entrada; entradas = compras lançadas no estoque próprio (ledger). */
+  fonte: 'notas' | 'entradas'
+  /** Começo da janela de comparação (120 dias atrás) e o corte entre "antes" e "agora" (30 dias atrás). */
+  desde: string
+  corte: string
+}
 
 /**
- * Custo médio por produto na foto de ~`dias` atrás (a última foto até lá; sem nenhuma, a mais antiga, se tiver
- * pelo menos 14 dias). null quando não há foto antiga o bastante.
+ * Variação do preço de compra por produto (para todos os insumos de uma vez): média ponderada das compras dos
+ * últimos 30 dias contra a dos 30–120 dias antes, por unidade do estoque.
+ * Próprio: entradas de compra do ledger (estoque_movimentos_efetivo, origem COMPRA, já na unidade base; estornadas
+ * fora); se não houver nenhuma, cai nas notas. Omie: notas_fiscais concluídas (etapa 60, não excluídas nem canceladas)
+ * + itens (total ÷ quantidade recebida no estoque, como a Sugestão de compra), itens em lotes de ≤200 notas.
  */
-export const custoDeAntes = cache(async (lojaId: number, modo: 'omie' | 'proprio', referencia: string | null, dias = 30): Promise<CustoAntes | null> => {
+export const variacaoDeCompras = cache(async (lojaId: number, modo: 'omie' | 'proprio'): Promise<VariacaoCompras> => {
   const supabase = await createClient()
-  const ref = referencia ?? hojeBahiaISO()
-  const alvo = somarDias(ref, -dias)
-  const soLocal0 = modo === 'omie'
-  const qDatas = () => {
-    const q = supabase.from('posicao_estoques').select('data_posicao').eq('loja_id', lojaId)
-    return soLocal0 ? q.eq('codigo_local_estoque', 0) : q
+  const hoje = hojeBahiaISO()
+  const desde = somarDias(hoje, -120)
+  const corte = somarDias(hoje, -30)
+  const pronto = (compras: Compra[], fonte: VariacaoCompras['fonte']) => ({ porProduto: variacaoPorCompras(compras, hoje, 30, 120), fonte, desde, corte })
+
+  if (modo === 'proprio') {
+    type M = { id: number; codigo_produto: number; data_ref: string; quantidade: number; custo_unitario: number | null; reverses_id: number | null }
+    const movs = await buscarTodasLinhas<M>((from, to) =>
+      supabase.from('estoque_movimentos_efetivo').select('id, codigo_produto, data_ref, quantidade, custo_unitario, reverses_id')
+        .eq('loja_id', lojaId).eq('origem', 'COMPRA').gte('data_ref', desde).order('id').range(from, to) as unknown as Pg<M>)
+    const estornados = new Set(movs.map((m) => m.reverses_id).filter((x): x is number => x != null).map(Number))
+    const compras = movs
+      .filter((m) => m.reverses_id == null && !estornados.has(Number(m.id)) && Number(m.quantidade) > 0 && Number(m.custo_unitario) > 0)
+      .map((m) => ({ produto: Number(m.codigo_produto), data: String(m.data_ref).slice(0, 10), quantidade: Number(m.quantidade), valor: Number(m.quantidade) * Number(m.custo_unitario) }))
+    if (compras.length) return pronto(compras, 'entradas')
   }
-  let { data: foto } = await qDatas().lte('data_posicao', alvo).order('data_posicao', { ascending: false }).limit(1).maybeSingle()
-  if (!foto?.data_posicao) ({ data: foto } = await qDatas().order('data_posicao', { ascending: true }).limit(1).maybeSingle())
-  const data = foto?.data_posicao ? String(foto.data_posicao).slice(0, 10) : null
-  if (!data || diasEntre(data, ref) < 14) return null
-  type R = { n_cod_prod: number; codigo_local_estoque: number | null; n_cmc: number; n_saldo: number }
-  const rows = await buscarTodasLinhas<R>((from, to) => {
-    let q = supabase.from('posicao_estoques').select('id, n_cod_prod, codigo_local_estoque, n_cmc, n_saldo').eq('loja_id', lojaId)
-    if (soLocal0) q = q.eq('codigo_local_estoque', 0)
-    return q.eq('data_posicao', data).gt('n_cmc', 0).order('id').range(from, to) as unknown as Pg<R>
-  })
-  const cmc = cmcDaFoto(rows.map((r) => ({ produto: Number(r.n_cod_prod), local: Number(r.codigo_local_estoque ?? 0), cmc: Number(r.n_cmc), saldo: Number(r.n_saldo) })))
-  return { data, dias: diasEntre(data, ref), cmc }
+
+  type N = { id: number; d_emissao_nfe: string | null; cancelada: string | null }
+  const notas = (await buscarTodasLinhas<N>((from, to) =>
+    supabase.from('notas_fiscais').select('id, d_emissao_nfe, cancelada:full_object->infoCadastro->>cCancelada')
+      .eq('loja_id', lojaId).is('deleted_at', null).eq('c_etapa', '60').gte('d_emissao_nfe', desde).order('id').range(from, to) as unknown as Pg<N>))
+    .filter((n) => n.cancelada !== 'S' && n.d_emissao_nfe)
+  const diaDa = new Map(notas.map((n) => [Number(n.id), String(n.d_emissao_nfe).slice(0, 10)]))
+  const ids = [...diaDa.keys()]
+  type I = { id: number; nota_fiscal_id: number; n_id_produto: number | null; n_qtde_nfe: number | null; n_preco_unit: number | null; v_total_item: number | null; qrec: string | null; naomov: string | null; c_ignorar_item: string | null }
+  const lotes: number[][] = []
+  for (let k = 0; k < ids.length; k += 200) lotes.push(ids.slice(k, k + 200))
+  const itens = (await Promise.all(lotes.map((lote) => buscarTodasLinhas<I>((from, to) =>
+    supabase.from('nota_fiscal_items')
+      .select('id, nota_fiscal_id, n_id_produto, n_qtde_nfe, n_preco_unit, v_total_item, c_ignorar_item, qrec:full_object->itensAjustes->>nQtdeRecebida, naomov:full_object->itensAjustes->>cNaoGerarMovEstoque')
+      .eq('loja_id', lojaId).in('nota_fiscal_id', lote).order('id').range(from, to) as unknown as Pg<I>)))).flat()
+  const compras: Compra[] = []
+  for (const i of itens) {
+    if (i.n_id_produto == null || i.naomov === 'S' || i.c_ignorar_item === 'S') continue
+    const rec = Number(i.qrec)
+    const q = rec > 0 ? rec : Number(i.n_qtde_nfe) || 0
+    const valor = Number(i.v_total_item) > 0 ? Number(i.v_total_item) : (Number(i.n_qtde_nfe) || 0) * (Number(i.n_preco_unit) || 0)
+    const data = diaDa.get(Number(i.nota_fiscal_id))
+    if (data && q > 0 && valor > 0) compras.push({ produto: Number(i.n_id_produto), data, quantidade: q, valor })
+  }
+  return pronto(compras, 'notas')
 })
 
-/** Variação do custo de cada insumo (só quando os dois custos são confiáveis). */
-export function variacoes(d: DadosInsumos, antes: CustoAntes | null): Map<number, number> {
+/** Variação do preço de compra de cada insumo das fichas (salto de 5× ou mais fica de fora: unidade trocada). */
+export function variacoes(d: DadosInsumos, vc: VariacaoCompras): Map<number, number> {
   const out = new Map<number, number>()
-  if (!antes) return out
   for (const i of d.insumos) {
-    if (i.suspeito) continue
-    const b = antes.cmc.get(i.codigo) ?? null
-    if (b == null || custoSuspeito(b, i.unidade)) continue
-    const v = variacao(i.custo, b)
+    const v = vc.porProduto.get(i.codigo)?.variacao ?? null
     if (v != null && !saltoEstranho(v)) out.set(i.codigo, v)
   }
   return out
 }
+
+/** Rótulo da fonte para a tela. */
+export const rotuloFonte = (vc: VariacaoCompras) => (vc.fonte === 'notas' ? 'pelas notas de compra' : 'pelas compras lançadas no estoque')
 
 export type CompraRecente = { fornecedor: string | null; ultimoCusto: number | null; ultimaCompra: string | null; consumoPorDia: number | null }
 
@@ -135,7 +167,7 @@ export const comprasRecentes = cache(async (lojaId: number, modo: 'omie' | 'prop
   for (const b of (Array.isArray(data) ? data : []) as LinhaBruta[]) {
     const consumo = Number(b.consumo_total)
     porProduto.set(Number(b.codigo_produto), {
-      fornecedor: b.fornecedor_nome?.trim() || null,
+      fornecedor: b.fornecedor_nome ? limparTexto(b.fornecedor_nome).trim() || null : null,
       ultimoCusto: b.ultimo_custo != null && Number(b.ultimo_custo) > 0 ? Number(b.ultimo_custo) : null,
       ultimaCompra: b.ultima_compra ? String(b.ultima_compra).slice(0, 10) : null,
       consumoPorDia: Number.isFinite(consumo) && consumo > 0 ? consumo / 31 : null,
@@ -208,7 +240,7 @@ export async function ultimasNotas(lojaId: number, codigo: number, limite = 10):
       const rec = Number(i.qrec)
       return {
         notaId: Number(i.nota_fiscal_id), numero: nf.c_numero_nfe, emissao: nf.d_emissao_nfe ? String(nf.d_emissao_nfe).slice(0, 10) : null,
-        fornecedor: (nf.c_razao_social || nf.c_nome || '').trim() || null, quantidade: q, unidadeNota: i.c_unidade_nfe?.trim() || null,
+        fornecedor: limparTexto(nf.c_razao_social || nf.c_nome || '').trim() || null, quantidade: q, unidadeNota: i.c_unidade_nfe?.trim() || null,
         precoNota: preco, total, custoEstoque: total != null && rec > 0 ? total / rec : null,
       }
     })

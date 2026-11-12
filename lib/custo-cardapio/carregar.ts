@@ -5,6 +5,7 @@ import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { carregarFichasAtivas } from '@/lib/estoque/receita-db'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { arvoreCustoFicha, type ArvoreCusto, type FichaArvore, type NoArvore } from '@/lib/estoque/arvore-custo-puro'
+import { limparTexto } from './formato'
 import { cmcDaFoto, custoSuspeito, lerTaxas, precoReal, precoSugeridoDelivery, precoSugeridoSalao, situacao, sobraPorVenda, type Situacao, type Taxas } from './preco-puro'
 
 // Custo e Cardápio: junta o que o ERP já tem — fichas (Omie: estrutura_produto_cache; próprio: fichas_tecnicas),
@@ -74,8 +75,6 @@ async function custoProprio(lojaId: number) {
   return cmc
 }
 
-/** O Omie devolve descrições com entidades HTML (&quot; &amp;). */
-const limparTexto = (t: string) => t.replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
 
 async function produtosDaLoja(lojaId: number) {
   const supabase = await createClient()
