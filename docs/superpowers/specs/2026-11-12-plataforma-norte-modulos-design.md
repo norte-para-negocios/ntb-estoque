@@ -130,6 +130,11 @@ Cada fase entra em produção sozinha, só para desenvolvedores primeiro, depois
 - **Domínio:** a porta e o ERP ficam num endereço só (ex.: `app.norteparanegocios.com.br`). O Vendas continua no endereço dele, aberto pela porta com o passe. Unificar o domínio do Vendas fica para depois.
 - **Pacioli:** a assinatura liga e desliga o robô no servidor (o norte-faxina consulta `podeUsar`). O login próprio do Pacioli vira Conta Norte numa fase posterior.
 
+- **Equipe num lugar só:** pessoas e cargos passam a ser cadastrados na Norte e valem para todos os módulos; a tela de equipe do Vendas passa a mostrar e vincular essas pessoas (não cria conta paralela).
+- **Plano do Vendas não trava nada por enquanto:** Balcão/Mesas e pacotes de mesas definem o preço; limites (desligar mesas, contar mesas) ficam para depois, decididos com o Ramon.
+- **Suspenso:** consulta sim, lançar não, em ERP/Cozinha/Pacioli. O caixa e o PDV do Vendas nunca param; só mostram aviso.
+- **Visual:** protótipo aprovado na linha em 12/11 (`~/Projects/plataforma-norte-prototipo`): logo oficial da Norte, Geist + Newsreader itálico só na saudação, porta com o Pacioli falando o resumo do dia, módulos contratados em destaque e os outros em "Para quando precisar", trilho escuro com os símbolos dos módulos.
+
 ## O que fica para o construtor decidir
 
 - Como o Vendas lê as assinaturas (API interna com cache ou cópia sincronizada), desde que valha a falha aberta.
