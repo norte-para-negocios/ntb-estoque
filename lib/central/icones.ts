@@ -1,6 +1,6 @@
 import {
   Activity, Archive, ArrowDownUp, ArrowLeftRight, BadgeCheck, BadgeDollarSign, Banknote, BarChart3, BookOpen, BookOpenCheck, Bot,
-  Boxes, Building2, Calculator, ChefHat, CalendarClock, CalendarRange, ChartBar, ChartBarDecreasing, ChartBarStacked, ChartColumnStacked,
+  Blocks, Boxes, Building2, Calculator, ChefHat, CalendarClock, CalendarRange, ChartBar, ChartBarDecreasing, ChartBarStacked, ChartColumnStacked,
   ChartLine, ChartSpline, ClipboardCheck, ClipboardList, ClipboardPen, Coins, Cog, Database, Factory, FileCode2, FileDown,
   FileOutput, FilePenLine, FileQuestion, FileSearch, FileSpreadsheet, FileExclamationPoint, FileText, FileUp, FileX, FolderTree, Gauge, Goal, Group,
   HandCoins, History, Hourglass, Rocket, IdCard, Landmark, Layers, LayoutDashboard, LayoutGrid, Lightbulb, List, ListChecks, ListOrdered,
@@ -140,6 +140,7 @@ export const ICONE_POR_ROTA: Record<string, Icone> = {
   '/cliente': [Users, 'marca'],
   '/historico-cadastro': [History, 'relatorio'],
   '/migracao-omie': [Rocket, 'relatorio'],
+  '/plataforma/modulos': [Blocks, 'marca'],
   '/fornecedor/importar': [FileSpreadsheet, 'importar'],
   '/compras-cadastros': [UserCog, 'marca'],
   '/relatorio-compras': [ChartBar, 'relatorio'],

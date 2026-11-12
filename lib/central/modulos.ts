@@ -311,6 +311,7 @@ export const MODULOS: ModuloCentral[] = [
       { label: 'Sincronização', href: '/sincronizacao', soDesktop: true, desc: 'Dados do computador com a nuvem' },
       { label: 'Minha loja', href: '/minha-loja', desc: 'Dados e preferências desta loja' },
       { label: 'Prontidão para sair do Omie', href: '/migracao-omie', desc: 'O que falta em cada loja para ir ao Norte ERP' },
+      { label: 'Módulos das lojas', href: '/plataforma/modulos', desc: 'O que cada loja tem e o preço de cada plano' },
     ],
     secoes: [
       { nome: 'Usuários', desc: 'Quem acessa o sistema', itens: [criar('Incluir', '/usuario'), { label: 'Exibir todos', href: '/usuario' }] },

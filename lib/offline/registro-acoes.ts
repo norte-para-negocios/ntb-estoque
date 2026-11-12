@@ -52,18 +52,19 @@ import * as m48 from '@/lib/actions/ops-lote'
 import * as m49 from '@/lib/actions/ordem-producao'
 import * as m50 from '@/lib/actions/pedido-compra'
 import * as m51 from '@/lib/actions/periodo-fechado'
-import * as m52 from '@/lib/actions/produto-minimo'
-import * as m53 from '@/lib/actions/produto-substituicao'
-import * as m54 from '@/lib/actions/produto'
-import * as m55 from '@/lib/actions/produtos-search'
-import * as m56 from '@/lib/actions/requisicao-compra'
-import * as m57 from '@/lib/actions/sintegra'
-import * as m58 from '@/lib/actions/sync-status'
-import * as m59 from '@/lib/actions/transferencia-loja'
-import * as m60 from '@/lib/actions/transferencia'
-import * as m61 from '@/lib/actions/usuario'
-import * as m62 from '@/lib/actions/validade-proprio'
-import * as m63 from '@/lib/actions/variacao-preco'
+import * as m52 from '@/lib/actions/plataforma-modulos'
+import * as m53 from '@/lib/actions/produto-minimo'
+import * as m54 from '@/lib/actions/produto-substituicao'
+import * as m55 from '@/lib/actions/produto'
+import * as m56 from '@/lib/actions/produtos-search'
+import * as m57 from '@/lib/actions/requisicao-compra'
+import * as m58 from '@/lib/actions/sintegra'
+import * as m59 from '@/lib/actions/sync-status'
+import * as m60 from '@/lib/actions/transferencia-loja'
+import * as m61 from '@/lib/actions/transferencia'
+import * as m62 from '@/lib/actions/usuario'
+import * as m63 from '@/lib/actions/validade-proprio'
+import * as m64 from '@/lib/actions/variacao-preco'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Acao = (...args: any[]) => Promise<unknown>
@@ -295,47 +296,49 @@ export const ACOES: Readonly<Record<string, Acao>> = Object.freeze({
   'periodo-fechado#fecharMes': m51.fecharMes as Acao,
   'periodo-fechado#reabrirMes': m51.reabrirMes as Acao,
   'periodo-fechado#pendenciasDoMes': m51.pendenciasDoMes as Acao,
-  'produto-minimo#setEstoqueMinimo': m52.setEstoqueMinimo as Acao,
-  'produto-substituicao#criarProdutoSubstituicao': m53.criarProdutoSubstituicao as Acao,
-  'produto-substituicao#excluirProdutoSubstituicao': m53.excluirProdutoSubstituicao as Acao,
-  'produto#buscarFamilias': m54.buscarFamilias as Acao,
-  'produto#sugerirProximoCodigo': m54.sugerirProximoCodigo as Acao,
-  'produto#criarProduto': m54.criarProduto as Acao,
-  'produto#editarProduto': m54.editarProduto as Acao,
-  'produto#excluirProduto': m54.excluirProduto as Acao,
-  'produtos-search#buscarProdutos': m55.buscarProdutos as Acao,
-  'produtos-search#buscarProdutoPorCodigo': m55.buscarProdutoPorCodigo as Acao,
-  'requisicao-compra#salvarRequisicao': m56.salvarRequisicao as Acao,
-  'requisicao-compra#acaoRequisicao': m56.acaoRequisicao as Acao,
-  'requisicao-compra#gerarPedidosDasRequisicoes': m56.gerarPedidosDasRequisicoes as Acao,
-  'requisicao-compra#criarRequisicaoDaSugestao': m56.criarRequisicaoDaSugestao as Acao,
-  'sintegra#consultarCnpj': m57.consultarCnpj as Acao,
-  'sintegra#importarParceiro': m57.importarParceiro as Acao,
-  'sync-status#reprocessarSync': m58.reprocessarSync as Acao,
-  'transferencia-loja#registrarTransferenciaLoja': m59.registrarTransferenciaLoja as Acao,
-  'transferencia-loja#cancelarTransferenciaLoja': m59.cancelarTransferenciaLoja as Acao,
-  'transferencia#createTransferencia': m60.createTransferencia as Acao,
-  'transferencia#addMovimento': m60.addMovimento as Acao,
-  'transferencia#enviarMovimento': m60.enviarMovimento as Acao,
-  'transferencia#salvarObservacaoTransferencia': m60.salvarObservacaoTransferencia as Acao,
-  'transferencia#salvarObservacaoItem': m60.salvarObservacaoItem as Acao,
-  'transferencia#removeMovimento': m60.removeMovimento as Acao,
-  'transferencia#finishTransferencia': m60.finishTransferencia as Acao,
-  'transferencia#forceSyncTransferencia': m60.forceSyncTransferencia as Acao,
-  'transferencia#retryMovimentosTransferenciaPendentes': m60.retryMovimentosTransferenciaPendentes as Acao,
-  'transferencia#duplicarTransferencia': m60.duplicarTransferencia as Acao,
-  'transferencia#excluirTransferencia': m60.excluirTransferencia as Acao,
-  'transferencia#editQuantidadeMovimento': m60.editQuantidadeMovimento as Acao,
-  'usuario#criarUsuario': m61.criarUsuario as Acao,
-  'usuario#editarUsuario': m61.editarUsuario as Acao,
-  'usuario#aprovarUsuario': m61.aprovarUsuario as Acao,
-  'usuario#recusarUsuario': m61.recusarUsuario as Acao,
-  'usuario#excluirUsuario': m61.excluirUsuario as Acao,
-  'usuario#togglePermissao': m61.togglePermissao as Acao,
-  'usuario#redefinirSenha': m61.redefinirSenha as Acao,
-  'usuario#toggleLocal': m61.toggleLocal as Acao,
-  'validade-proprio#baixarLoteVencido': m62.baixarLoteVencido as Acao,
-  'validade-proprio#salvarAlertaValidade': m62.salvarAlertaValidade as Acao,
-  'validade-proprio#reconciliarLotes': m62.reconciliarLotes as Acao,
-  'variacao-preco#salvarLimiteVariacaoPreco': m63.salvarLimiteVariacaoPreco as Acao,
+  'plataforma-modulos#salvarAssinatura': m52.salvarAssinatura as Acao,
+  'plataforma-modulos#salvarPrecoPlano': m52.salvarPrecoPlano as Acao,
+  'produto-minimo#setEstoqueMinimo': m53.setEstoqueMinimo as Acao,
+  'produto-substituicao#criarProdutoSubstituicao': m54.criarProdutoSubstituicao as Acao,
+  'produto-substituicao#excluirProdutoSubstituicao': m54.excluirProdutoSubstituicao as Acao,
+  'produto#buscarFamilias': m55.buscarFamilias as Acao,
+  'produto#sugerirProximoCodigo': m55.sugerirProximoCodigo as Acao,
+  'produto#criarProduto': m55.criarProduto as Acao,
+  'produto#editarProduto': m55.editarProduto as Acao,
+  'produto#excluirProduto': m55.excluirProduto as Acao,
+  'produtos-search#buscarProdutos': m56.buscarProdutos as Acao,
+  'produtos-search#buscarProdutoPorCodigo': m56.buscarProdutoPorCodigo as Acao,
+  'requisicao-compra#salvarRequisicao': m57.salvarRequisicao as Acao,
+  'requisicao-compra#acaoRequisicao': m57.acaoRequisicao as Acao,
+  'requisicao-compra#gerarPedidosDasRequisicoes': m57.gerarPedidosDasRequisicoes as Acao,
+  'requisicao-compra#criarRequisicaoDaSugestao': m57.criarRequisicaoDaSugestao as Acao,
+  'sintegra#consultarCnpj': m58.consultarCnpj as Acao,
+  'sintegra#importarParceiro': m58.importarParceiro as Acao,
+  'sync-status#reprocessarSync': m59.reprocessarSync as Acao,
+  'transferencia-loja#registrarTransferenciaLoja': m60.registrarTransferenciaLoja as Acao,
+  'transferencia-loja#cancelarTransferenciaLoja': m60.cancelarTransferenciaLoja as Acao,
+  'transferencia#createTransferencia': m61.createTransferencia as Acao,
+  'transferencia#addMovimento': m61.addMovimento as Acao,
+  'transferencia#enviarMovimento': m61.enviarMovimento as Acao,
+  'transferencia#salvarObservacaoTransferencia': m61.salvarObservacaoTransferencia as Acao,
+  'transferencia#salvarObservacaoItem': m61.salvarObservacaoItem as Acao,
+  'transferencia#removeMovimento': m61.removeMovimento as Acao,
+  'transferencia#finishTransferencia': m61.finishTransferencia as Acao,
+  'transferencia#forceSyncTransferencia': m61.forceSyncTransferencia as Acao,
+  'transferencia#retryMovimentosTransferenciaPendentes': m61.retryMovimentosTransferenciaPendentes as Acao,
+  'transferencia#duplicarTransferencia': m61.duplicarTransferencia as Acao,
+  'transferencia#excluirTransferencia': m61.excluirTransferencia as Acao,
+  'transferencia#editQuantidadeMovimento': m61.editQuantidadeMovimento as Acao,
+  'usuario#criarUsuario': m62.criarUsuario as Acao,
+  'usuario#editarUsuario': m62.editarUsuario as Acao,
+  'usuario#aprovarUsuario': m62.aprovarUsuario as Acao,
+  'usuario#recusarUsuario': m62.recusarUsuario as Acao,
+  'usuario#excluirUsuario': m62.excluirUsuario as Acao,
+  'usuario#togglePermissao': m62.togglePermissao as Acao,
+  'usuario#redefinirSenha': m62.redefinirSenha as Acao,
+  'usuario#toggleLocal': m62.toggleLocal as Acao,
+  'validade-proprio#baixarLoteVencido': m63.baixarLoteVencido as Acao,
+  'validade-proprio#salvarAlertaValidade': m63.salvarAlertaValidade as Acao,
+  'validade-proprio#reconciliarLotes': m63.reconciliarLotes as Acao,
+  'variacao-preco#salvarLimiteVariacaoPreco': m64.salvarLimiteVariacaoPreco as Acao,
 })

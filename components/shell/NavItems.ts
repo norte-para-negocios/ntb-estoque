@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   LayoutGrid,
+  Blocks,
   FileText,
   Factory,
   ArrowLeftRight,
@@ -128,6 +129,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/cliente', label: 'Clientes e transportadoras', icon: Users, group: 'Cadastros', soEstoqueProprio: true, superAdmin: true },
   { href: '/historico-cadastro', label: 'Histórico de cadastros', icon: History, group: 'Cadastros', superAdmin: true },
   { href: '/migracao-omie', label: 'Prontidão para sair do Omie', icon: Rocket, group: 'Administração', superAdmin: true },
+  { href: '/plataforma/modulos', label: 'Módulos das lojas', icon: Blocks, group: 'Administração', superAdmin: true },
   { href: '/compras-cadastros', label: 'Compradores e prazos', icon: UserCog, group: 'Cadastros', soEstoqueProprio: true },
   { href: '/sintegra', label: 'SINTEGRA', icon: ScanLine, group: 'Cadastros' },
   { href: '/sync-status', label: 'Saúde da integração', icon: Activity, group: 'Cadastros', admin: true },

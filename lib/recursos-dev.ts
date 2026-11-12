@@ -31,6 +31,8 @@ export const ROTAS_SO_DEV = [
   '/historico-cadastro',
   // Fase 10: prontidão de cada loja Omie para ir ao Norte ERP (só leitura).
   '/migracao-omie',
+  // Plataforma Norte (fase 1): módulos e preços de cada loja. Só a equipe da Norte.
+  '/plataforma',
 ] as const
 
 export async function ehDesenvolvedor(): Promise<boolean> {
