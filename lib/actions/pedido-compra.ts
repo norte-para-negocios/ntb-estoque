@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { revalidatePath } from 'next/cache'
 import { getCurrentLojaId, getProfile, requirePermissao } from '@/lib/auth'
@@ -111,6 +112,7 @@ function paraJson(f: PedidoForm, origem: 'manual' | 'sugestao') {
 /** Cria ou edita (só rascunho) um pedido de compra. */
 export async function salvarPedidoCompra(form: PedidoForm): Promise<{ id: number; numero: number } | Erro> {
   const __d = viaDesktop('pedido-compra#salvarPedidoCompra', salvarPedidoCompra, [form]); if (__d) return __d as never
+  await guardaModulo('pedido-compra#salvarPedidoCompra')
   await exigirDevAcao()
   const ctx = await contexto('Compras - Pedidos')
   if ('error' in ctx) return ctx
@@ -138,6 +140,7 @@ export type AcaoEtapa = 'enviar' | 'aprovar' | 'reprovar' | 'reabrir' | 'cancela
 /** Muda a etapa. Aprovar e reprovar exigem "Compras - Aprovar pedidos"; o resto, "Compras - Pedidos". */
 export async function mudarEtapaPedido(id: number, acao: AcaoEtapa, motivo?: string | null): Promise<{ ok: true; etapa: string; omie?: EnvioOmieTela } | Erro> {
   const __d = viaDesktop('pedido-compra#mudarEtapaPedido', mudarEtapaPedido, [id, acao, motivo]); if (__d) return __d as never
+  await guardaModulo('pedido-compra#mudarEtapaPedido')
   await exigirDevAcao()
   if (!['enviar', 'aprovar', 'reprovar', 'reabrir', 'cancelar'].includes(acao)) return { error: 'Ação inválida' }
   const ctx = await contexto(acao === 'aprovar' || acao === 'reprovar' ? 'Compras - Aprovar pedidos' : 'Compras - Pedidos')
@@ -168,6 +171,7 @@ export async function mudarEtapaPedido(id: number, acao: AcaoEtapa, motivo?: str
  */
 export async function enviarPedidoAoOmieAgora(id: number): Promise<{ ok: true; omie: EnvioOmieTela } | Erro> {
   const __d = viaDesktop('pedido-compra#enviarPedidoAoOmieAgora', enviarPedidoAoOmieAgora, [id]); if (__d) return __d as never
+  await guardaModulo('pedido-compra#enviarPedidoAoOmieAgora')
   await exigirDevAcao()
   const ctx = await contexto('Compras - Aprovar pedidos')
   if ('error' in ctx) return ctx
@@ -184,6 +188,7 @@ export async function enviarPedidoAoOmieAgora(id: number): Promise<{ ok: true; o
 /** Liga a nota (compra do estoque próprio) a um pedido aprovado; refazer é seguro (refaz os vínculos desta nota). */
 export async function vincularNotaAoPedido(pedidoId: number, compraId: number): Promise<{ ok: true; vinculados: number; foraDoPedido: number; emOutroPedido: number } | Erro> {
   const __d = viaDesktop('pedido-compra#vincularNotaAoPedido', vincularNotaAoPedido, [pedidoId, compraId]); if (__d) return __d as never
+  await guardaModulo('pedido-compra#vincularNotaAoPedido')
   await exigirDevAcao()
   const ctx = await contexto('Compras - Pedidos', 'Notas Fiscais')
   if ('error' in ctx) return ctx
@@ -199,6 +204,7 @@ export async function vincularNotaAoPedido(pedidoId: number, compraId: number): 
 
 export async function desvincularNotaDoPedido(pedidoId: number, compraId: number): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('pedido-compra#desvincularNotaDoPedido', desvincularNotaDoPedido, [pedidoId, compraId]); if (__d) return __d as never
+  await guardaModulo('pedido-compra#desvincularNotaDoPedido')
   await exigirDevAcao()
   const ctx = await contexto('Compras - Pedidos', 'Notas Fiscais')
   if ('error' in ctx) return ctx
@@ -214,6 +220,7 @@ export async function desvincularNotaDoPedido(pedidoId: number, compraId: number
 /** "Criar pedido" da sugestão: um rascunho por fornecedor (último fornecedor de cada produto). Idempotente pela chave. */
 export async function criarPedidosDaSugestao(linhas: LinhaParaPedido[], chave: string): Promise<{ pedidos: { id: number; numero: number; fornecedor: string }[]; falhas: { fornecedor: string; erro: string }[] } | Erro> {
   const __d = viaDesktop('pedido-compra#criarPedidosDaSugestao', criarPedidosDaSugestao, [linhas, chave]); if (__d) return __d as never
+  await guardaModulo('pedido-compra#criarPedidosDaSugestao')
   await exigirDevAcao()
   const ctx = await contexto('Compras - Pedidos')
   if ('error' in ctx) return ctx
@@ -247,6 +254,7 @@ export async function criarPedidosDaSugestao(linhas: LinhaParaPedido[], chave: s
 /** Lead time de ressuprimento do produto (estoque próprio; na loja Omie ele vem do cadastro do Omie). */
 export async function salvarLeadTime(codigoProduto: number, dias: number): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('pedido-compra#salvarLeadTime', salvarLeadTime, [codigoProduto, dias]); if (__d) return __d as never
+  await guardaModulo('pedido-compra#salvarLeadTime')
   await exigirDevAcao()
   const ctx = await contexto('Compras - Pedidos')
   if ('error' in ctx) return ctx

@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { isAdmin } from '@/lib/auth'
@@ -12,6 +13,7 @@ import { criptografar } from '@/lib/cripto'
 // sensivel (arquivo/senha) e logado.
 export async function salvarCertificado(formData: FormData) {
   const __d = viaDesktop('certificado#salvarCertificado', salvarCertificado, [formData]); if (__d) return __d as never
+  await guardaModulo('certificado#salvarCertificado')
   if (!(await isAdmin())) return { error: 'Sem permissão' }
 
   const lojaId = Number(formData.get('loja_id'))

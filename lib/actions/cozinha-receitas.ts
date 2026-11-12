@@ -1,11 +1,11 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { revalidatePath } from 'next/cache'
 import { getAtorGestao, getCurrentLojaId, getProfile } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
-import { exigirDevAcao } from '@/lib/recursos-dev'
 import { carregarBase } from '@/lib/custo-cardapio/carregar'
 import { BUCKET_FOTOS } from '@/lib/custo-cardapio/receita-info'
 import { fotoEhDe, validarReceita, type DadosReceita } from '@/lib/custo-cardapio/guia-puro'
@@ -17,7 +17,6 @@ import { fotoEhDe, validarReceita, type DadosReceita } from '@/lib/custo-cardapi
 type Resultado = { ok: true } | { error: string }
 
 async function contexto(codigo: number): Promise<{ lojaId: number; nome: string } | { error: string }> {
-  await exigirDevAcao()
   const ator = await getAtorGestao()
   if (!ator.podeGerir) return { error: 'Sem permissão' }
   const lojaId = await getCurrentLojaId()
@@ -35,6 +34,7 @@ function revalidar(codigo: number) {
 
 export async function salvarInfoReceita(codigo: number, dados: DadosReceita): Promise<Resultado> {
   const __d = viaDesktop('cozinha-receitas#salvarInfoReceita', salvarInfoReceita, [codigo, dados]); if (__d) return __d as never
+  await guardaModulo('cozinha-receitas#salvarInfoReceita')
   const ctx = await contexto(Number(codigo))
   if ('error' in ctx) return ctx
   const v = validarReceita(dados)
@@ -49,6 +49,7 @@ export async function salvarInfoReceita(codigo: number, dados: DadosReceita): Pr
 
 export async function removerFotoReceita(codigo: number): Promise<Resultado> {
   const __d = viaDesktop('cozinha-receitas#removerFotoReceita', removerFotoReceita, [codigo]); if (__d) return __d as never
+  await guardaModulo('cozinha-receitas#removerFotoReceita')
   const ctx = await contexto(Number(codigo))
   if ('error' in ctx) return ctx
   const sb = createServiceClient()

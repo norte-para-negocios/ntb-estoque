@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 // Fase 6 (migration 450): clientes e transportadoras do ESTOQUE PRÓPRIO (lojas Omie seguem com o cadastro do Omie, sem esta tela).
 // Só desenvolvedor por enquanto (layout novo). Nada vai ao Omie.
@@ -34,6 +35,7 @@ async function documentoEmUso(lojaId: number, doc: string | null, ignorarId?: nu
 
 export async function criarCliente(dados: ClienteInput): Promise<{ ok: true; id: number } | Erro> {
   const __d = viaDesktop('clientes#criarCliente', criarCliente, [dados]); if (__d) return __d as never
+  await guardaModulo('clientes#criarCliente')
   const ctx = await contexto('Clientes - Criar')
   if ('error' in ctx) return ctx
   const v = validarCliente(dados, validarCnpjCpf)
@@ -49,6 +51,7 @@ export async function criarCliente(dados: ClienteInput): Promise<{ ok: true; id:
 
 export async function editarCliente(id: number, dados: ClienteInput): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('clientes#editarCliente', editarCliente, [id, dados]); if (__d) return __d as never
+  await guardaModulo('clientes#editarCliente')
   const ctx = await contexto('Clientes - Editar')
   if ('error' in ctx) return ctx
   const v = validarCliente(dados, validarCnpjCpf)
@@ -66,6 +69,7 @@ export async function editarCliente(id: number, dados: ClienteInput): Promise<{ 
 
 export async function excluirCliente(id: number): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('clientes#excluirCliente', excluirCliente, [id]); if (__d) return __d as never
+  await guardaModulo('clientes#excluirCliente')
   const ctx = await contexto('Clientes - Excluir')
   if ('error' in ctx) return ctx
   const { data, error } = await createServiceClient().from('clientes').delete().eq('id', id).eq('loja_id', ctx.lojaId).select('razao_social')
@@ -79,6 +83,7 @@ export async function excluirCliente(id: number): Promise<{ ok: true } | Erro> {
 /** Cadastra as transportadoras que aparecem nas notas de entrada da loja (bloco transporte da NF-e) e ainda não estão aqui. */
 export async function trazerTransportadorasDasNotas(): Promise<{ ok: true; novas: number; viraramAmbos: number } | Erro> {
   const __d = viaDesktop('clientes#trazerTransportadorasDasNotas', trazerTransportadorasDasNotas, []); if (__d) return __d as never
+  await guardaModulo('clientes#trazerTransportadorasDasNotas')
   const ctx = await contexto('Clientes - Criar')
   if ('error' in ctx) return ctx
   const sb = createServiceClient()

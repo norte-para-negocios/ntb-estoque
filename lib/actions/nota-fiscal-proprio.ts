@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { revalidatePath } from 'next/cache'
 import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
@@ -75,6 +76,7 @@ async function compraDaNota(lojaId: number, notaId: number) {
  *  (reaberta) entra de novo por aqui. */
 export async function confirmarEntradaNF(notaId: number, codigoLocal?: number | null, opts?: { aceitarAvisos?: boolean }): Promise<{ ok: true; lancados: number; pendentes: number; status: string; aviso?: string } | { error: string }> {
   const __d = viaDesktop('nota-fiscal-proprio#confirmarEntradaNF', confirmarEntradaNF, [notaId, codigoLocal, opts]); if (__d) return __d as never
+  await guardaModulo('nota-fiscal-proprio#confirmarEntradaNF')
   const ctx = await contexto('Notas Fiscais - Manifestar')
   if ('error' in ctx) return ctx
   const compra = await compraDaNota(ctx.lojaId, notaId)
@@ -102,6 +104,7 @@ export async function confirmarEntradaNF(notaId: number, codigoLocal?: number | 
 /** Desfaz a entrada no estoque (estorno movimento a movimento; o histórico fica). */
 export async function desfazerEntradaNF(notaId: number): Promise<{ ok: true; estornados: number; aviso?: string } | { error: string }> {
   const __d = viaDesktop('nota-fiscal-proprio#desfazerEntradaNF', desfazerEntradaNF, [notaId]); if (__d) return __d as never
+  await guardaModulo('nota-fiscal-proprio#desfazerEntradaNF')
   const ctx = await contexto('Notas Fiscais - Reverter')
   if ('error' in ctx) return ctx
   const compra = await compraDaNota(ctx.lojaId, notaId)
@@ -119,6 +122,7 @@ export async function desfazerEntradaNF(notaId: number): Promise<{ ok: true; est
 /** Tira a nota da lista (soft delete). Se já tinha entrada no estoque, a entrada é desfeita antes. */
 export async function excluirNotaProprio(notaId: number): Promise<{ ok: true; aviso?: string } | { error: string }> {
   const __d = viaDesktop('nota-fiscal-proprio#excluirNotaProprio', excluirNotaProprio, [notaId]); if (__d) return __d as never
+  await guardaModulo('nota-fiscal-proprio#excluirNotaProprio')
   const ctx = await contexto('Notas Fiscais - Excluir')
   if ('error' in ctx) return ctx
   const sb = createServiceClient()
@@ -147,6 +151,7 @@ export async function excluirNotaProprio(notaId: number): Promise<{ ok: true; av
 /** Liga um item da nota a um produto do cadastro (e o sistema aprende o de-para para as próximas notas do fornecedor). */
 export async function vincularItemNF(compraItemId: number, codigoProduto: number, fator: number): Promise<{ ok: true } | { error: string }> {
   const __d = viaDesktop('nota-fiscal-proprio#vincularItemNF', vincularItemNF, [compraItemId, codigoProduto, fator]); if (__d) return __d as never
+  await guardaModulo('nota-fiscal-proprio#vincularItemNF')
   const ctx = await contexto('Notas Fiscais - Manifestar')
   if ('error' in ctx) return ctx
   const fatorFinal = fator > 0 && fator !== 1 ? fator : await fatorPelaUnidade(ctx.lojaId, compraItemId, codigoProduto)
@@ -192,6 +197,7 @@ async function recalcularCfopDoItem(lojaId: number, compraItemId: number, codigo
 /** Lote e validade do item antes da entrada (o gatilho de lotes usa na hora do movimento). Item já lançado não muda. */
 export async function definirLoteItemNF(compraItemId: number, lote: string | null, validade: string | null): Promise<{ ok: true } | { error: string }> {
   const __d = viaDesktop('nota-fiscal-proprio#definirLoteItemNF', definirLoteItemNF, [compraItemId, lote, validade]); if (__d) return __d as never
+  await guardaModulo('nota-fiscal-proprio#definirLoteItemNF')
   const ctx = await contexto('Notas Fiscais - Manifestar')
   if ('error' in ctx) return ctx
   const l = lote?.trim() || null
@@ -210,6 +216,7 @@ export async function definirLoteItemNF(compraItemId: number, lote: string | nul
 /** Cria o produto a partir do item da nota (descrição, unidade e NCM da nota; código por tipo) e já liga o item a ele. */
 export async function criarProdutoDoItemNF(compraItemId: number, tipoItem: string): Promise<{ ok: true; codigo: string } | { error: string }> {
   const __d = viaDesktop('nota-fiscal-proprio#criarProdutoDoItemNF', criarProdutoDoItemNF, [compraItemId, tipoItem]); if (__d) return __d as never
+  await guardaModulo('nota-fiscal-proprio#criarProdutoDoItemNF')
   const ctx = await contexto('Notas Fiscais - Manifestar')
   if ('error' in ctx) return ctx
   if (!(await requirePermissao(ctx.lojaId, 'Produtos - Criar'))) return { error: 'Sem permissão para criar produto' }
@@ -228,6 +235,7 @@ export async function criarProdutoDoItemNF(compraItemId: number, tipoItem: strin
 export type ProdutoNF = { codigoProduto: number; codigo: string; descricao: string; unidade: string }
 export async function buscarProdutosNF(termo: string): Promise<ProdutoNF[]> {
   const __d = viaDesktop('nota-fiscal-proprio#buscarProdutosNF', buscarProdutosNF, [termo]); if (__d) return __d as never
+  await guardaModulo('nota-fiscal-proprio#buscarProdutosNF')
   const ctx = await contexto('Notas Fiscais')
   if ('error' in ctx) return []
   const q = termo.trim().replace(/[%,()]/g, ' ')
@@ -240,6 +248,7 @@ export async function buscarProdutosNF(termo: string): Promise<ProdutoNF[]> {
 /** Liga/desliga a entrada automática e a ciência da operação para esta loja. */
 export async function salvarConfigSefaz(cfg: { autoLancar: boolean; autoCiencia: boolean; ativo: boolean; ambiente: 1 | 2 }): Promise<{ ok: true } | { error: string }> {
   const __d = viaDesktop('nota-fiscal-proprio#salvarConfigSefaz', salvarConfigSefaz, [cfg]); if (__d) return __d as never
+  await guardaModulo('nota-fiscal-proprio#salvarConfigSefaz')
   const ctx = await contexto('Notas Fiscais - Sincronizar')
   if ('error' in ctx) return ctx
   const sb = createServiceClient()
@@ -252,6 +261,7 @@ export async function salvarConfigSefaz(cfg: { autoLancar: boolean; autoCiencia:
 
 export async function sincronizarSefazAgora() {
   const __d = viaDesktop('nota-fiscal-proprio#sincronizarSefazAgora', sincronizarSefazAgora, []); if (__d) return __d as never
+  await guardaModulo('nota-fiscal-proprio#sincronizarSefazAgora')
   const ctx = await contexto('Notas Fiscais - Sincronizar')
   if ('error' in ctx) return ctx
   // Fase G (revisão I1): o que vem da SEFAZ grava no histórico como "Sistema".
@@ -263,6 +273,7 @@ export async function sincronizarSefazAgora() {
 /** Cria um produto pela conferência da nota (código por tipo). Mesmo formato do criar rápido das compras, com as permissões de Notas Fiscais. */
 export async function criarProdutoParaNF(dados: { descricao: string; unidade: string; tipoItem: string; ncm?: string | null }): Promise<{ ok: true; produto: ProdutoNF } | { error: string }> {
   const __d = viaDesktop('nota-fiscal-proprio#criarProdutoParaNF', criarProdutoParaNF, [dados]); if (__d) return __d as never
+  await guardaModulo('nota-fiscal-proprio#criarProdutoParaNF')
   const ctx = await contexto('Notas Fiscais - Manifestar')
   if ('error' in ctx) return ctx
   if (!(await requirePermissao(ctx.lojaId, 'Produtos - Criar'))) return { error: 'Sem permissão para criar produto' }
@@ -310,6 +321,7 @@ async function avisosDosItens(lojaId: number, compraId: number, notaId: number):
  *  Grava só o que veio em `cfg`; mexer no item tira a conferência (R9). */
 export async function configurarItemNF(compraItemId: number, cfg: ConfigItemNF): Promise<{ ok: true } | { error: string }> {
   const __d = viaDesktop('nota-fiscal-proprio#configurarItemNF', configurarItemNF, [compraItemId, cfg]); if (__d) return __d as never
+  await guardaModulo('nota-fiscal-proprio#configurarItemNF')
   const ctx = await contexto('Notas Fiscais - Manifestar')
   if ('error' in ctx) return ctx
   const erro = validarConfigItem(cfg)
@@ -335,6 +347,7 @@ export async function configurarItemNF(compraItemId: number, cfg: ConfigItemNF):
 /** Etapa "Conferida": recalcula no servidor os avisos de cada item (fator, custo, valor zero) e só aceita com "Conferi os avisos". */
 export async function marcarConferidaNF(notaId: number, opts: { aceitarAvisos: boolean }): Promise<{ ok: true } | { error: string; pendencias?: { linha: number; motivo: string }[] }> {
   const __d = viaDesktop('nota-fiscal-proprio#marcarConferidaNF', marcarConferidaNF, [notaId, opts]); if (__d) return __d as never
+  await guardaModulo('nota-fiscal-proprio#marcarConferidaNF')
   const ctx = await contexto('Notas Fiscais - Manifestar')
   if ('error' in ctx) return ctx
   const sb = createServiceClient()
@@ -358,6 +371,7 @@ export async function marcarConferidaNF(notaId: number, opts: { aceitarAvisos: b
 /** Observações da nota própria (aba Observações): texto livre da compra, com registro no histórico. */
 export async function salvarObservacaoNF(notaId: number, obs: string): Promise<{ ok: true } | { error: string }> {
   const __d = viaDesktop('nota-fiscal-proprio#salvarObservacaoNF', salvarObservacaoNF, [notaId, obs]); if (__d) return __d as never
+  await guardaModulo('nota-fiscal-proprio#salvarObservacaoNF')
   const ctx = await contexto('Notas Fiscais - Manifestar')
   if ('error' in ctx) return ctx
   const texto = (obs ?? '').trim()
@@ -379,6 +393,7 @@ export async function salvarObservacaoNF(notaId: number, obs: string): Promise<{
  *  fica FORA da política do desktop offline. */
 export async function manifestarNotaSefaz(notaId: number, tipo: TipoManifestacao, justificativa?: string | null): Promise<{ ok: true; status: 'registrada' | 'recusada'; cStat: string | null; xMotivo: string | null } | { error: string }> {
   const __d = viaDesktop('nota-fiscal-proprio#manifestarNotaSefaz', manifestarNotaSefaz, [notaId, tipo, justificativa]); if (__d) return __d as never
+  await guardaModulo('nota-fiscal-proprio#manifestarNotaSefaz')
   const ctx = await contexto('Notas Fiscais - Manifestar na SEFAZ')
   if ('error' in ctx) return ctx
   if (!ehTipoManifestacao(tipo)) return { error: 'Tipo de manifestação inválido.' }
@@ -453,6 +468,7 @@ const TAMANHO_MAX_CTE = 900_000
  *  por enquanto): o custo da entrada é refeito pela data da nota. */
 export async function importarCteNF(notaId: number, xml: string): Promise<{ ok: true; notas: number; aviso?: string } | { error: string }> {
   const __d = viaDesktop('nota-fiscal-proprio#importarCteNF', importarCteNF, [notaId, xml]); if (__d) return __d as never
+  await guardaModulo('nota-fiscal-proprio#importarCteNF')
   const ctx = await contexto('Notas Fiscais - Manifestar')
   if ('error' in ctx) return ctx
   if (!xml || xml.length > TAMANHO_MAX_CTE) return { error: 'Arquivo vazio ou grande demais.' }
@@ -504,6 +520,7 @@ export async function importarCteNF(notaId: number, xml: string): Promise<{ ok: 
 /** Frete sem XML (valor digitado): CT-e "manual" só desta nota. */
 export async function informarFreteNF(notaId: number, dados: { valor: number; transportadora?: string; numero?: string }): Promise<{ ok: true; aviso?: string } | { error: string }> {
   const __d = viaDesktop('nota-fiscal-proprio#informarFreteNF', informarFreteNF, [notaId, dados]); if (__d) return __d as never
+  await guardaModulo('nota-fiscal-proprio#informarFreteNF')
   const ctx = await contexto('Notas Fiscais - Manifestar')
   if ('error' in ctx) return ctx
   const valor = Math.round(Number(dados.valor) * 100) / 100
@@ -528,6 +545,7 @@ export async function informarFreteNF(notaId: number, dados: { valor: number; tr
 /** Desliga um CT-e das notas (o frete sai do custo dos itens). Nota já lançada: custo refeito (351, só dev por enquanto). */
 export async function desvincularCteNF(notaId: number, cteId: number): Promise<{ ok: true; aviso?: string } | { error: string }> {
   const __d = viaDesktop('nota-fiscal-proprio#desvincularCteNF', desvincularCteNF, [notaId, cteId]); if (__d) return __d as never
+  await guardaModulo('nota-fiscal-proprio#desvincularCteNF')
   const ctx = await contexto('Notas Fiscais - Manifestar')
   if ('error' in ctx) return ctx
   const sb = createServiceClient()
@@ -549,6 +567,7 @@ export async function desvincularCteNF(notaId: number, cteId: number): Promise<{
  *  fica FORA da política do desktop offline. */
 export async function buscarNotaPorChaveNF(chave: string): Promise<{ ok: true; situacao: 'completa' | 'resumo' | 'nao_encontrada'; notaId: number | null } | { error: string }> {
   const __d = viaDesktop('nota-fiscal-proprio#buscarNotaPorChaveNF', buscarNotaPorChaveNF, [chave]); if (__d) return __d as never
+  await guardaModulo('nota-fiscal-proprio#buscarNotaPorChaveNF')
   const ctx = await contexto('Notas Fiscais - Sincronizar')
   if ('error' in ctx) return ctx
   const r = await importarNotaPorChave(ctx.lojaId, chave)

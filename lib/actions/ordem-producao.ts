@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { exigirPeriodoAberto, mesesFechados, mesesFechadosSet, semMesFechado } from '@/lib/estoque/periodo-fechado'
@@ -198,6 +199,7 @@ export async function criarOrdemProducao(input: {
   obs?: string
 }) {
   const __d = viaDesktop('ordem-producao#criarOrdemProducao', criarOrdemProducao, [input]); if (__d) return __d as never
+  await guardaModulo('ordem-producao#criarOrdemProducao')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao - Criar'))) {
     return { error: 'Sem permissão' }
@@ -272,6 +274,7 @@ export async function criarOrdensProducao(input: {
   obs?: string
 }) {
   const __d = viaDesktop('ordem-producao#criarOrdensProducao', criarOrdensProducao, [input]); if (__d) return __d as never
+  await guardaModulo('ordem-producao#criarOrdensProducao')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao - Criar'))) return { error: 'Sem permissão' }
   if (!input.itens.length) return { error: 'Adicione ao menos um produto' }
@@ -355,6 +358,7 @@ export async function criarOrdensProducao(input: {
 // ao vivo: mais rapido e sem gastar rate limit so pra um alerta informativo.
 export async function saldoAtualProdutos(codigosProduto: number[]): Promise<Record<number, number>> {
   const __d = viaDesktop('ordem-producao#saldoAtualProdutos', saldoAtualProdutos, [codigosProduto]); if (__d) return __d as never
+  await guardaModulo('ordem-producao#saldoAtualProdutos')
   if (!codigosProduto.length) return {}
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
@@ -382,6 +386,7 @@ export async function saldoAtualProdutos(codigosProduto: number[]): Promise<Reco
 
 export async function setValidadeOP(opId: number, validade: string | null) {
   const __d = viaDesktop('ordem-producao#setValidadeOP', setValidadeOP, [opId, validade]); if (__d) return __d as never
+  await guardaModulo('ordem-producao#setValidadeOP')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao - Editar'))) return { error: 'Sem permissão' }
   const supabase = createServiceClient()
@@ -395,6 +400,7 @@ export async function setValidadeOP(opId: number, validade: string | null) {
 
 export async function setQuantidadeOP(opId: number, quantidade: number | null) {
   const __d = viaDesktop('ordem-producao#setQuantidadeOP', setQuantidadeOP, [opId, quantidade]); if (__d) return __d as never
+  await guardaModulo('ordem-producao#setQuantidadeOP')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao - Editar'))) return { error: 'Sem permissão' }
   const supabase = createServiceClient()
@@ -414,6 +420,7 @@ export async function setQuantidadeOP(opId: number, quantidade: number | null) {
  */
 export async function setDataOP(opId: number, dataISO: string) {
   const __d = viaDesktop('ordem-producao#setDataOP', setDataOP, [opId, dataISO]); if (__d) return __d as never
+  await guardaModulo('ordem-producao#setDataOP')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao - Editar'))) return { error: 'Sem permissão' }
 
@@ -474,6 +481,7 @@ export async function setDataOP(opId: number, dataISO: string) {
  */
 export async function setQtdPlanejadaOP(opId: number, novaQtd: number) {
   const __d = viaDesktop('ordem-producao#setQtdPlanejadaOP', setQtdPlanejadaOP, [opId, novaQtd]); if (__d) return __d as never
+  await guardaModulo('ordem-producao#setQtdPlanejadaOP')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao - Editar'))) return { error: 'Sem permissão' }
   if (!novaQtd || !Number.isFinite(novaQtd) || novaQtd <= 0) return { error: 'Quantidade inválida' }
@@ -717,6 +725,7 @@ export async function finishOP(
   qtdeProduzida?: number | null,
 ): Promise<{ ok: true; insumosPulados?: string[]; avisoRestaurar?: string; semEtiqueta?: boolean; avisos?: string[] } | { error: string }> {
   const __d = viaDesktop('ordem-producao#finishOP', finishOP, [opId, dataEscolhidaISO, qtdeProduzida]); if (__d) return __d as never
+  await guardaModulo('ordem-producao#finishOP')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao - Concluir'))) return { error: 'Sem permissão' }
   if (dataEscolhidaISO) {
@@ -808,6 +817,7 @@ async function carregarOPdaLoja(opId: number, permissao: string) {
  */
 export async function excluirOP(opId: number) {
   const __d = viaDesktop('ordem-producao#excluirOP', excluirOP, [opId]); if (__d) return __d as never
+  await guardaModulo('ordem-producao#excluirOP')
   {
     const lojaProp = await getCurrentLojaId()
     const travadoOP = await travaDaOP(lojaProp, opId)
@@ -861,6 +871,7 @@ export async function excluirOP(opId: number) {
  */
 export async function reverterOP(opId: number) {
   const __d = viaDesktop('ordem-producao#reverterOP', reverterOP, [opId]); if (__d) return __d as never
+  await guardaModulo('ordem-producao#reverterOP')
   {
     const lojaProp = await getCurrentLojaId()
     const travadoOP = await travaDaOP(lojaProp, opId)
@@ -972,6 +983,7 @@ export async function retryOPsPendentes(
   opts: { incluirSemCmc?: boolean; limitePorLoja?: number; semCmcStaleHoras?: number; usuarioId?: string | null } = {}
 ): Promise<{ loja_id: number; tentadas: number; sucesso: number; falhas: number }[]> {
   const __d = viaDesktop('ordem-producao#retryOPsPendentes', retryOPsPendentes, [lojas, opts]); if (__d) return __d as never
+  await guardaModulo('ordem-producao#retryOPsPendentes')
   const { incluirSemCmc = false, limitePorLoja = 30, semCmcStaleHoras = SEM_CMC_STALE_HORAS, usuarioId = null } = opts
   const supabase = createServiceClient()
   const resultados: { loja_id: number; tentadas: number; sucesso: number; falhas: number }[] = []
@@ -1045,6 +1057,7 @@ export async function finishOPsEmLote(
   opIds: number[]
 ): Promise<{ sucesso: number; falhas: { id: number; numOP: string; error: string }[] }> {
   const __d = viaDesktop('ordem-producao#finishOPsEmLote', finishOPsEmLote, [opIds]); if (__d) return __d as never
+  await guardaModulo('ordem-producao#finishOPsEmLote')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao - Concluir'))) {
     return { sucesso: 0, falhas: opIds.map((id) => ({ id, numOP: '-', error: 'Sem permissão' })) }
@@ -1122,6 +1135,7 @@ export async function reverterOPsEmLote(
   opIds: number[]
 ): Promise<{ sucesso: number; falhas: { id: number; error: string }[] }> {
   const __d = viaDesktop('ordem-producao#reverterOPsEmLote', reverterOPsEmLote, [opIds]); if (__d) return __d as never
+  await guardaModulo('ordem-producao#reverterOPsEmLote')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao - Reverter'))) {
     return { sucesso: 0, falhas: opIds.map((id) => ({ id, error: 'Sem permissão' })) }

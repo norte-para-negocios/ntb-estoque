@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { getAtorGestao } from '@/lib/auth'
@@ -37,6 +38,7 @@ export async function gerarConvite(input: {
   validadeDias?: number
 }) {
   const __d = viaDesktop('convite#gerarConvite', gerarConvite, [input]); if (__d) return __d as never
+  await guardaModulo('convite#gerarConvite')
   const ator = await getAtorGestao()
   if (!ator.podeGerir) return { error: 'Sem permissão para gerar convites.' }
 
@@ -107,6 +109,7 @@ export async function gerarConvite(input: {
 // das lojas que ele gere.
 export async function revogarConvite(conviteId: number) {
   const __d = viaDesktop('convite#revogarConvite', revogarConvite, [conviteId]); if (__d) return __d as never
+  await guardaModulo('convite#revogarConvite')
   const ator = await getAtorGestao()
   if (!ator.podeGerir) return { error: 'Sem permissão.' }
 

@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
@@ -15,6 +16,7 @@ export type ProdutoSubstituicaoInput = {
 // Puramente local: nao existe conceito de "produto substituto" no Omie.
 export async function criarProdutoSubstituicao(dados: ProdutoSubstituicaoInput) {
   const __d = viaDesktop('produto-substituicao#criarProdutoSubstituicao', criarProdutoSubstituicao, [dados]); if (__d) return __d as never
+  await guardaModulo('produto-substituicao#criarProdutoSubstituicao')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produto Substituicoes - Criar'))) return { error: 'Sem permissão' }
   if (dados.n_cod_prod === dados.substitui_n_cod_prod) {
@@ -36,6 +38,7 @@ export async function criarProdutoSubstituicao(dados: ProdutoSubstituicaoInput) 
 
 export async function excluirProdutoSubstituicao(id: number) {
   const __d = viaDesktop('produto-substituicao#excluirProdutoSubstituicao', excluirProdutoSubstituicao, [id]); if (__d) return __d as never
+  await guardaModulo('produto-substituicao#excluirProdutoSubstituicao')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produto Substituicoes - Excluir'))) return { error: 'Sem permissão' }
 

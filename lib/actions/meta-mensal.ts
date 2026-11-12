@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
@@ -9,6 +10,7 @@ import { revalidatePath } from 'next/cache'
 // Salva a meta de faturamento de um mes ('YYYY-MM') para a loja ativa.
 export async function salvarMetaMensal(mes: string, valor: number): Promise<{ ok: true } | { error: string }> {
   const __d = viaDesktop('meta-mensal#salvarMetaMensal', salvarMetaMensal, [mes, valor]); if (__d) return __d as never
+  await guardaModulo('meta-mensal#salvarMetaMensal')
   const ator = await getAtorGestao()
   if (!ator.podeGerir) return { error: 'Sem permissão' }
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) return { error: 'Mês inválido' }

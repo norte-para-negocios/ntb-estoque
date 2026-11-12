@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 // Fase G [O2]: excluir anexo (apaga o arquivo do bucket e marca a linha com quem/quando; a linha não some).
 import { createServiceClient } from '@/lib/supabase/server'
@@ -9,6 +10,7 @@ import { BUCKET_ANEXOS, contextoAnexo, ehEntidadeAnexo } from '@/lib/anexos/serv
 
 export async function excluirAnexo(id: number): Promise<{ ok: true } | { error: string }> {
   const __d = viaDesktop('anexos#excluirAnexo', excluirAnexo, [id]); if (__d) return __d as never
+  await guardaModulo('anexos#excluirAnexo')
   if (!Number.isInteger(id) || id <= 0) return { error: 'Anexo inválido' }
   const lojaId = await getCurrentLojaId()
   const sb = createServiceClient()

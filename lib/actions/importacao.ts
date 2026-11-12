@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 // Fase G [K10/O6] (migration 223): importação de produtos e fornecedores por planilha, SÓ estoque próprio.
 // 1) previaImportacao: lê, valida linha a linha e grava a prévia (nada muda no cadastro); 2) confirmarImportacao: aplica numa
@@ -42,6 +43,7 @@ export type PreviaImportacao = {
 
 export async function previaImportacao(formData: FormData): Promise<PreviaImportacao | Erro> {
   const __d = viaDesktop('importacao#previaImportacao', previaImportacao, [formData]); if (__d) return __d as never
+  await guardaModulo('importacao#previaImportacao')
   const tipo = formData.get('tipo')
   if (tipo !== 'produtos' && tipo !== 'fornecedores') return { error: 'Tipo de importação inválido' }
   const ctx = await contexto(tipo)
@@ -92,6 +94,7 @@ export async function previaImportacao(formData: FormData): Promise<PreviaImport
 
 export async function confirmarImportacao(id: number, tipo: TipoImportacao): Promise<{ ok: true; criados: number; atualizados: number; duplicado: boolean } | Erro> {
   const __d = viaDesktop('importacao#confirmarImportacao', confirmarImportacao, [id, tipo]); if (__d) return __d as never
+  await guardaModulo('importacao#confirmarImportacao')
   if (tipo !== 'produtos' && tipo !== 'fornecedores') return { error: 'Tipo de importação inválido' }
   if (!Number.isInteger(id) || id <= 0) return { error: 'Prévia inválida' }
   const ctx = await contexto(tipo)

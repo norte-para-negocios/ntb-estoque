@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { carimboUsuario, getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
@@ -40,6 +41,7 @@ export async function createInventario(
   filtros?: { tipos?: string[]; familias?: string[]; curvas?: string[] }
 ) {
   const __d = viaDesktop('inventario#createInventario', createInventario, [codigoLocalEstoque, dataEscolhida, filtros]); if (__d) return __d as never
+  await guardaModulo('inventario#createInventario')
   const hojeBahia = hojeBahiaISO()
   if (dataEscolhida && dataEscolhida > hojeBahia) {
     return { error: 'A data não pode ser futura' }
@@ -114,6 +116,7 @@ export async function addInventarioItem(
   }
 ) {
   const __d = viaDesktop('inventario#addInventarioItem', addInventarioItem, [inventarioId, produto]); if (__d) return __d as never
+  await guardaModulo('inventario#addInventarioItem')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Inventarios - Editar'))) {
     return null
@@ -162,6 +165,7 @@ export async function enviarInventarioItem(
   motivo?: string | null
 ): Promise<EnvioInventarioResult> {
   const __d = viaDesktop('inventario#enviarInventarioItem', enviarInventarioItem, [itemId, quan, motivo]); if (__d) return __d as never
+  await guardaModulo('inventario#enviarInventarioItem')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Inventarios - Editar'))) {
     return { status: 'Erro', descricao_status: 'Sem permissao para editar', valor: null, id_ajuste: null, error: 'Sem permissao para editar inventario' }
@@ -289,6 +293,7 @@ async function enviarItemOmie(lojaId: number, itemId: number, quan: number | nul
 
 export async function removeInventarioItem(itemId: number) {
   const __d = viaDesktop('inventario#removeInventarioItem', removeInventarioItem, [itemId]); if (__d) return __d as never
+  await guardaModulo('inventario#removeInventarioItem')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Inventarios - Editar'))) {
     return { error: 'Sem permissao para editar inventario' }
@@ -485,6 +490,7 @@ async function processarItemInventario(
  */
 export async function finishInventario(inventarioId: number) {
   const __d = viaDesktop('inventario#finishInventario', finishInventario, [inventarioId]); if (__d) return __d as never
+  await guardaModulo('inventario#finishInventario')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Inventarios - Editar'))) {
     return { error: 'Sem permissao para editar inventario' }
@@ -539,6 +545,7 @@ export async function finishInventario(inventarioId: number) {
  */
 export async function forceSyncInventario(inventarioId: number) {
   const __d = viaDesktop('inventario#forceSyncInventario', forceSyncInventario, [inventarioId]); if (__d) return __d as never
+  await guardaModulo('inventario#forceSyncInventario')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Inventarios - Editar'))) {
     return { error: 'Sem permissao para editar inventario' }
@@ -646,6 +653,7 @@ export async function retryAjustesInventarioPendentes(
   opts: { limitePorLoja?: number } = {}
 ): Promise<{ loja_id: number; tentadas: number; sucesso: number; falhas: number; erro?: string }[]> {
   const __d = viaDesktop('inventario#retryAjustesInventarioPendentes', retryAjustesInventarioPendentes, [lojas, opts]); if (__d) return __d as never
+  await guardaModulo('inventario#retryAjustesInventarioPendentes')
   const limitePorLoja = opts.limitePorLoja ?? 30
   const supabase = createServiceClient()
   const resultados: { loja_id: number; tentadas: number; sucesso: number; falhas: number; erro?: string }[] = []
@@ -864,6 +872,7 @@ export async function retryAjustesInventarioPendentes(
  */
 export async function duplicarInventario(inventarioId: number, dataEscolhida?: string) {
   const __d = viaDesktop('inventario#duplicarInventario', duplicarInventario, [inventarioId, dataEscolhida]); if (__d) return __d as never
+  await guardaModulo('inventario#duplicarInventario')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Inventarios - Criar'))) {
     return { error: 'Sem permissao para criar inventario' }
@@ -934,6 +943,7 @@ export async function duplicarInventario(inventarioId: number, dataEscolhida?: s
  */
 export async function excluirInventario(inventarioId: number) {
   const __d = viaDesktop('inventario#excluirInventario', excluirInventario, [inventarioId]); if (__d) return __d as never
+  await guardaModulo('inventario#excluirInventario')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Inventarios - Excluir'))) {
     return { error: 'Sem permissão para excluir' }
@@ -994,6 +1004,7 @@ export async function excluirInventario(inventarioId: number) {
  */
 export async function editQuantidadeInventarioItem(itemId: number, quan: number | null) {
   const __d = viaDesktop('inventario#editQuantidadeInventarioItem', editQuantidadeInventarioItem, [itemId, quan]); if (__d) return __d as never
+  await guardaModulo('inventario#editQuantidadeInventarioItem')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Inventarios - Editar'))) {
     return { error: 'Sem permissao para editar inventario' }
@@ -1096,6 +1107,7 @@ async function enviarItemProprio(lojaId: number, itemId: number, quan: number | 
 /** Informa o motivo de uma diferença grande e lança o ajuste (estoque próprio). */
 export async function informarMotivoInventarioItem(itemId: number, motivo: string): Promise<EnvioInventarioResult> {
   const __d = viaDesktop('inventario#informarMotivoInventarioItem', informarMotivoInventarioItem, [itemId, motivo]); if (__d) return __d as never
+  await guardaModulo('inventario#informarMotivoInventarioItem')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Inventarios - Editar'))) {
     return { status: 'Erro', descricao_status: 'Sem permissao para editar', valor: null, id_ajuste: null, error: 'Sem permissao para editar inventario' }

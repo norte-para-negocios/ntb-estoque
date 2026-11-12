@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
@@ -18,6 +19,7 @@ import { criarLocalProprio, editarLocalProprio, localTemMovimento, type LocalPro
  */
 export async function excluirLocalEstoque(id: number) {
   const __d = viaDesktop('local-estoque#excluirLocalEstoque', excluirLocalEstoque, [id]); if (__d) return __d as never
+  await guardaModulo('local-estoque#excluirLocalEstoque')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Locais de Estoque - Excluir'))) return { error: 'Sem permissão' }
   if (!id) return { error: 'Local inválido' }
@@ -51,6 +53,7 @@ export async function excluirLocalEstoque(id: number) {
  */
 export async function criarLocalEstoque(dados: { descricao: string; codigo?: string } & Partial<Omit<LocalProprioCampos, 'descricao' | 'codigo'>>) {
   const __d = viaDesktop('local-estoque#criarLocalEstoque', criarLocalEstoque, [dados]); if (__d) return __d as never
+  await guardaModulo('local-estoque#criarLocalEstoque')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Locais de Estoque - Criar'))) return { error: 'Sem permissão' }
   if (!dados.descricao?.trim()) return { error: 'Informe a descrição do local' }
@@ -96,6 +99,7 @@ export async function editarLocalEstoque(dados: {
   codigo?: string
 } & Partial<Omit<LocalProprioCampos, 'descricao' | 'codigo'>>) {
   const __d = viaDesktop('local-estoque#editarLocalEstoque', editarLocalEstoque, [dados]); if (__d) return __d as never
+  await guardaModulo('local-estoque#editarLocalEstoque')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Locais de Estoque - Editar'))) return { error: 'Sem permissão' }
   if (!dados.codigoLocalEstoque) return { error: 'Local inválido' }

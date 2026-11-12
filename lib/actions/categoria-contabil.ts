@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
@@ -16,6 +17,7 @@ export type CategoriaContabilInput = {
 // expoe essa classificacao via API pra gravar aqui).
 export async function criarCategoriaContabil(dados: CategoriaContabilInput) {
   const __d = viaDesktop('categoria-contabil#criarCategoriaContabil', criarCategoriaContabil, [dados]); if (__d) return __d as never
+  await guardaModulo('categoria-contabil#criarCategoriaContabil')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Categorias Contabeis - Criar'))) return { error: 'Sem permissão' }
   if (!dados.nome.trim()) return { error: 'Informe o nome da categoria' }
@@ -35,6 +37,7 @@ export async function criarCategoriaContabil(dados: CategoriaContabilInput) {
 
 export async function editarCategoriaContabil(id: number, dados: CategoriaContabilInput) {
   const __d = viaDesktop('categoria-contabil#editarCategoriaContabil', editarCategoriaContabil, [id, dados]); if (__d) return __d as never
+  await guardaModulo('categoria-contabil#editarCategoriaContabil')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Categorias Contabeis - Editar'))) return { error: 'Sem permissão' }
   if (!dados.nome.trim()) return { error: 'Informe o nome da categoria' }
@@ -54,6 +57,7 @@ export async function editarCategoriaContabil(id: number, dados: CategoriaContab
 
 export async function excluirCategoriaContabil(id: number) {
   const __d = viaDesktop('categoria-contabil#excluirCategoriaContabil', excluirCategoriaContabil, [id]); if (__d) return __d as never
+  await guardaModulo('categoria-contabil#excluirCategoriaContabil')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Categorias Contabeis - Excluir'))) return { error: 'Sem permissão' }
 

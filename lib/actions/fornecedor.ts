@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
@@ -97,6 +98,7 @@ async function criarFornecedorProprio(lojaId: number, norm: ReturnType<typeof no
  */
 export async function criarFornecedor(dados: ParceiroInput): Promise<{ ok?: boolean; error?: string; omieError?: string }> {
   const __d = viaDesktop('fornecedor#criarFornecedor', criarFornecedor, [dados]); if (__d) return __d as never
+  await guardaModulo('fornecedor#criarFornecedor')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Fornecedores - Criar'))) return { error: 'Sem permissão' }
   if (!dados.razao_social.trim()) return { error: 'Informe a razão social' }
@@ -131,6 +133,7 @@ export async function criarFornecedor(dados: ParceiroInput): Promise<{ ok?: bool
 
 export async function editarFornecedor(id: number, dados: ParceiroInput): Promise<{ ok?: boolean; error?: string; omieError?: string }> {
   const __d = viaDesktop('fornecedor#editarFornecedor', editarFornecedor, [id, dados]); if (__d) return __d as never
+  await guardaModulo('fornecedor#editarFornecedor')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Fornecedores - Editar'))) return { error: 'Sem permissão' }
   if (!dados.razao_social.trim()) return { error: 'Informe a razão social' }
@@ -186,6 +189,7 @@ export async function editarFornecedor(id: number, dados: ParceiroInput): Promis
 
 export async function excluirFornecedor(id: number): Promise<{ ok?: boolean; error?: string; omieError?: string }> {
   const __d = viaDesktop('fornecedor#excluirFornecedor', excluirFornecedor, [id]); if (__d) return __d as never
+  await guardaModulo('fornecedor#excluirFornecedor')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Fornecedores - Excluir'))) return { error: 'Sem permissão' }
 
@@ -220,6 +224,7 @@ export async function excluirFornecedor(id: number): Promise<{ ok?: boolean; err
 
 export async function puxarFornecedoresDoOmie() {
   const __d = viaDesktop('fornecedor#puxarFornecedoresDoOmie', puxarFornecedoresDoOmie, []); if (__d) return __d as never
+  await guardaModulo('fornecedor#puxarFornecedoresDoOmie')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Fornecedores - Sincronizar'))) return { error: 'Sem permissão' }
 

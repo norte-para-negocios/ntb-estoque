@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 import { bloqueioDaResposta, ehRecusaDoDisjuntor } from '@/lib/omie/erros-omie'
 
 import { createServiceClient } from '@/lib/supabase/server'
@@ -30,6 +31,7 @@ export async function createTransferencia(data: {
   data?: string // YYYY-MM-DD; vazio = hoje. Pode ser retroativa, nao futura.
 }) {
   const __d = viaDesktop('transferencia#createTransferencia', createTransferencia, [data]); if (__d) return __d as never
+  await guardaModulo('transferencia#createTransferencia')
   if (data.codigoLocalOrigem === data.codigoLocalDestino) {
     return { error: 'Origem e destino não podem ser o mesmo local' }
   }
@@ -72,6 +74,7 @@ export async function addMovimento(
   produto: { id_prod: number }
 ) {
   const __d = viaDesktop('transferencia#addMovimento', addMovimento, [transferenciaId, produto]); if (__d) return __d as never
+  await guardaModulo('transferencia#addMovimento')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Transferencias - Editar'))) {
     return null
@@ -133,6 +136,7 @@ export async function enviarMovimento(
   quan: number | null
 ): Promise<EnvioMovimentoResult> {
   const __d = viaDesktop('transferencia#enviarMovimento', enviarMovimento, [movimentoId, quan]); if (__d) return __d as never
+  await guardaModulo('transferencia#enviarMovimento')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Transferencias - Editar'))) {
     return { status: 'Erro', descricao_status: 'Sem permissao para editar', valor: null, id_ajuste: null, error: 'Sem permissao para editar transferencia' }
@@ -269,6 +273,7 @@ export async function enviarMovimento(
 /** Observação geral da transferência (vai no Omie junto de cada item enviado depois, e no PDF). */
 export async function salvarObservacaoTransferencia(transferenciaId: number, texto: string) {
   const __d = viaDesktop('transferencia#salvarObservacaoTransferencia', salvarObservacaoTransferencia, [transferenciaId, texto]); if (__d) return __d as never
+  await guardaModulo('transferencia#salvarObservacaoTransferencia')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Transferencias - Editar'))) {
     return { error: 'Sem permissao para editar transferencia' }
@@ -290,6 +295,7 @@ export async function salvarObservacaoTransferencia(transferenciaId: number, tex
  */
 export async function salvarObservacaoItem(movimentoId: number, texto: string): Promise<{ ok?: true; error?: string; envio?: EnvioMovimentoResult }> {
   const __d = viaDesktop('transferencia#salvarObservacaoItem', salvarObservacaoItem, [movimentoId, texto]); if (__d) return __d as never
+  await guardaModulo('transferencia#salvarObservacaoItem')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Transferencias - Editar'))) {
     return { error: 'Sem permissao para editar transferencia' }
@@ -315,6 +321,7 @@ export async function salvarObservacaoItem(movimentoId: number, texto: string): 
 
 export async function removeMovimento(movimentoId: number) {
   const __d = viaDesktop('transferencia#removeMovimento', removeMovimento, [movimentoId]); if (__d) return __d as never
+  await guardaModulo('transferencia#removeMovimento')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Transferencias - Editar'))) {
     return { error: 'Sem permissao para editar transferencia' }
@@ -527,6 +534,7 @@ async function processarMovimento(
  */
 export async function finishTransferencia(transferenciaId: number) {
   const __d = viaDesktop('transferencia#finishTransferencia', finishTransferencia, [transferenciaId]); if (__d) return __d as never
+  await guardaModulo('transferencia#finishTransferencia')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Transferencias - Editar'))) {
     return { error: 'Sem permissao para editar transferencia' }
@@ -589,6 +597,7 @@ export async function finishTransferencia(transferenciaId: number) {
  */
 export async function forceSyncTransferencia(transferenciaId: number) {
   const __d = viaDesktop('transferencia#forceSyncTransferencia', forceSyncTransferencia, [transferenciaId]); if (__d) return __d as never
+  await guardaModulo('transferencia#forceSyncTransferencia')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Transferencias - Editar'))) {
     return { error: 'Sem permissao para editar transferencia' }
@@ -700,6 +709,7 @@ export async function retryMovimentosTransferenciaPendentes(
   opts: { limitePorLoja?: number } = {}
 ): Promise<{ loja_id: number; tentadas: number; sucesso: number; falhas: number; erro?: string }[]> {
   const __d = viaDesktop('transferencia#retryMovimentosTransferenciaPendentes', retryMovimentosTransferenciaPendentes, [lojas, opts]); if (__d) return __d as never
+  await guardaModulo('transferencia#retryMovimentosTransferenciaPendentes')
   const limitePorLoja = opts.limitePorLoja ?? 30
   const supabase = createServiceClient()
   const resultados: { loja_id: number; tentadas: number; sucesso: number; falhas: number; erro?: string }[] = []
@@ -957,6 +967,7 @@ export async function retryMovimentosTransferenciaPendentes(
  */
 export async function duplicarTransferencia(transferenciaId: number, novaData?: string) {
   const __d = viaDesktop('transferencia#duplicarTransferencia', duplicarTransferencia, [transferenciaId, novaData]); if (__d) return __d as never
+  await guardaModulo('transferencia#duplicarTransferencia')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Transferencias - Criar'))) {
     return { error: 'Sem permissao para criar transferencia' }
@@ -1035,6 +1046,7 @@ export async function duplicarTransferencia(transferenciaId: number, novaData?: 
  */
 export async function excluirTransferencia(transferenciaId: number) {
   const __d = viaDesktop('transferencia#excluirTransferencia', excluirTransferencia, [transferenciaId]); if (__d) return __d as never
+  await guardaModulo('transferencia#excluirTransferencia')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Transferencias - Excluir'))) {
     return { error: 'Sem permissão para excluir' }
@@ -1093,6 +1105,7 @@ export async function excluirTransferencia(transferenciaId: number) {
  */
 export async function editQuantidadeMovimento(movId: number, quan: number | null) {
   const __d = viaDesktop('transferencia#editQuantidadeMovimento', editQuantidadeMovimento, [movId, quan]); if (__d) return __d as never
+  await guardaModulo('transferencia#editQuantidadeMovimento')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Transferencias - Editar'))) {
     return { error: 'Sem permissao para editar transferencia' }

@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 // "Nosso Omie" Fase 4: concluir / excluir / mudar a data de OPs em lote a partir de /ordem-producao/abertas.
 // A tela chama UMA OP por vez (uma escrita no Omie por vez, para no primeiro bloqueio do Omie e cabe no corte de
@@ -23,6 +24,7 @@ type OPRow = { id: number; identificacao_n_cod_op: number | null; concluida: boo
 
 export async function acaoOPLote(input: { acao: AcaoLoteOP; opId: number; dataISO?: string | null }): Promise<RespostaLoteOP> {
   const __d = viaDesktop('ops-lote#acaoOPLote', acaoOPLote, [input]); if (__d) return __d as never
+  await guardaModulo('ops-lote#acaoOPLote')
   const ctx = await contextoEscritaOmie('OP - Acoes em lote')
   if ('error' in ctx) return { error: ctx.error, parar: true }
   if (!['concluir', 'excluir', 'data'].includes(input.acao)) return { error: 'Ação inválida.', parar: true }

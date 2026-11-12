@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { revalidatePath } from 'next/cache'
 import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
@@ -30,6 +31,7 @@ function atualizar() {
 /** 'Dar baixa por vencimento': saída com origem PERDA, dirigida ao lote escolhido, com motivo. */
 export async function baixarLoteVencido(dados: { loteId: number; quantidade: number | string; motivo: string }): Promise<Resposta> {
   const __d = viaDesktop('validade-proprio#baixarLoteVencido', baixarLoteVencido, [dados]); if (__d) return __d as never
+  await guardaModulo('validade-proprio#baixarLoteVencido')
   const ctx = await contexto('Movimentacoes - Criar')
   if ('error' in ctx) return ctx
   const quantidade = lerNumeroBR(dados.quantidade, { milhar: true }) ?? 0 // ponto = milhar, vírgula = decimal
@@ -57,6 +59,7 @@ export async function baixarLoteVencido(dados: { loteId: number; quantidade: num
 /** Quantos dias antes do vencimento o lote entra no alerta (Início, Reposição, filtro padrão da tela). */
 export async function salvarAlertaValidade(dias: number | string): Promise<Resposta> {
   const __d = viaDesktop('validade-proprio#salvarAlertaValidade', salvarAlertaValidade, [dias]); if (__d) return __d as never
+  await guardaModulo('validade-proprio#salvarAlertaValidade')
   const ctx = await contexto('Validade')
   if ('error' in ctx) return ctx
   const n = Math.trunc(Number(dias))
@@ -70,6 +73,7 @@ export async function salvarAlertaValidade(dias: number | string): Promise<Respo
 /** Corrige diferença entre lotes e saldo (só no "saldo sem lote"; nunca mexe em lote com validade). */
 export async function reconciliarLotes(): Promise<{ ok: true; corrigidos: number } | { error: string }> {
   const __d = viaDesktop('validade-proprio#reconciliarLotes', reconciliarLotes, []); if (__d) return __d as never
+  await guardaModulo('validade-proprio#reconciliarLotes')
   const ctx = await contexto('Movimentacoes - Criar')
   if ('error' in ctx) return ctx
   const { data, error } = await createServiceClient().rpc('reconciliar_lotes', { p_loja: ctx.lojaId })

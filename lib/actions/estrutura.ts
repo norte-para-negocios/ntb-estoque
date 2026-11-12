@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { carimboUsuario, getCurrentLojaId, requirePermissao } from '@/lib/auth'
@@ -59,6 +60,7 @@ export async function verEstrutura(
   codigoProduto: number
 ): Promise<{ error: string } | { ok: true; view: EstruturaView }> {
   const __d = viaDesktop('estrutura#verEstrutura', verEstrutura, [codigoProduto]); if (__d) return __d as never
+  await guardaModulo('estrutura#verEstrutura')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos'))) return { error: 'Sem permissão' }
   if (await ehLojaProprio(lojaId)) return verEstruturaProprio(lojaId, codigoProduto)
@@ -179,6 +181,7 @@ export async function salvarEstrutura(
   opts?: { rendimento?: number; expandirNaVenda?: boolean }
 ): Promise<{ error: string } | { ok: true; incluidos: number; alterados: number; excluidos: number }> {
   const __d = viaDesktop('estrutura#salvarEstrutura', salvarEstrutura, [codigoProduto, itens, opts]); if (__d) return __d as never
+  await guardaModulo('estrutura#salvarEstrutura')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos - Editar'))) return { error: 'Sem permissão para editar a ficha técnica' }
   if (await ehLojaProprio(lojaId)) return salvarEstruturaProprio(lojaId, codigoProduto, itens, opts, await carimboUsuario())

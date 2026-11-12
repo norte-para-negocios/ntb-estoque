@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { isAdmin } from '@/lib/auth'
@@ -19,6 +20,7 @@ export async function salvarMapeamentoLocalEstoque(
   barCodigo: number | null
 ) {
   const __d = viaDesktop('mapeamento-local-estoque#salvarMapeamentoLocalEstoque', salvarMapeamentoLocalEstoque, [lojaId, cozinhaCodigo, barCodigo]); if (__d) return __d as never
+  await guardaModulo('mapeamento-local-estoque#salvarMapeamentoLocalEstoque')
   if (!(await isAdmin())) return { error: 'Apenas administradores' }
 
   const supabase = createServiceClient()

@@ -1,11 +1,11 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { revalidatePath } from 'next/cache'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
-import { exigirDevAcao } from '@/lib/recursos-dev'
 import { validarTaxas, type Taxas } from '@/lib/custo-cardapio/preco-puro'
 import { validarConfigCompras, type ConfigCompras } from '@/lib/custo-cardapio/config-puro'
 
@@ -13,7 +13,7 @@ import { validarConfigCompras, type ConfigCompras } from '@/lib/custo-cardapio/c
 // `compras` (opcional, migration 474): cobertura da lista de compras, WhatsApp de compras (só dígitos) e dia da contagem.
 export async function salvarTaxasCardapio(t: Taxas, compras?: ConfigCompras | null): Promise<{ ok: true } | { error: string }> {
   const __d = viaDesktop('custo-cardapio#salvarTaxasCardapio', salvarTaxasCardapio, [t, compras]); if (__d) return __d as never
-  await exigirDevAcao()
+  await guardaModulo('custo-cardapio#salvarTaxasCardapio')
   const ator = await getAtorGestao()
   if (!ator.podeGerir) return { error: 'Sem permissão' }
   const lojaId = await getCurrentLojaId()

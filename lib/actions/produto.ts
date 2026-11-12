@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
@@ -21,6 +22,7 @@ import { criarProdutoProprio, editarProdutoProprio, excluirProdutoProprio } from
 // o select funcionar; apenas familias com codigo_familia > 0 sao enviadas ao Omie.
 export async function buscarFamilias(): Promise<{ codigo: number; descricao: string }[]> {
   const __d = viaDesktop('produto#buscarFamilias', buscarFamilias, []); if (__d) return __d as never
+  await guardaModulo('produto#buscarFamilias')
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
   const { data } = await supabase
@@ -42,6 +44,7 @@ export async function buscarFamilias(): Promise<{ codigo: number; descricao: str
 // (ou o inicio da faixa se nao houver). Tipos sem faixa definida retornam null.
 export async function sugerirProximoCodigo(tipo: string): Promise<string | null> {
   const __d = viaDesktop('produto#sugerirProximoCodigo', sugerirProximoCodigo, [tipo]); if (__d) return __d as never
+  await guardaModulo('produto#sugerirProximoCodigo')
   const lojaId = await getCurrentLojaId()
   if ((await modoDaLoja(lojaId)) !== 'omie') return null // loja própria: o código é gerado sozinho ao salvar
   const faixa = FAIXA_CODIGO_POR_TIPO[tipo]
@@ -146,6 +149,7 @@ export async function criarProduto(dados: {
   criarNoNtbVendas?: boolean
 }) {
   const __d = viaDesktop('produto#criarProduto', criarProduto, [dados]); if (__d) return __d as never
+  await guardaModulo('produto#criarProduto')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos - Criar'))) return { error: 'Sem permissão' }
 
@@ -263,6 +267,7 @@ export async function editarProduto(
   }
 ) {
   const __d = viaDesktop('produto#editarProduto', editarProduto, [id, dados]); if (__d) return __d as never
+  await guardaModulo('produto#editarProduto')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos - Editar'))) return { error: 'Sem permissão' }
   if (!id) return { error: 'Produto inválido' }
@@ -409,6 +414,7 @@ export async function editarProduto(
  */
 export async function excluirProduto(codigoProduto: number) {
   const __d = viaDesktop('produto#excluirProduto', excluirProduto, [codigoProduto]); if (__d) return __d as never
+  await guardaModulo('produto#excluirProduto')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos - Excluir'))) return { error: 'Sem permissão' }
   if (!codigoProduto) return { error: 'Produto inválido' }

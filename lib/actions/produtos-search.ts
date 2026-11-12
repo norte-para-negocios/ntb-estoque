@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId } from '@/lib/auth'
@@ -20,6 +21,7 @@ export async function buscarProdutos(
   filtros?: { tipo?: string; familia?: string }
 ): Promise<ProdutoBusca[]> {
   const __d = viaDesktop('produtos-search#buscarProdutos', buscarProdutos, [termo, filtros]); if (__d) return __d as never
+  await guardaModulo('produtos-search#buscarProdutos')
   const lojaId = await getCurrentLojaId()
   const supabase = await createClient()
   const t = termo.trim()
@@ -71,6 +73,7 @@ export async function buscarProdutos(
 
 export async function buscarProdutoPorCodigo(codigo: string): Promise<ProdutoBusca | null> {
   const __d = viaDesktop('produtos-search#buscarProdutoPorCodigo', buscarProdutoPorCodigo, [codigo]); if (__d) return __d as never
+  await guardaModulo('produtos-search#buscarProdutoPorCodigo')
   const termo = codigo.trim()
   if (!termo) return null
   const lojaId = await getCurrentLojaId()

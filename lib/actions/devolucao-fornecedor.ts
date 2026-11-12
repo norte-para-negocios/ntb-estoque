@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { revalidatePath } from 'next/cache'
 import { getCurrentLojaId, getProfile, requirePermissao } from '@/lib/auth'
@@ -40,6 +41,7 @@ function atualizar(notaId?: number | null) {
 /** Registra a devolução: os itens saem do estoque na hora (ao custo da entrada) e ficam "Devolução a emitir". */
 export async function registrarDevolucao(input: { compraId: number; itens: ItemPedidoDevolucao[]; motivo: string; chave: string }): Promise<{ ok: true; id: number; numero: number } | Erro> {
   const __d = viaDesktop('devolucao-fornecedor#registrarDevolucao', registrarDevolucao, [input]); if (__d) return __d as never
+  await guardaModulo('devolucao-fornecedor#registrarDevolucao')
   await exigirDevAcao()
   const ctx = await contexto()
   if ('error' in ctx) return ctx
@@ -65,6 +67,7 @@ export async function registrarDevolucao(input: { compraId: number; itens: ItemP
 /** Cancela a devolução ainda não emitida: os itens voltam ao estoque. */
 export async function cancelarDevolucao(id: number, motivo: string): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('devolucao-fornecedor#cancelarDevolucao', cancelarDevolucao, [id, motivo]); if (__d) return __d as never
+  await guardaModulo('devolucao-fornecedor#cancelarDevolucao')
   await exigirDevAcao()
   const ctx = await contexto()
   if ('error' in ctx) return ctx

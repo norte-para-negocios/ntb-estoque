@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { carimboUsuario, getCurrentLojaId, requirePermissao } from '@/lib/auth'
@@ -36,6 +37,7 @@ export async function criarAjusteManual(input: {
   motivoOmie?: 'INV' | 'PER'
 }) {
   const __d = viaDesktop('movimentacoes#criarAjusteManual', criarAjusteManual, [input]); if (__d) return __d as never
+  await guardaModulo('movimentacoes#criarAjusteManual')
   if (!TIPOS_MANUAIS.has(input.tipo)) {
     return { error: 'Tipo de ajuste invalido' }
   }
@@ -214,6 +216,7 @@ export async function retryMovimentosManuaisPendentes(
   opts: { limitePorLoja?: number } = {}
 ): Promise<{ loja_id: number; tentadas: number; sucesso: number; falhas: number; encerradas?: number; erro?: string }[]> {
   const __d = viaDesktop('movimentacoes#retryMovimentosManuaisPendentes', retryMovimentosManuaisPendentes, [lojas, opts]); if (__d) return __d as never
+  await guardaModulo('movimentacoes#retryMovimentosManuaisPendentes')
   const limitePorLoja = opts.limitePorLoja ?? 30
   const supabase = createServiceClient()
   const resultados: { loja_id: number; tentadas: number; sucesso: number; falhas: number; encerradas?: number; erro?: string }[] = []

@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 // Fase G (migration 222): sininho. Lê as notificações abertas da loja atual (só os tipos que o usuário tem permissão de
 // ver) e marca como lida por usuário. Nada aqui gera notificação (isso é o cron gerar-notificacoes).
@@ -49,6 +50,7 @@ async function visiveis(): Promise<{ userId: string; itens: Omit<NotificacaoTela
 
 export async function minhasNotificacoes(): Promise<{ itens: NotificacaoTela[]; naoLidas: number }> {
   const __d = viaDesktop('notificacoes#minhasNotificacoes', minhasNotificacoes, []); if (__d) return __d as never
+  await guardaModulo('notificacoes#minhasNotificacoes')
   const v = await visiveis()
   if (!v || !v.itens.length) return { itens: [], naoLidas: 0 }
   const { data: leituras } = await createServiceClient().from('notificacoes_leituras').select('notificacao_id, lida_em')
@@ -71,6 +73,7 @@ async function marcar(ids: number[], userId: string): Promise<{ ok: true } | { e
 
 export async function marcarNotificacaoLida(id: number): Promise<{ ok: true } | { error: string }> {
   const __d = viaDesktop('notificacoes#marcarNotificacaoLida', marcarNotificacaoLida, [id]); if (__d) return __d as never
+  await guardaModulo('notificacoes#marcarNotificacaoLida')
   const v = await visiveis()
   if (!v || !v.itens.some((i) => i.id === id)) return { error: 'Notificação não encontrada' }
   return marcar([id], v.userId)
@@ -78,6 +81,7 @@ export async function marcarNotificacaoLida(id: number): Promise<{ ok: true } | 
 
 export async function marcarTodasLidas(): Promise<{ ok: true } | { error: string }> {
   const __d = viaDesktop('notificacoes#marcarTodasLidas', marcarTodasLidas, []); if (__d) return __d as never
+  await guardaModulo('notificacoes#marcarTodasLidas')
   const v = await visiveis()
   if (!v) return { ok: true }
   return marcar(v.itens.map((i) => i.id), v.userId)

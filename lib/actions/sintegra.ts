@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
@@ -27,6 +28,7 @@ export async function consultarCnpj(cnpjCpf: string): Promise<
   { error: string } | { ok: true; parceiro: ParceiroOmie | null }
 > {
   const __d = viaDesktop('sintegra#consultarCnpj', consultarCnpj, [cnpjCpf]); if (__d) return __d as never
+  await guardaModulo('sintegra#consultarCnpj')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Fornecedores'))) return { error: 'Sem permissão' }
 
@@ -78,6 +80,7 @@ export async function importarParceiro(
   p: ParceiroOmie
 ): Promise<{ error: string } | { ok: true; importados: string[] }> {
   const __d = viaDesktop('sintegra#importarParceiro', importarParceiro, [p]); if (__d) return __d as never
+  await guardaModulo('sintegra#importarParceiro')
   const { lojaId, supabase } = await getLoja()
   if (!(await requirePermissao(lojaId, 'Fornecedores'))) return { error: 'Sem permissão' }
 

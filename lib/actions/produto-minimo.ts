@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
@@ -9,6 +10,7 @@ import { revalidatePath } from 'next/cache'
 // Define o estoque minimo de um produto no NTB (o Omie traz 0). Base do alerta de reposicao.
 export async function setEstoqueMinimo(produtoId: number, valor: number | null) {
   const __d = viaDesktop('produto-minimo#setEstoqueMinimo', setEstoqueMinimo, [produtoId, valor]); if (__d) return __d as never
+  await guardaModulo('produto-minimo#setEstoqueMinimo')
   const lojaId = await getCurrentLojaId()
   // Definir o estoque minimo manual e uma edicao do produto.
   if (!(await requirePermissao(lojaId, 'Produtos - Editar'))) return { error: 'Sem permissão' }

@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 // "Nosso Omie" Fase 4: trocar um insumo por outro nas fichas técnicas do Omie (ex.: Coca → Pepsi), UM prato por
 // chamada (a tela chama em sequência e para no primeiro erro). Por prato: ler a ficha ao vivo → IncluirEstrutura do
@@ -27,6 +28,7 @@ const lidos = (itens: EstruturaItem[] | undefined): ItemLido[] =>
 
 export async function trocarInsumoNoPrato(input: { de: number; para: number; quantidadeFixa: number | null; produto: number }): Promise<RespostaTroca> {
   const __d = viaDesktop('fichas-omie#trocarInsumoNoPrato', trocarInsumoNoPrato, [input]); if (__d) return __d as never
+  await guardaModulo('fichas-omie#trocarInsumoNoPrato')
   const falha = (error: string, etapa: EtapaTroca = 'nada_feito', parar = true): RespostaTroca => ({ error, etapa, parar })
   const ctx = await contextoEscritaOmie('Fichas - Trocar insumo')
   if ('error' in ctx) return falha(ctx.error)

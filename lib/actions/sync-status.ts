@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { semAutor } from '@/lib/supabase/sem-autor'
@@ -30,6 +31,7 @@ export async function reprocessarSync(
   model: SyncModel
 ): Promise<{ ok: boolean; erro?: string }> {
   const __d = viaDesktop('sync-status#reprocessarSync', reprocessarSync, [lojaId, model]); if (__d) return __d as never
+  await guardaModulo('sync-status#reprocessarSync')
   if (!SYNCS[model]) {
     return { ok: false, erro: 'Model invalido.' }
   }

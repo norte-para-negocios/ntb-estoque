@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 // Central de correções (14/10/2026): estado dos problemas, "não controla estoque", lançar OP (preparo, prato, cupom)
 // e o painel sob demanda. As outras correções chamam as ações de sempre da Fase 4 (ajusteOmie, acaoOPLote,
@@ -34,6 +35,7 @@ export async function marcarEstadoProblema(i: {
   chave: string; estado: EstadoProblema; motivo?: string | null; mensagem?: string | null; acao?: string | null; ate?: string | null; assinatura?: string | null
 }): Promise<RespostaCentral> {
   const __d = viaDesktop('central#marcarEstadoProblema', marcarEstadoProblema, [i]); if (__d) return __d as never
+  await guardaModulo('central#marcarEstadoProblema')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Movimentacoes'))) return { error: 'Sem permissão.' }
   if (!CHAVE.test(i.chave ?? '')) return { error: 'Problema inválido.' }
@@ -54,6 +56,7 @@ export async function marcarEstadoProblema(i: {
 /** Marca (ou desmarca) um produto como "não controla estoque": só aqui, o cadastro do Omie não muda. */
 export async function marcarNaoControla(i: { codigoProduto: number; motivo?: string | null; desfazer?: boolean }): Promise<RespostaCentral> {
   const __d = viaDesktop('central#marcarNaoControla', marcarNaoControla, [i]); if (__d) return __d as never
+  await guardaModulo('central#marcarNaoControla')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Movimentacoes'))) return { error: 'Sem permissão.' }
   const db = createServiceClient()
@@ -79,6 +82,7 @@ export async function lancarOPCorrecao(i: {
   chave?: string | null; assinatura?: string | null; acao?: string | null
 }): Promise<RespostaCentral> {
   const __d = viaDesktop('central#lancarOPCorrecao', lancarOPCorrecao, [i]); if (__d) return __d as never
+  await guardaModulo('central#lancarOPCorrecao')
   const ctx = await contextoEscritaOmie('Correcoes - Executar', 'Ordens de Producao - Criar', 'Ordens de Producao - Concluir')
   if ('error' in ctx) return { error: ctx.error, parar: true }
   if (i.origem !== 'cupom' && i.origem !== 'correcao') return { error: 'Pedido inválido.' }
@@ -91,6 +95,7 @@ export async function lancarOPCorrecao(i: {
 /** Dados do painel lateral (só leitura). */
 export async function carregarPainel(alvo: AlvoPainel): Promise<PainelDados | { error: string }> {
   const __d = viaDesktop('central#carregarPainel', carregarPainel, [alvo]); if (__d) return __d as never
+  await guardaModulo('central#carregarPainel')
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Movimentacoes'))) return { error: 'Sem permissão.' }
   if (!['produto', 'op', 'nota', 'cupom', 'ajuste'].includes(alvo?.tipo) || !Number.isFinite(Number(alvo?.id))) return { error: 'Item inválido.' }
@@ -111,6 +116,7 @@ export async function carregarPainel(alvo: AlvoPainel): Promise<PainelDados | { 
  */
 export async function previaRefazerInventario(i: PedidoRefazer): Promise<PreviaRefazer | { error: string }> {
   const __d = viaDesktop('central#previaRefazerInventario', previaRefazerInventario, [i]); if (__d) return __d as never
+  await guardaModulo('central#previaRefazerInventario')
   const ctx = await contextoEscritaOmieCom({ permitirLoja4: true }, 'Correcoes - Executar')
   if ('error' in ctx) return { error: ctx.error }
   try {
@@ -122,6 +128,7 @@ export async function previaRefazerInventario(i: PedidoRefazer): Promise<PreviaR
 
 export async function refazerInventario(i: PedidoRefazer & { assinatura: string }): Promise<RespostaRefazer> {
   const __d = viaDesktop('central#refazerInventario', refazerInventario, [i]); if (__d) return __d as never
+  await guardaModulo('central#refazerInventario')
   const ctx = await contextoEscritaOmieCom({ permitirLoja4: true }, 'Correcoes - Executar', 'Movimentacoes - Criar')
   if ('error' in ctx) return { error: ctx.error }
   const u = await quem()

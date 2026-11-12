@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { createHash } from 'crypto'
 import { revalidatePath } from 'next/cache'
@@ -54,6 +55,7 @@ async function jaImportada(lojaId: number, chave: string): Promise<PedidoJaImpor
 /** Prévia: cada linha com seus erros e os pedidos que vão ser criados. Não grava nada. */
 export async function previaImportacaoPedidos(arq: ArquivoImportacao): Promise<{ resultado: ResultadoImportacao; jaImportada: PedidoJaImportado[] } | ErroCompras> {
   const __d = viaDesktop('importar-pedidos#previaImportacaoPedidos', previaImportacaoPedidos, [arq]); if (__d) return __d as never
+  await guardaModulo('importar-pedidos#previaImportacaoPedidos')
   await exigirDevAcao()
   const ctx = await contextoCompras(['Compras - Pedidos'])
   if ('error' in ctx) return ctx
@@ -65,6 +67,7 @@ export async function previaImportacaoPedidos(arq: ArquivoImportacao): Promise<{
 /** Grava os pedidos (rascunho) se a planilha não tiver nenhum erro. O mesmo arquivo de novo devolve os pedidos da 1ª vez. */
 export async function confirmarImportacaoPedidos(arq: ArquivoImportacao): Promise<{ pedidos: PedidoJaImportado[]; duplicado: boolean } | ErroCompras> {
   const __d = viaDesktop('importar-pedidos#confirmarImportacaoPedidos', confirmarImportacaoPedidos, [arq]); if (__d) return __d as never
+  await guardaModulo('importar-pedidos#confirmarImportacaoPedidos')
   await exigirDevAcao()
   const ctx = await contextoCompras(['Compras - Pedidos'])
   if ('error' in ctx) return ctx

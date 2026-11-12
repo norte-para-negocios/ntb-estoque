@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { revalidatePath } from 'next/cache'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
@@ -17,6 +18,7 @@ type Resposta = { ok: true } | { error: string }
 
 export async function salvarLimiteVariacaoPreco(pct: number | string): Promise<Resposta> {
   const __d = viaDesktop('variacao-preco#salvarLimiteVariacaoPreco', salvarLimiteVariacaoPreco, [pct]); if (__d) return __d as never
+  await guardaModulo('variacao-preco#salvarLimiteVariacaoPreco')
   await exigirDevAcao()
   const lojaId = await getCurrentLojaId()
   if ((await modoDaLoja(lojaId)) !== 'proprio') return { error: 'Esta loja não usa o estoque próprio.' }
