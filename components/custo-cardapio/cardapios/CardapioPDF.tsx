@@ -15,7 +15,7 @@ const s = StyleSheet.create({
   vermelho: { color: '#dc2626' },
 })
 
-export type LinhaCardapioPdf = { descricao: string; familia: string | null; preco: number | null; custo: number; cmv: number | null; sugerido: number; acima: boolean }
+export type LinhaCardapioPdf = { descricao: string; familia: string | null; preco: number | null; custo: number; cmv: number | null; sugerido: number; acima: boolean; porcoes?: number; participacao?: number }
 
 export function CardapioPDF({ loja, nome, canal, linhas, interno, meta, resumo }: {
   loja: string
@@ -49,19 +49,23 @@ export function CardapioPDF({ loja, nome, canal, linhas, interno, meta, resumo }
             ]} />
             <View style={pdfTabela.table}>
               <View style={pdfTabela.thead}>
-                <Text style={[pdfTabela.th, s.th, { width: '46%' }]}>Prato</Text>
+                <Text style={[pdfTabela.th, s.th, { width: '32%' }]}>Prato</Text>
+                <Text style={[pdfTabela.th, s.th, { width: '7%', textAlign: 'right' }]}>Porções</Text>
                 <Text style={[pdfTabela.th, s.th, { width: '13%', textAlign: 'right' }]}>Custo</Text>
+                <Text style={[pdfTabela.th, s.th, { width: '7%', textAlign: 'right' }]}>% custo</Text>
                 <Text style={[pdfTabela.th, s.th, { width: '13%', textAlign: 'right' }]}>Preço</Text>
-                <Text style={[pdfTabela.th, s.th, { width: '12%', textAlign: 'right' }]}>CMV</Text>
-                <Text style={[pdfTabela.th, s.th, { width: '14%', textAlign: 'right' }]}>Preço p/ meta</Text>
+                <Text style={[pdfTabela.th, s.th, { width: '11%', textAlign: 'right' }]}>CMV</Text>
+                <Text style={[pdfTabela.th, s.th, { width: '17%', textAlign: 'right' }]}>Preço p/ meta</Text>
               </View>
               {linhas.map((l, i) => (
                 <View key={i} style={[pdfTabela.tr, i % 2 ? pdfTabela.trAlt : {}]} wrap={false}>
-                  <Text style={[pdfTabela.td, { width: '46%' }]}>{l.descricao}</Text>
+                  <Text style={[pdfTabela.td, { width: '32%' }]}>{l.descricao}</Text>
+                  <Text style={[pdfTabela.td, { width: '7%', textAlign: 'right' }]}>{(l.porcoes ?? 1).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</Text>
                   <Text style={[pdfTabela.td, { width: '13%', textAlign: 'right' }]}>{brl(l.custo)}</Text>
+                  <Text style={[pdfTabela.td, { width: '7%', textAlign: 'right' }]}>{l.participacao != null ? pct(l.participacao, 0) : '—'}</Text>
                   <Text style={[pdfTabela.td, { width: '13%', textAlign: 'right' }]}>{brl(l.preco)}</Text>
-                  <Text style={[pdfTabela.td, { width: '12%', textAlign: 'right' }, l.acima ? s.vermelho : {}]}>{pct(l.cmv)}</Text>
-                  <Text style={[pdfTabela.td, { width: '14%', textAlign: 'right' }]}>{l.sugerido > 0 ? brl(l.sugerido) : '—'}</Text>
+                  <Text style={[pdfTabela.td, { width: '11%', textAlign: 'right' }, l.acima ? s.vermelho : {}]}>{pct(l.cmv)}</Text>
+                  <Text style={[pdfTabela.td, { width: '17%', textAlign: 'right' }]}>{l.sugerido > 0 ? brl(l.sugerido) : '—'}</Text>
                 </View>
               ))}
             </View>

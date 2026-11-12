@@ -61,3 +61,18 @@ test('move item na lista', () => {
   assert.equal(moverNaLista([1, 2, 3], 3, 'baixo'), null)
   assert.equal(moverNaLista([1, 2, 3], 9, 'cima'), null)
 })
+
+test('porções: CMV do conjunto, margem, ROI e participação ponderados pelas porções', async () => {
+  const { participacaoNoCusto, lerPorcoes } = await import('./cardapios-puro.ts')
+  const a = { conta: contaDoItem(item({ custo: 10, precoCadastro: 40 }), 'salao', t), custo: 10, porcoes: 2 }
+  const b = { conta: contaDoItem(item({ custo: 6, precoCadastro: 30 }), 'salao', t), custo: 6, porcoes: 1 }
+  const r = resumoDoCardapio([a, b], 'salao', t)
+  perto(r.custoTotal, 26); perto(r.vendaTotal, 110); perto(r.cmvCardapio as number, 26 / 110)
+  perto(r.margem as number, 84); perto(r.margemPct as number, 84 / 110); perto(r.roi as number, 84 / 26)
+  perto(r.sobraTotal as number, 2 * (40 * 0.91 - 10) + (30 * 0.91 - 6))
+  const p = participacaoNoCusto([{ custo: 10, porcoes: 2 }, { custo: 6, porcoes: 1 }, { custo: 50, semFicha: true }])
+  perto(p[0], 20 / 26); perto(p[1], 6 / 26); assert.equal(p[2], 0)
+  assert.equal(lerPorcoes('1,5'), 1.5); assert.equal(lerPorcoes('0'), null); assert.equal(lerPorcoes('abc'), null); assert.equal(lerPorcoes('1001'), null)
+  // sem porções, o resumo de antes não muda
+  perto(resumoDoCardapio([{ conta: a.conta, custo: 10 }, { conta: b.conta, custo: 6 }], 'salao', t).cmvCardapio as number, 16 / 70)
+})

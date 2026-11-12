@@ -9,6 +9,7 @@ export const ABAS_COZINHA = [
   { href: '/cozinha/insumos', rotulo: 'Insumos' },
   { href: '/cozinha/preparacoes', rotulo: 'Preparações' },
   { href: '/cozinha/pratos', rotulo: 'Pratos' },
+  { href: '/cozinha/guia', rotulo: 'Guia de preparo' },
   { href: '/cozinha/cardapios', rotulo: 'Cardápios' },
   { href: '/cozinha/estoque', rotulo: 'Estoque' },
   { href: '/cozinha/eventos', rotulo: 'Eventos' },

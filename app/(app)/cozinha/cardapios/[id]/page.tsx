@@ -36,7 +36,7 @@ export default async function CardapioPage({ params }: { params: Promise<{ id: s
       <EditorCardapio cardapioId={c.id} canal={c.canal} taxas={base.taxas} opcoes={opcoes}
         itens={c.itens.map((i) => ({
           itemId: i.itemId, codigo: i.codigo, codigoTexto: i.codigoTexto, descricao: i.descricao, familia: i.familia, custo: i.custo,
-          semCusto: i.semCusto, suspeitos: i.suspeitos, semFicha: i.semFicha, precoCadastro: i.precoCadastro, precoProprio: i.precoProprio,
+          semCusto: i.semCusto, suspeitos: i.suspeitos, semFicha: i.semFicha, precoCadastro: i.precoCadastro, precoProprio: i.precoProprio, porcoes: i.porcoes,
         }))} />
     </div>
   )

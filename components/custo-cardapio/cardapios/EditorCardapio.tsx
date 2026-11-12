@@ -7,8 +7,8 @@ import { toast } from 'sonner'
 import { BarraCmv } from '@/components/custo-cardapio/BarraCmv'
 import { btnClass } from '@/components/ui-kit/Button'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
-import { definirPrecoItemCardapio, definirPrecosCardapio, adicionarPratoCardapio, moverItemCardapio, removerItemCardapio } from '@/lib/actions/cozinha-cardapios'
-import { contaDoItem, lerPreco, resumoDoCardapio, type CanalCardapio } from '@/lib/custo-cardapio/cardapios-puro'
+import { definirPorcoesItemCardapio, definirPrecoItemCardapio, definirPrecosCardapio, adicionarPratoCardapio, moverItemCardapio, removerItemCardapio } from '@/lib/actions/cozinha-cardapios'
+import { contaDoItem, lerPorcoes, lerPreco, participacaoNoCusto, resumoDoCardapio, type CanalCardapio } from '@/lib/custo-cardapio/cardapios-puro'
 import type { Taxas } from '@/lib/custo-cardapio/preco-puro'
 import { brl, pct } from '@/lib/custo-cardapio/formato'
 import { SeletorPratos, type OpcaoPrato } from './SeletorPratos'
@@ -25,6 +25,8 @@ export type ItemEditor = {
   semFicha: boolean
   precoCadastro: number | null
   precoProprio: number | null
+  /** Porções deste prato no conjunto. */
+  porcoes: number
 }
 
 const fmt = (v: number | null) => (v == null ? '' : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
@@ -38,6 +40,7 @@ export function EditorCardapio({ cardapioId, canal, itens, taxas, opcoes }: {
 }) {
   // Texto digitado por item (só enquanto difere do salvo).
   const [rascunho, setRascunho] = useState<Record<number, string>>({})
+  const [rascunhoPorcoes, setRascunhoPorcoes] = useState<Record<number, string>>({})
   const [pendente, start] = useTransition()
   const delivery = canal === 'delivery'
 
@@ -45,9 +48,12 @@ export function EditorCardapio({ cardapioId, canal, itens, taxas, opcoes }: {
     const txt = rascunho[i.itemId]
     const lido = txt == null ? i.precoProprio : lerPreco(txt)
     const precoProprio = lido != null && Number.isNaN(lido) ? null : lido
-    return { i, conta: contaDoItem({ custo: i.custo, semCusto: i.semFicha ? 1 : i.semCusto, suspeitos: i.suspeitos, precoCadastro: i.precoCadastro, precoProprio }, canal, taxas) }
-  }), [itens, rascunho, canal, taxas])
-  const resumo = useMemo(() => resumoDoCardapio(linhas.map((l) => ({ conta: l.conta, custo: l.i.custo })), canal, taxas), [linhas, canal, taxas])
+    const p = rascunhoPorcoes[i.itemId]
+    const porcoes = p == null ? i.porcoes : lerPorcoes(p) ?? i.porcoes
+    return { i, porcoes, conta: contaDoItem({ custo: i.custo, semCusto: i.semFicha ? 1 : i.semCusto, suspeitos: i.suspeitos, precoCadastro: i.precoCadastro, precoProprio }, canal, taxas) }
+  }), [itens, rascunho, rascunhoPorcoes, canal, taxas])
+  const resumo = useMemo(() => resumoDoCardapio(linhas.map((l) => ({ conta: l.conta, custo: l.i.custo, porcoes: l.porcoes, semFicha: l.i.semFicha })), canal, taxas), [linhas, canal, taxas])
+  const parte = useMemo(() => participacaoNoCusto(linhas.map((l) => ({ custo: l.i.custo, porcoes: l.porcoes, semFicha: l.i.semFicha }))), [linhas])
 
   const rodar = (f: () => Promise<{ ok: true } | { error: string }>, sucesso?: string, depois?: () => void) =>
     start(async () => {
@@ -57,6 +63,16 @@ export function EditorCardapio({ cardapioId, canal, itens, taxas, opcoes }: {
     })
 
   const limparRascunho = (id: number) => setRascunho((r) => { const n = { ...r }; delete n[id]; return n })
+  const limparPorcoes = (id: number) => setRascunhoPorcoes((r) => { const n = { ...r }; delete n[id]; return n })
+
+  const salvarPorcoes = (i: ItemEditor) => {
+    const txt = rascunhoPorcoes[i.itemId]
+    if (txt == null) return
+    const v = lerPorcoes(txt)
+    if (v == null) { toast.error('Porções: um número maior que zero, até 1000.'); limparPorcoes(i.itemId); return }
+    if (v === i.porcoes) { limparPorcoes(i.itemId); return }
+    rodar(() => definirPorcoesItemCardapio(i.itemId, v), undefined, () => limparPorcoes(i.itemId))
+  }
 
   const salvarPreco = (i: ItemEditor) => {
     const txt = rascunho[i.itemId]
@@ -90,7 +106,7 @@ export function EditorCardapio({ cardapioId, canal, itens, taxas, opcoes }: {
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 pt-4 sm:px-5">
           <div>
             <h2 className="text-[17px] font-semibold">Pratos <span className="num font-normal text-text-muted">{itens.length}</span></h2>
-            <p className="text-[13px] text-text-muted">Preço em branco usa o do cadastro. O preço daqui vale só para este cardápio.</p>
+            <p className="text-[13px] text-text-muted">Preço em branco usa o do cadastro. O preço daqui vale só para este cardápio. As porções pesam no CMV e nos totais.</p>
           </div>
           <SeletorPratos opcoes={opcoes} usados={itens.map((i) => i.codigo)} metaCmv={taxas.metaCmv}
             onEscolher={async (codigo) => {
@@ -104,7 +120,7 @@ export function EditorCardapio({ cardapioId, canal, itens, taxas, opcoes }: {
           <EmptyState icon={ChefHat} title="Nenhum prato ainda" hint="Adicione os pratos que entram neste cardápio para ver o CMV dele." />
         ) : (
           <ul className="mt-3 divide-y divide-border/60">
-            {linhas.map(({ i, conta }, idx) => {
+            {linhas.map(({ i, conta, porcoes }, idx) => {
               const proprio = rascunho[i.itemId] ?? fmt(i.precoProprio)
               const mudouPreco = conta.fontePreco === 'proprio'
               return (
@@ -122,6 +138,23 @@ export function EditorCardapio({ cardapioId, canal, itens, taxas, opcoes }: {
                         : <>custo <span className="num">{brl(i.custo)}</span>{delivery ? ` + embalagem ${brl(taxas.embalagem)}` : ''}{i.familia ? ` · ${i.familia}` : ''}</>}
                       {i.semCusto > 0 && !i.semFicha ? <span className="text-warn"> · {i.semCusto} insumo{i.semCusto > 1 ? 's' : ''} sem custo</span> : ''}
                     </p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-text-muted">
+                      <label className="inline-flex items-center gap-1.5">
+                        <input inputMode="decimal" aria-label={`Porções de ${i.descricao} no cardápio`}
+                          value={rascunhoPorcoes[i.itemId] ?? i.porcoes.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
+                          onChange={(e) => setRascunhoPorcoes((r) => ({ ...r, [i.itemId]: e.target.value }))}
+                          onBlur={() => salvarPorcoes(i)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') limparPorcoes(i.itemId) }}
+                          className="num h-7 w-[56px] rounded-[var(--r-sm)] bg-surface-2 px-2 text-right text-[13px] text-text outline-none focus:ring-2 focus:ring-brand/40" />
+                        {porcoes === 1 ? 'porção' : 'porções'}
+                      </label>
+                      {!i.semFicha && resumo.custoConjunto > 0 && (
+                        <span className="inline-flex items-center gap-1.5" title="Parte do custo do cardápio">
+                          <span className="h-1.5 w-12 overflow-hidden rounded-full bg-surface-2"><span className="block h-full rounded-full bg-brand-fill" style={{ width: `${Math.min(parte[idx], 1) * 100}%` }} /></span>
+                          <span className="num">{pct(parte[idx], 0)} do custo</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <button type="button" aria-label={`Tirar ${i.descricao} do cardápio`} disabled={pendente}
                     onClick={() => rodar(() => removerItemCardapio(i.itemId), `${i.descricao} saiu do cardápio`)}
@@ -166,7 +199,17 @@ export function EditorCardapio({ cardapioId, canal, itens, taxas, opcoes }: {
         <section className="rounded-[var(--r-lg)] bg-surface p-4 shadow-[var(--shadow-sm)] sm:p-5">
           <p className="text-[13px] text-text-muted">CMV do cardápio</p>
           <p className={`num mt-1 text-[36px] font-semibold leading-none tracking-[-0.03em] ${resumo.cmvCardapio == null ? 'text-text-muted' : resumo.cmvCardapio > taxas.metaCmv ? 'text-err' : 'text-ok'}`}>{pct(resumo.cmvCardapio)}</p>
-          <p className="mt-1.5 text-[12px] text-text-muted">um de cada prato · prato típico {pct(resumo.cmvTipico)} · meta {pct(taxas.metaCmv, 0)}</p>
+          <p className="mt-1.5 text-[12px] text-text-muted">pelas porções de cada prato · prato típico {pct(resumo.cmvTipico)} · meta {pct(taxas.metaCmv, 0)}</p>
+          {resumo.margem != null && (
+            <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2.5 border-t border-border/60 pt-4 text-[13px]">
+              <div><dt className="text-text-muted">Custo do conjunto</dt><dd className="num font-semibold">{brl(resumo.custoTotal)}</dd></div>
+              <div><dt className="text-text-muted">Venda</dt><dd className="num font-semibold">{brl(resumo.vendaTotal)}</dd></div>
+              <div><dt className="text-text-muted">Margem</dt><dd className={`num font-semibold ${resumo.margem < 0 ? 'text-err' : ''}`}>{brl(resumo.margem)} <span className="font-normal text-text-muted">{pct(resumo.margemPct, 0)}</span></dd></div>
+              <div><dt className="text-text-muted">ROI</dt><dd className={`num font-semibold ${resumo.roi != null && resumo.roi < 0 ? 'text-err' : ''}`}>{resumo.roi == null ? '—' : `${resumo.roi.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}×`}</dd></div>
+              <div className="col-span-2"><dt className="text-text-muted">{delivery ? 'Sobra depois do app, cartão e imposto' : 'Sobra depois do cartão e imposto'}</dt><dd className={`num font-semibold ${resumo.sobraTotal != null && resumo.sobraTotal < 0 ? 'text-err' : 'text-ok'}`}>{brl(resumo.sobraTotal)}</dd></div>
+            </dl>
+          )}
+          {resumo.margem != null && <p className="mt-2 text-[11px] text-text-muted">ROI = margem ÷ custo: quanto volta para cada R$ 1 de ingrediente. Só pratos com preço e custo completo.</p>}
           <dl className="mt-4 space-y-2 text-[13px]">
             <div className="flex justify-between gap-3"><dt className="text-text-muted">Acima da meta</dt><dd className={`num font-semibold ${resumo.acima ? 'text-err' : ''}`}>{resumo.acima}</dd></div>
             <div className="flex justify-between gap-3"><dt className="text-text-muted">Perto do limite</dt><dd className={`num font-semibold ${resumo.atencao ? 'text-warn' : ''}`}>{resumo.atencao}</dd></div>

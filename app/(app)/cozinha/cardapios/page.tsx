@@ -9,7 +9,7 @@ import { FormCardapio } from '@/components/custo-cardapio/cardapios/FormCardapio
 import { carregarBase } from '@/lib/custo-cardapio/carregar'
 import { listarCardapios, type CardapioComConta } from '@/lib/custo-cardapio/cardapios'
 import { NOME_CANAL } from '@/lib/custo-cardapio/cardapios-puro'
-import { pct } from '@/lib/custo-cardapio/formato'
+import { brl, pct } from '@/lib/custo-cardapio/formato'
 
 // Norte Cozinha (só dev), Cardápios: seleções de pratos por canal, com o CMV de cada uma.
 export default async function CardapiosPage({ searchParams }: { searchParams: Promise<{ arquivados?: string }> }) {
@@ -66,15 +66,16 @@ export default async function CardapiosPage({ searchParams }: { searchParams: Pr
           {!verArquivados && <FormCardapio />}
         </EmptyState>
       ) : (
-        <DataTable minLargura="max-2xl:min-w-[960px]">
+        <DataTable minLargura="max-2xl:min-w-[1040px]">
           <thead>
             <tr>
-              <th className="w-[28%]">Cardápio</th>
-              <th className="w-[8%] text-right">Pratos</th>
-              <th className="w-[12%] text-right">CMV</th>
-              <th className="w-[12%] text-right">Acima da meta</th>
-              <th className="w-[20%]">Melhor prato</th>
-              <th className="w-[20%]">Pior prato</th>
+              <th className="w-[24%]">Cardápio</th>
+              <th className="w-[7%] text-right">Pratos</th>
+              <th className="w-[10%] text-right">CMV</th>
+              <th className="w-[13%] text-right">Margem</th>
+              <th className="w-[10%] text-right">Acima da meta</th>
+              <th className="w-[18%]">Melhor prato</th>
+              <th className="w-[18%]">Pior prato</th>
             </tr>
           </thead>
           <tbody>
@@ -91,6 +92,12 @@ export default async function CardapiosPage({ searchParams }: { searchParams: Pr
                   </td>
                   <td className="num text-right">{c.itens.length}</td>
                   <td className={`num text-right font-semibold ${c.resumo.cmvCardapio == null ? 'text-text-muted' : c.resumo.cmvCardapio > meta ? 'text-err' : 'text-ok'}`}>{pct(c.resumo.cmvCardapio)}</td>
+                  <td className="num text-right">
+                    {c.resumo.margem == null ? <span className="text-text-muted">—</span> : <>
+                      <span className={c.resumo.margem < 0 ? 'text-err' : ''}>{brl(c.resumo.margem)}</span>
+                      <span className="block text-[12px] text-text-muted">ROI {c.resumo.roi == null ? '—' : `${c.resumo.roi.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}×`}</span>
+                    </>}
+                  </td>
                   <td className={`num text-right ${c.resumo.acima ? 'font-semibold text-err' : 'text-text-muted'}`}>{c.resumo.acima}{c.resumo.atencao ? <span className="font-normal text-warn"> +{c.resumo.atencao}</span> : null}</td>
                   <td className="truncate text-[13px]">{melhor ? <>{melhor.descricao} <span className="num text-ok">{pct(melhor.conta.cmv)}</span></> : <span className="text-text-muted">—</span>}</td>
                   <td className="truncate text-[13px]">{pior ? <>{pior.descricao} <span className={`num ${pior.conta.cmv != null && pior.conta.cmv > meta ? 'text-err' : ''}`}>{pct(pior.conta.cmv)}</span></> : <span className="text-text-muted">—</span>}</td>
@@ -100,7 +107,7 @@ export default async function CardapiosPage({ searchParams }: { searchParams: Pr
           </tbody>
         </DataTable>
       )}
-      <p className="text-[12px] text-text-muted">CMV do cardápio = custo de um de cada prato ÷ preço de um de cada prato. No delivery entram a embalagem e as taxas do app, do cartão e o imposto. Os números com + são os pratos perto do limite.</p>
+      <p className="text-[12px] text-text-muted">CMV do cardápio = custo ÷ preço do conjunto, cada prato pelas suas porções. Margem = venda − custo do conjunto; ROI = margem ÷ custo. No delivery entram a embalagem e as taxas do app, do cartão e o imposto. Os números com + são os pratos perto do limite.</p>
     </div>
   )
 }

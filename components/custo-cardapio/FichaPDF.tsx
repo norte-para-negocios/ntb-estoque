@@ -1,4 +1,4 @@
-import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
+import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
 import { PdfCabecalho, PdfRodape, pdfTabela, PdfResumoBar } from '@/components/relatorio/PdfChrome'
 import type { NoTela } from '@/lib/custo-cardapio/carregar'
 import { brl, pct, qtd } from '@/lib/custo-cardapio/formato'
@@ -10,6 +10,13 @@ const s = StyleSheet.create({
   sub: { fontSize: 9, color: '#6b7280', marginBottom: 10 },
   secao: { fontSize: 10, fontFamily: 'Helvetica-Bold', marginTop: 12, marginBottom: 4 },
   filho: { color: '#6b7280' },
+  foto: { width: '100%', height: 200, objectFit: 'cover', borderRadius: 6, marginBottom: 10 },
+  chips: { flexDirection: 'row', gap: 12, marginBottom: 6 },
+  chip: { fontSize: 9, color: '#374151' },
+  passo: { flexDirection: 'row', marginBottom: 5 },
+  passoNum: { width: 18, fontFamily: 'Helvetica-Bold' },
+  passoTxt: { flex: 1, lineHeight: 1.4 },
+  obs: { lineHeight: 1.4, color: '#374151' },
 })
 
 export type FichaPdfProps = {
@@ -21,6 +28,12 @@ export type FichaPdfProps = {
   custo: number
   preco: number | null
   meta: number
+  /** Foto do prato (JPG/PNG baixados no servidor). */
+  foto?: { data: Buffer; format: 'jpg' | 'png' } | null
+  passos?: string[]
+  observacoes?: string | null
+  tempo?: string | null
+  rendimento?: string | null
 }
 
 function linhas(nos: NoTela[], nivel: number, out: { n: NoTela; nivel: number }[]) {
@@ -38,8 +51,16 @@ export function FichaPDF(p: FichaPdfProps) {
     <Document title={`Ficha técnica · ${p.nome}`}>
       <Page size="A4" style={s.page}>
         <PdfCabecalho titulo={p.cozinha ? 'Ficha técnica · cozinha' : 'Ficha técnica'} sub={p.loja} />
+        {/* eslint-disable-next-line jsx-a11y/alt-text -- Image do @react-pdf não tem alt */}
+        {p.foto && <Image src={p.foto} style={s.foto} />}
         <Text style={s.nome}>{p.nome}</Text>
         <Text style={s.sub}>{p.sub}</Text>
+        {(p.tempo || p.rendimento) && (
+          <View style={s.chips}>
+            {p.tempo && <Text style={s.chip}>Tempo de preparo: {p.tempo}</Text>}
+            {p.rendimento && <Text style={s.chip}>Rendimento: {p.rendimento}</Text>}
+          </View>
+        )}
         {!p.cozinha && (
           <PdfResumoBar campos={[
             { label: 'Custo', valor: brl(p.custo) },
@@ -65,6 +86,23 @@ export function FichaPDF(p: FichaPdfProps) {
             </View>
           ))}
         </View>
+        {p.passos && p.passos.length > 0 && (
+          <View>
+            <Text style={s.secao} minPresenceAhead={40}>Modo de preparo</Text>
+            {p.passos.map((t, i) => (
+              <View key={i} style={s.passo} wrap={false}>
+                <Text style={s.passoNum}>{i + 1}.</Text>
+                <Text style={s.passoTxt}>{t}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+        {p.observacoes && (
+          <View wrap={false}>
+            <Text style={s.secao}>Observações</Text>
+            <Text style={s.obs}>{p.observacoes}</Text>
+          </View>
+        )}
         <PdfRodape texto="Norte ERP · Custo e Cardápio" />
       </Page>
     </Document>

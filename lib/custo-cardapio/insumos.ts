@@ -10,6 +10,7 @@ import { hojeBahiaISO } from '@/lib/data-bahia'
 import { carregarBase, ehPreparacao, type BaseCusto } from './carregar'
 import { custoSuspeito } from './preco-puro'
 import { saltoEstranho, usosDasArvores, variacaoPorCompras, type Compra, type Uso, type VarCompra } from './insumos-puro'
+import { jaPedidoPorProduto } from './compras-puro'
 
 // Norte Cozinha: dados de Insumos, Início e Estoque da cozinha. Só leitura.
 // Insumo = folha das fichas (usado em alguma ficha, sem ficha própria). Custo agora = o de carregarBase.
@@ -245,3 +246,31 @@ export async function ultimasNotas(lojaId: number, codigo: number, limite = 10):
       }
     })
 }
+
+export type PedidosAbertos = { porProduto: Map<number, number>; pedidos: number; erro: boolean }
+
+/**
+ * O que já foi pedido ao fornecedor e ainda não chegou, pelos pedidos de compra do ERP (`/pedido-compra`, migration 200):
+ * pedidos aguardando aprovação ou aprovados; por item, quantidade na unidade do estoque (`quantidade_base`) menos o que já
+ * está ligado a nota (`vinculado`, view pedidos_compra_itens_situacao) — a mesma regra da Sugestão de compra (migration 321).
+ * Só leitura. Sem a tabela (instalação sem pedidos) ou em erro: mapa vazio.
+ */
+export const pedidosEmAberto = cache(async (lojaId: number): Promise<PedidosAbertos> => {
+  const supabase = await createClient()
+  const { data: peds, error } = await supabase.from('pedidos_compra').select('id').eq('loja_id', lojaId)
+    .in('etapa', ['aguardando_aprovacao', 'aprovado']).order('id').limit(1000)
+  if (error) return { porProduto: new Map(), pedidos: 0, erro: true }
+  const ids = (peds ?? []).map((p) => Number(p.id))
+  type I = { codigo_produto: number; quantidade_base: number | string; vinculado: number | string }
+  const itens: I[] = []
+  for (let k = 0; k < ids.length; k += 100) {
+    const { data, error: e } = await supabase.from('pedidos_compra_itens_situacao').select('id, codigo_produto, quantidade_base, vinculado')
+      .eq('loja_id', lojaId).in('pedido_id', ids.slice(k, k + 100)).order('id').limit(5000)
+    if (e) return { porProduto: new Map(), pedidos: 0, erro: true }
+    itens.push(...((data ?? []) as I[]))
+  }
+  return {
+    porProduto: jaPedidoPorProduto(itens.map((i) => ({ codigoProduto: Number(i.codigo_produto), quantidadeBase: Number(i.quantidade_base), vinculado: Number(i.vinculado) }))),
+    pedidos: ids.length, erro: false,
+  }
+})

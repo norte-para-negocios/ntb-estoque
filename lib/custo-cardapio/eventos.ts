@@ -1,11 +1,13 @@
 import 'server-only'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { linhasDoCardapio, type BaseCusto, type LinhaPrato } from './carregar'
 import { saldosDaLoja } from './saldos'
+import { reservasDeEventos, type Reservas } from './reservas'
+import { hojeBahiaISO } from '@/lib/data-bahia'
 import {
-  explodirEvento, listaDeCompras, listaDeProducao, porcoesNoEvento, resumoEvento, STATUS_EVENTO,
-  type InfoProduto, type LinhaCompra, type LinhaProducao, type ResumoEvento, type StatusEvento,
+  coberturaCompras, explodirEvento, lerConsumoReal, limitarFolga, listaDeCompras, listaDeProducao, pedidosDoEvento, porcoesNoEvento, resumoEvento, STATUS_EVENTO,
+  type Cobertura, type InfoProduto, type LinhaCompra, type LinhaConsumo, type LinhaProducao, type ResumoEvento, type StatusEvento,
 } from './eventos-puro'
 
 // Norte Cozinha, Eventos: leitura (RLS), conta do evento e as listas de produção e de compras. Gravação só em lib/actions/cozinha-eventos.ts.
@@ -13,8 +15,16 @@ import {
 export type EventoRow = {
   id: number; nome: string; data_evento: string | null; convidados: number; status: StatusEvento
   preco_por_pessoa: number | null; obs: string | null; created_at: string; updated_at: string
+  /** Folga de produção em % (0 a 200). */
+  folga_pct: number
+  finalizado_em: string | null; finalizado_por: string | null
+  /** Consumo real lançado ao finalizar (insumo → quantidade). */
+  consumo_real: Map<number, number> | null
+  baixa_ref: string | null
 }
-type EventoDb = Omit<EventoRow, 'preco_por_pessoa' | 'status'> & { preco_por_pessoa: number | string | null; status: string }
+type EventoDb = Omit<EventoRow, 'preco_por_pessoa' | 'status' | 'folga_pct' | 'consumo_real'> & {
+  preco_por_pessoa: number | string | null; status: string; folga_pct: number | string | null; consumo_real: unknown
+}
 type ItemRow = { id: number; evento_id: number; codigo_produto: number; porcoes_por_convidado: number | string; ordem: number }
 
 export type ItemEventoTela = {
@@ -35,7 +45,7 @@ export type ItemEventoTela = {
 
 export type EventoComConta = EventoRow & { itens: ItemEventoTela[]; resumo: ResumoEvento }
 
-const SELECT_EVENTO = 'id, nome, data_evento, convidados, status, preco_por_pessoa, obs, created_at, updated_at'
+const SELECT_EVENTO = 'id, nome, data_evento, convidados, status, preco_por_pessoa, obs, created_at, updated_at, folga_pct, finalizado_em, finalizado_por, consumo_real, baixa_ref'
 
 function lerEvento(r: EventoDb): EventoRow {
   const preco = r.preco_por_pessoa == null ? null : Number(r.preco_por_pessoa)
@@ -43,6 +53,7 @@ function lerEvento(r: EventoDb): EventoRow {
     ...r, id: Number(r.id), convidados: Number(r.convidados), data_evento: r.data_evento ? String(r.data_evento).slice(0, 10) : null,
     status: (STATUS_EVENTO as readonly string[]).includes(r.status) ? (r.status as StatusEvento) : 'orcamento',
     preco_por_pessoa: preco != null && Number.isFinite(preco) ? preco : null,
+    folga_pct: limitarFolga(Number(r.folga_pct ?? 0)), consumo_real: lerConsumoReal(r.consumo_real),
   }
 }
 
@@ -61,7 +72,7 @@ function montarItens(base: BaseCusto, porCodigo: Map<number, LinhaPrato>, rows: 
 }
 
 const comConta = (e: EventoRow, itens: ItemEventoTela[], base: BaseCusto): EventoComConta => ({
-  ...e, itens, resumo: resumoEvento(e.convidados, itens, base.taxas.metaCmv, e.preco_por_pessoa),
+  ...e, itens, resumo: resumoEvento(e.convidados, itens, base.taxas.metaCmv, e.preco_por_pessoa, e.folga_pct),
 })
 
 /** Pratos e preparações com ficha que podem entrar num evento. */
@@ -101,36 +112,119 @@ export type ListasEvento = {
   pratos: { codigo: number; descricao: string; porcoes: number; unidade: string | null }[]
   producao: LinhaProducao[]
   compras: LinhaCompra[]
+  cobertura: Cobertura
+  folgaPct: number
   semFicha: string[]
   ciclo: boolean
   /** Data da foto de saldo (Omie) ou null (estoque próprio, ao vivo). */
   dataSaldo: string | null
   /** Insumos cuja unidade na ficha difere da do estoque (saldo não descontado). */
   unidadeDiferente: number
+  /** Outros eventos confirmados que reservam insumos agora. */
+  outrosEventos: number
 }
 
-/** Explode o evento salvo nas listas de produção e de compras (saldo atual descontado). */
-export async function listasDoEvento(base: BaseCusto, e: EventoComConta): Promise<ListasEvento> {
-  const pedidos = e.itens.filter((i) => !i.semFicha).map((i) => ({ codigo: i.codigo, porcoes: porcoesNoEvento(e.convidados, i.porcoesPorConvidado) }))
-  const ex = explodirEvento(base.fichas, base.cmc, pedidos)
-  const saldos = await saldosDaLoja(base.lojaId, base.modo)
-  const info = (cod: number): InfoProduto => {
+function infoDe(base: BaseCusto) {
+  return (cod: number): InfoProduto => {
     const p = base.produtos.get(cod)
     return { descricao: p?.descricao ?? `Produto ${cod}`, unidade: base.unidadeNaFicha.get(cod) ?? p?.unidade?.toUpperCase() ?? null, familia: p?.familia ?? null }
   }
-  let unidadeDiferente = 0
-  // Saldo só é comparável quando a ficha usa a mesma unidade do estoque (no Omie a ficha pode ter unidade própria).
-  const saldo = (cod: number): number | undefined => {
+}
+
+/** Saldo só é comparável quando a ficha usa a mesma unidade do estoque (no Omie a ficha pode ter unidade própria). */
+function saldoComparavel(base: BaseCusto, porProduto: Map<number, { saldo: number }>, aoDivergir?: () => void) {
+  return (cod: number): number | undefined => {
     const naFicha = base.unidadeNaFicha.get(cod)
     const doEstoque = base.produtos.get(cod)?.unidade?.toUpperCase()
-    if (naFicha && doEstoque && naFicha !== doEstoque) { unidadeDiferente++; return undefined }
-    return saldos.porProduto.get(cod)?.saldo ?? 0
+    if (naFicha && doEstoque && naFicha !== doEstoque) { aoDivergir?.(); return undefined }
+    return porProduto.get(cod)?.saldo ?? 0
   }
-  const compras = listaDeCompras(ex.insumos, info, saldo)
+}
+
+/** Reservas de outros eventos para um insumo, tirando o próprio evento. */
+const reservaDeOutros = (r: Reservas, eventoId: number) => (cod: number) => {
+  const eventos = (r.porInsumo.get(cod) ?? []).filter((x) => x.eventoId !== eventoId)
+  return eventos.length ? { total: eventos.reduce((a, x) => a + x.quantidade, 0), eventos } : undefined
+}
+
+const pedidosSalvos = (e: EventoComConta) =>
+  pedidosDoEvento(e.convidados, e.itens.filter((i) => !i.semFicha), e.folga_pct)
+
+/** Explode o evento salvo nas listas de produção e de compras (com folga; saldo atual menos o que outros eventos reservaram). */
+export async function listasDoEvento(base: BaseCusto, e: EventoComConta): Promise<ListasEvento> {
+  const ex = explodirEvento(base.fichas, base.cmc, pedidosSalvos(e))
+  const [saldos, reservas] = await Promise.all([saldosDaLoja(base.lojaId, base.modo), reservasDeEventos(base, e.id)])
+  const info = infoDe(base)
+  let unidadeDiferente = 0
+  const compras = listaDeCompras(ex.insumos, info, saldoComparavel(base, saldos.porProduto, () => { unidadeDiferente++ }), reservaDeOutros(reservas, e.id))
   const producao = listaDeProducao(ex.preparacoes, (cod) => ({ ...info(cod), unidade: base.produtos.get(cod)?.unidade?.toUpperCase() ?? null }),
     (cod) => saldos.porProduto.get(cod)?.saldo ?? 0)
   return {
     pratos: e.itens.filter((i) => !i.semFicha).map((i) => ({ codigo: i.codigo, descricao: i.descricao, porcoes: porcoesNoEvento(e.convidados, i.porcoesPorConvidado), unidade: i.unidade })),
-    producao, compras, semFicha: e.itens.filter((i) => i.semFicha).map((i) => i.descricao), ciclo: ex.ciclo, dataSaldo: saldos.data, unidadeDiferente,
+    producao, compras, cobertura: coberturaCompras(compras), folgaPct: e.folga_pct,
+    semFicha: e.itens.filter((i) => i.semFicha).map((i) => i.descricao), ciclo: ex.ciclo, dataSaldo: saldos.data, unidadeDiferente,
+    outrosEventos: reservas.eventos.length,
   }
+}
+
+/** Evento que ainda vai acontecer e precisa de estoque: orçamento ou confirmado, não finalizado, de hoje em diante (ou sem data). */
+export const eventoEmAberto = (e: EventoRow) =>
+  (e.status === 'orcamento' || e.status === 'confirmado') && !e.finalizado_em && (e.data_evento == null || e.data_evento >= hojeBahiaISO())
+
+/** Para a lista: cobertura dos insumos de cada evento em aberto (uma leitura de saldo e de reservas para todos). */
+export async function coberturaDosEventos(base: BaseCusto, eventos: EventoComConta[]): Promise<Map<number, Cobertura>> {
+  const out = new Map<number, Cobertura>()
+  const abertos = eventos.filter((e) => eventoEmAberto(e) && e.itens.some((i) => !i.semFicha))
+  if (!abertos.length) return out
+  const [saldos, reservas] = await Promise.all([saldosDaLoja(base.lojaId, base.modo), reservasDeEventos(base, null)])
+  const info = infoDe(base)
+  const saldo = saldoComparavel(base, saldos.porProduto)
+  for (const e of abertos) {
+    const ex = explodirEvento(base.fichas, base.cmc, pedidosSalvos(e))
+    out.set(e.id, coberturaCompras(listaDeCompras(ex.insumos, info, saldo, reservaDeOutros(reservas, e.id))))
+  }
+  return out
+}
+
+/** Linhas do consumo: previsto (com folga, pela ficha de hoje) e usado. Finalizado = os insumos gravados no consumo real. */
+export function linhasDeConsumo(base: BaseCusto, e: EventoRow, compras: LinhaCompra[]): LinhaConsumo[] {
+  const porCodigo = new Map(compras.map((c) => [c.codigo, c]))
+  const info = infoDe(base)
+  const codigos = e.consumo_real ? [...e.consumo_real.keys()] : compras.map((c) => c.codigo)
+  return codigos.map((cod) => {
+    const c = porCodigo.get(cod)
+    const i = info(cod)
+    return {
+      codigo: cod, codigoTexto: base.produtos.get(cod)?.codigoTexto ?? String(cod), descricao: c?.descricao ?? i.descricao, unidade: c?.unidade ?? i.unidade,
+      previsto: c?.bruta ?? 0, usado: e.consumo_real?.get(cod) ?? c?.bruta ?? 0,
+    }
+  }).sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR'))
+}
+
+/** Insumos esperados no consumo do evento salvo (para validar o que a tela manda). */
+export function insumosDoEvento(base: BaseCusto, e: EventoComConta): Set<number> {
+  return new Set(explodirEvento(base.fichas, base.cmc, pedidosSalvos(e)).insumos.keys())
+}
+
+export type LocalBaixa = { codigo: number; descricao: string }
+
+/**
+ * Locais de onde a baixa do evento pode sair (estoque próprio). Padrão = o local da cozinha da loja
+ * (`lojas.local_estoque_cozinha_codigo`, o mesmo da baixa das vendas da cozinha), senão o local padrão, senão o primeiro.
+ * Leitura com service client (a coluna da cozinha não tem grant para a sessão), sempre filtrada pela loja.
+ */
+export async function locaisDeBaixa(lojaId: number): Promise<{ locais: LocalBaixa[]; padrao: number | null }> {
+  const sb = createServiceClient()
+  const [{ data: locs }, { data: loja }] = await Promise.all([
+    sb.from('local_estoques').select('codigo_local_estoque, descricao, padrao, inativo').eq('loja_id', lojaId).is('deleted_at', null).order('descricao'),
+    sb.from('lojas').select('local_estoque_cozinha_codigo').eq('id', lojaId).maybeSingle(),
+  ])
+  type L = { codigo_local_estoque: number; descricao: string | null; padrao: string | null; inativo: string | null }
+  const ativos = ((locs ?? []) as L[]).filter((l) => (l.inativo ?? 'N') !== 'S')
+  const locais = ativos.map((l) => ({ codigo: Number(l.codigo_local_estoque), descricao: l.descricao || `Local ${l.codigo_local_estoque}` }))
+  const cozinha = Number((loja as { local_estoque_cozinha_codigo?: number | null } | null)?.local_estoque_cozinha_codigo ?? 0)
+  const padrao = locais.find((l) => l.codigo === cozinha)?.codigo
+    ?? ativos.find((l) => l.padrao === 'S')?.codigo_local_estoque
+    ?? locais[0]?.codigo ?? null
+  return { locais, padrao: padrao == null ? null : Number(padrao) }
 }

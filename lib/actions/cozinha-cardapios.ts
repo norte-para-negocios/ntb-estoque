@@ -182,3 +182,50 @@ export async function definirPrecosCardapio(cardapioId: number, precos: { itemId
   revalidar(cardapioId)
   return { ok: true }
 }
+
+/** Porções deste prato no conjunto (ex.: 2 porções no rodízio). Entre 0,001 e 1000, 3 casas. */
+export async function definirPorcoesItemCardapio(itemId: number, porcoes: number): Promise<Resultado> {
+  const __d = viaDesktop('cozinha-cardapios#definirPorcoesItemCardapio', definirPorcoesItemCardapio, [itemId, porcoes]); if (__d) return __d as never
+  const c = await contexto()
+  if ('error' in c) return c
+  if (!idValido(itemId)) return { error: 'Item inválido.' }
+  const n = Math.round(Number(porcoes) * 1000) / 1000
+  if (!Number.isFinite(n) || n <= 0 || n > 1000) return { error: 'Porções inválidas (mais que 0 e até 1000).' }
+  const { data, error } = await createServiceClient().from('custo_cardapio_itens').update({ porcoes: n }).eq('id', itemId).eq('loja_id', c.lojaId).select('cardapio_id')
+  if (error) return { error: /porcoes/.test(error.message) ? 'As porções ainda não existem nesta base (migration 474 pendente).' : error.message }
+  if (!data?.length) return { error: 'Item não encontrado nesta loja.' }
+  revalidar(Number(data[0].cardapio_id))
+  return { ok: true }
+}
+
+/** Copia o cardápio (nome "(cópia)", mesmo canal, mesmos pratos, preços próprios, porções e ordem). Nasce ativo. */
+export async function duplicarCardapio(id: number): Promise<ResultadoId> {
+  const __d = viaDesktop('cozinha-cardapios#duplicarCardapio', duplicarCardapio, [id]); if (__d) return __d as never
+  const c = await contexto()
+  if ('error' in c) return c
+  if (!idValido(id)) return { error: 'Cardápio inválido.' }
+  const sb = createServiceClient()
+  const { data: orig } = await sb.from('custo_cardapios').select('id, nome, canal').eq('id', id).eq('loja_id', c.lojaId).maybeSingle()
+  if (!orig) return { error: 'Cardápio não encontrado nesta loja.' }
+  const { data: itens, error: eItens } = await sb.from('custo_cardapio_itens').select('codigo_produto, preco, ordem, porcoes')
+    .eq('cardapio_id', id).eq('loja_id', c.lojaId).order('ordem').order('id')
+  if (eItens) return { error: eItens.message }
+  const sufixo = ' (cópia)'
+  const nome = `${limparNome(orig.nome).slice(0, 80 - sufixo.length).trimEnd()}${sufixo}`
+  const { data: novo, error } = await sb.from('custo_cardapios')
+    .insert({ loja_id: c.lojaId, nome, canal: orig.canal, criado_por: c.ator }).select('id').single()
+  if (error || !novo) return { error: error?.message ?? 'Não foi possível duplicar o cardápio.' }
+  const novoId = Number(novo.id)
+  if (itens?.length) {
+    const { error: e2 } = await sb.from('custo_cardapio_itens').insert(itens.map((i) => ({
+      cardapio_id: novoId, loja_id: c.lojaId, codigo_produto: i.codigo_produto, preco: i.preco, ordem: i.ordem, porcoes: i.porcoes ?? 1,
+    })))
+    if (e2) {
+      // Sem os itens a cópia não serve: desfaz o cabeçalho.
+      await sb.from('custo_cardapios').delete().eq('id', novoId).eq('loja_id', c.lojaId)
+      return { error: e2.message }
+    }
+  }
+  revalidar(novoId)
+  return { ok: true, id: novoId }
+}

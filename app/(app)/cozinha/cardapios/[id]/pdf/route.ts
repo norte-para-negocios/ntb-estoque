@@ -24,7 +24,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     loja: loja?.nome_fantasia || loja?.nome || '', nome: c.nome, canal: NOME_CANAL[c.canal], interno, meta: base.taxas.metaCmv,
     resumo: { cmvCardapio: c.resumo.cmvCardapio, acima: c.resumo.acima, semPreco: c.resumo.semPreco },
     linhas: c.itens.filter((i) => interno || !i.semFicha).map((i) => ({
-      descricao: i.descricao, familia: i.familia, preco: i.conta.preco, custo: i.custo, cmv: i.conta.cmv, sugerido: i.conta.sugerido, acima: i.conta.situacao === 'acima',
+      descricao: i.descricao, familia: i.familia, preco: i.conta.preco, custo: i.custo, porcoes: i.porcoes, participacao: i.participacao, cmv: i.conta.cmv, sugerido: i.conta.sugerido, acima: i.conta.situacao === 'acima',
     })),
   }) as Parameters<typeof renderToBuffer>[0]
   const buf = await renderToBuffer(el)

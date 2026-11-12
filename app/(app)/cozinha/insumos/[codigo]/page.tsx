@@ -7,12 +7,14 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { btnClass } from '@/components/ui-kit/Button'
 import { CartaoResumo } from '@/components/faturamento/CartaoResumo'
 import { GraficoCusto } from '@/components/estoque-proprio/CustoProduto'
-import { Secao, Vazio, dataLonga } from '@/components/custo-cardapio/inicio/Secao'
+import { Linha, Lista, Secao, Vazio, dataLonga } from '@/components/custo-cardapio/inicio/Secao'
 import { SimularPreco, type UsoSimulavel } from '@/components/custo-cardapio/insumos/SimularPreco'
 import { dadosInsumos, historicoCusto, rotuloFonte, ultimasNotas, variacaoDeCompras, variacoes } from '@/lib/custo-cardapio/insumos'
 import { precoReal } from '@/lib/custo-cardapio/preco-puro'
 import { brl, pct, qtd } from '@/lib/custo-cardapio/formato'
 import { formatCustoUnit } from '@/lib/num-br'
+import { relacoesDoInsumo } from '@/lib/custo-cardapio/relacoes'
+import { formatarData, NOME_STATUS, STATUS_EVENTO, type StatusEvento } from '@/lib/custo-cardapio/eventos-puro'
 
 // Norte Cozinha, um insumo: custo no tempo, últimas compras, onde é usado (e quanto pesa em cada prato) e o "e se".
 // Consultas: carregarBase (cache), variacaoDeCompras (notas de compra de 120 dias, cache), histórico do custo (1 consulta; Omie sem
@@ -39,9 +41,13 @@ export default async function InsumoPage({ params }: { params: Promise<{ codigo:
     )
   }
 
-  const [vc, historico, notas] = await Promise.all([
+  const usoPorRaiz = new Map((d.usos.get(codigo) ?? []).map((u) => [u.raiz, u.quantidade]))
+  const [vc, historico, notas, rel] = await Promise.all([
     variacaoDeCompras(lojaId, base.modo), historicoCusto(lojaId, base.modo, codigo), ultimasNotas(lojaId, codigo),
+    relacoesDoInsumo(lojaId, usoPorRaiz),
   ])
+  const nomeDe = (cod: number) => base.produtos.get(cod)?.descricao ?? `Produto ${cod}`
+  const nomeStatus = (s: string) => ((STATUS_EVENTO as readonly string[]).includes(s) ? NOME_STATUS[s as StatusEvento] : s)
   const v = variacoes(d, vc).get(codigo) ?? null
   const compra = vc.porProduto.get(codigo)
   // Sem fotos de custo médio no tempo: o gráfico usa o custo das compras (nota a nota).
@@ -119,6 +125,32 @@ export default async function InsumoPage({ params }: { params: Promise<{ codigo:
           </div>
         )}
       </Secao>
+
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        <Secao titulo="Nos cardápios" sub="Cardápios com algum prato que usa este insumo, e quanto vai em um de cada (pelas porções)." acao={{ href: '/cozinha/cardapios', rotulo: 'Cardápios' }}>
+          {rel.cardapios.length === 0 ? <Vazio>Nenhum cardápio usa este insumo.</Vazio> : (
+            <Lista>
+              {rel.cardapios.map((c) => (
+                <Linha key={c.id} href={`/cozinha/cardapios/${c.id}`} titulo={c.nome}
+                  detalhe={`${c.pratos.map((p) => nomeDe(p.codigo)).join(', ')}${c.ativo ? '' : ' · arquivado'}`}
+                  valor={qtd(c.quantidade, ins.unidade)} valorDetalhe={ins.custo != null && !ins.suspeito ? brl(c.quantidade * ins.custo) : undefined} />
+              ))}
+            </Lista>
+          )}
+        </Secao>
+        <Secao titulo="Nos próximos eventos" sub="Eventos de hoje em diante (orçamento ou confirmado) e quanto cada um vai usar, com a folga." acao={{ href: '/cozinha/eventos', rotulo: 'Eventos' }}>
+          {rel.eventos.length === 0 ? <Vazio>Nenhum evento marcado usa este insumo.</Vazio> : (
+            <Lista>
+              {rel.eventos.map((e) => (
+                <Linha key={e.id} href={`/cozinha/eventos/${e.id}`} titulo={e.nome}
+                  detalhe={`${formatarData(e.data)} · ${e.convidados} ${e.convidados === 1 ? 'convidado' : 'convidados'} · ${nomeStatus(e.status)}`}
+                  valor={qtd(e.quantidade, ins.unidade)}
+                  valorDetalhe={e.status === 'confirmado' ? 'reservado' : 'se confirmar'} />
+              ))}
+            </Lista>
+          )}
+        </Secao>
+      </div>
 
       <Secao titulo={pelasCompras ? 'Custo das compras no tempo' : 'Custo médio no tempo'} sub={pelasCompras ? 'Custo por unidade do estoque em cada nota de entrada recente.' : 'Últimos seis meses.'}>
         <div className="rounded-[var(--r-lg)] bg-surface p-4 shadow-[var(--shadow-sm)]">

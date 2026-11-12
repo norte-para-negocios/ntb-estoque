@@ -10,6 +10,8 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { PainelPrato } from '@/components/custo-cardapio/PainelPrato'
 import { arvoreDoPrato, carregarBase, ehPreparacao, type NoTela } from '@/lib/custo-cardapio/carregar'
 import { precoReal } from '@/lib/custo-cardapio/preco-puro'
+import { carregarInfoReceita } from '@/lib/custo-cardapio/receita-info'
+import { EditorPreparo } from '@/components/custo-cardapio/guia/EditorPreparo'
 
 const contar = (nos: NoTela[]): number => nos.reduce((a, n) => a + (n.suspeito ? 1 : 0) + contar(n.filhos), 0)
 
@@ -40,6 +42,7 @@ export default async function CustoPratoPage({ params }: { params: Promise<{ cod
   }
 
   const ficha = base.fichas.get(codigo)
+  const info = await carregarInfoReceita(lojaId, codigo)
   const rend = ficha && 'rendimento' in ficha && ficha.rendimento !== 1 ? ` · rende ${ficha.rendimento.toLocaleString('pt-BR')} ${(produto?.unidade ?? '').toLowerCase()}` : ''
   return (
     <div className="space-y-4">
@@ -53,6 +56,10 @@ export default async function CustoPratoPage({ params }: { params: Promise<{ cod
         </>} />
       {arvore.ciclo && <p className="rounded-[var(--r-md)] bg-err/10 px-3 py-2 text-[13px] text-err">A ficha tem um ciclo (uma preparação usa a si mesma). O custo pode estar errado.</p>}
       <PainelPrato itens={arvore.filhos} taxas={base.taxas} precoCadastro={prep || !precoReal(produto?.preco) ? null : produto!.preco} semCusto={arvore.semCusto} suspeitos={contar(arvore.filhos)} />
+      <EditorPreparo codigo={codigo} nome={titulo} info={info && {
+        modoPreparo: info.modoPreparo, observacoes: info.observacoes, tempoPreparoMin: info.tempoPreparoMin, rendimentoTexto: info.rendimentoTexto,
+        fotoUrl: info.fotoUrl, atualizadoPor: info.atualizadoPor, atualizadoEm: info.atualizadoEm,
+      }} />
     </div>
   )
 }

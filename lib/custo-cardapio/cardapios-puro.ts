@@ -72,13 +72,49 @@ export type ResumoDoCardapio = {
   pior: number | null
   /** Índices a repreçar (acima ou perto da meta), do pior para o menos ruim. */
   reprecar: number[]
+  /** Conjunto com as porções de cada prato (só pratos com preço e custo confiável). */
+  custoTotal: number
+  vendaTotal: number
+  /** Venda − custo do conjunto (no delivery o custo inclui a embalagem). */
+  margem: number | null
+  /** Margem ÷ venda. */
+  margemPct: number | null
+  /** Margem ÷ custo: quanto volta para cada R$ 1 de ingrediente. */
+  roi: number | null
+  /** O que sobra do conjunto depois do custo e das taxas do canal. */
+  sobraTotal: number | null
+  /** Custo de todos os pratos com ficha × porções (inclusive os sem preço): base da participação. */
+  custoConjunto: number
 }
 
-/** Resumo de um cardápio a partir das contas dos itens (índices referem-se à lista recebida). */
-export function resumoDoCardapio(contas: { conta: ContaItem; custo: number }[], canal: CanalCardapio, t: Taxas): ResumoDoCardapio {
-  const validos = contas.map((c, i) => ({ ...c, i })).filter((c) => confiavel(c.conta.situacao) && c.conta.preco != null && c.custo > 0)
-  const somaCusto = validos.reduce((a, c) => a + custoNoCanal(c.custo, canal, t), 0)
-  const somaPreco = validos.reduce((a, c) => a + (c.conta.preco as number), 0)
+/** Porções válidas (> 0); qualquer outra coisa vale 1. */
+export const porcoesValidas = (p: number | null | undefined) => (p != null && Number.isFinite(p) && p > 0 ? p : 1)
+
+/** Parte de cada prato no custo do conjunto (custo × porções ÷ soma), na ordem recebida. Prato sem ficha vale 0. */
+export function participacaoNoCusto(itens: { custo: number; porcoes?: number; semFicha?: boolean }[]): number[] {
+  const custos = itens.map((i) => (i.semFicha ? 0 : Math.max(i.custo, 0) * porcoesValidas(i.porcoes)))
+  const total = custos.reduce((a, c) => a + c, 0)
+  return custos.map((c) => (total > 0 ? c / total : 0))
+}
+
+/** Lê porções digitadas ("2", "1,5"). null = inválido (precisa ser > 0 e até 1000, 3 casas). */
+export function lerPorcoes(s: string): number | null {
+  const v = Number(s.trim().replace(',', '.'))
+  if (!Number.isFinite(v) || v <= 0 || v > 1000) return null
+  return Math.round(v * 1000) / 1000
+}
+
+/**
+ * Resumo de um cardápio a partir das contas dos itens (índices referem-se à lista recebida). Cada item entra com as suas
+ * porções no conjunto (padrão 1): o CMV do cardápio é ponderado por elas.
+ */
+export function resumoDoCardapio(contas: { conta: ContaItem; custo: number; porcoes?: number; semFicha?: boolean }[], canal: CanalCardapio, t: Taxas): ResumoDoCardapio {
+  const validos = contas.map((c, i) => ({ ...c, i, p: porcoesValidas(c.porcoes) })).filter((c) => confiavel(c.conta.situacao) && c.conta.preco != null && c.custo > 0)
+  const somaCusto = validos.reduce((a, c) => a + custoNoCanal(c.custo, canal, t) * c.p, 0)
+  const somaPreco = validos.reduce((a, c) => a + (c.conta.preco as number) * c.p, 0)
+  const custoTotal = validos.reduce((a, c) => a + (canal === 'delivery' ? c.custo + t.embalagem : c.custo) * c.p, 0)
+  const margem = validos.length ? somaPreco - custoTotal : null
+  const sobraTotal = validos.length ? validos.reduce((a, c) => a + (c.conta.sobra ?? 0) * c.p, 0) : null
   const cmvs = validos.map((c) => c.conta.cmv as number).sort((a, b) => a - b)
   const m = Math.floor(cmvs.length / 2)
   const ordenados = [...validos].sort((a, b) => (a.conta.cmv as number) - (b.conta.cmv as number))
@@ -93,6 +129,11 @@ export function resumoDoCardapio(contas: { conta: ContaItem; custo: number }[], 
     melhor: ordenados.length ? ordenados[0].i : null,
     pior: ordenados.length > 1 ? ordenados[ordenados.length - 1].i : null,
     reprecar: ordenados.filter((c) => c.conta.situacao === 'acima' || c.conta.situacao === 'atencao').reverse().map((c) => c.i),
+    custoTotal, vendaTotal: somaPreco, margem,
+    margemPct: margem != null && somaPreco > 0 ? margem / somaPreco : null,
+    roi: margem != null && custoTotal > 0 ? margem / custoTotal : null,
+    sobraTotal,
+    custoConjunto: contas.reduce((a, c) => a + (c.semFicha ? 0 : Math.max(c.custo, 0) * porcoesValidas(c.porcoes)), 0),
   }
 }
 
