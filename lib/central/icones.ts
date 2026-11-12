@@ -147,8 +147,7 @@ export const ICONE_POR_ROTA: Record<string, Icone> = {
   '/relatorio-produtos-fornecedor': [PackageSearch, 'relatorio'],
   // Produção
   '/ordem-producao': [Factory, 'marca'],
-  '/custo-cardapio': [ChefHat, 'marca'],
-  '/custo-cardapio/taxas': [SlidersHorizontal, 'neutro'],
+  '/cozinha': [ChefHat, 'marca'],
   '/ordem-producao/abertas': [Hourglass, 'marca'],
   '/impressoes': [Printer, 'marca'],
   '/relatorio-ops': [ChartBarStacked, 'relatorio'],

@@ -109,8 +109,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/relatorio-variacao-preco', label: 'Variação de preço nas notas', icon: ChartSpline, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
   // Fase 8: engenharia de cardápio, só dev (rota em ROTAS_SO_DEV).
   { href: '/relatorio-engenharia-cardapio', label: 'Engenharia de cardápio', icon: LayoutGrid, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
-  // Custo e Cardápio: custo do prato pela ficha, CMV contra a meta e preço sugerido (salão e delivery). Só dev (ROTAS_SO_DEV).
-  { href: '/custo-cardapio', label: 'Custo e Cardápio', icon: ChefHat, group: 'Operação', comEstoque: true, superAdmin: true },
+  // Norte Cozinha: custo do prato pela ficha, CMV, preço sugerido, cardápios, eventos e o Pacioli. Só dev (ROTAS_SO_DEV).
+  { href: '/cozinha', label: 'Norte Cozinha', icon: ChefHat, group: 'Operação', comEstoque: true, superAdmin: true },
   { href: '/nota-fiscal', label: 'Notas Fiscais', icon: FileText, group: 'Operação' },
   { href: '/ordem-producao', label: 'Ordens de Produção', icon: Factory, group: 'Operação' },
   { href: '/transferencia', label: 'Transferências', icon: ArrowLeftRight, group: 'Operação' },

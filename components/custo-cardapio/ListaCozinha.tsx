@@ -1,20 +1,17 @@
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
-import { ChefHat, Settings2 } from 'lucide-react'
-import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
-import { exigirDev } from '@/lib/recursos-dev'
+import { ChefHat } from 'lucide-react'
+import { getCurrentLojaId } from '@/lib/auth'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { DataTable } from '@/components/ui-kit/DataTable'
-import { btnClass } from '@/components/ui-kit/Button'
 import { CartaoResumo } from '@/components/faturamento/CartaoResumo'
 import { BarraCmv } from '@/components/custo-cardapio/BarraCmv'
 import { carregarBase, linhasDoCardapio, type LinhaPrato } from '@/lib/custo-cardapio/carregar'
 import { arredondarPreco, resumir } from '@/lib/custo-cardapio/preco-puro'
 import { brl, pct } from '@/lib/custo-cardapio/formato'
 
-// Custo e Cardápio (só dev): cada prato com ficha, o custo pela ficha, o CMV contra a meta e o preço que bate a meta.
-type Sp = { ver?: string; filtro?: string; familia?: string; q?: string; ord?: string }
+// Norte Cozinha (só dev), Pratos e Preparações: cada prato com ficha, o custo pela ficha, o CMV contra a meta e o preço que bate a meta.
+export type SpCozinha = { filtro?: string; familia?: string; q?: string; ord?: string }
 const FILTROS = [
   { v: '', rotulo: 'Todos' },
   { v: 'acima', rotulo: 'Acima da meta' },
@@ -26,23 +23,20 @@ const FILTROS = [
 
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
-export default async function CustoCardapioPage({ searchParams }: { searchParams: Promise<Sp> }) {
-  await exigirDev()
-  if (!(await getAtorGestao()).podeGerir) notFound()
+export async function ListaCozinha({ sp, tipo }: { sp: SpCozinha; tipo: LinhaPrato['tipo'] }) {
   const lojaId = await getCurrentLojaId()
-  const sp = await searchParams
+  const caminho = tipo === 'prato' ? '/cozinha/pratos' : '/cozinha/preparacoes'
   const base = await carregarBase(lojaId)
   if (!base) {
     return (
       <div className="space-y-4">
-        <PageHeader title="Custo e Cardápio" icon={ChefHat} />
+        <PageHeader title="Norte Cozinha" icon={ChefHat} />
         <EmptyState icon={ChefHat} title="Esta loja não controla estoque" hint="O custo do prato sai das fichas técnicas e do custo dos insumos, que esta loja não tem." />
       </div>
     )
   }
 
-  const ver: LinhaPrato['tipo'] = sp.ver === 'preparacoes' ? 'preparacao' : 'prato'
-  const todas = linhasDoCardapio(base).filter((l) => l.tipo === ver)
+  const todas = linhasDoCardapio(base).filter((l) => l.tipo === tipo)
   const familias = [...new Set(todas.map((l) => l.familia).filter((f): f is string => !!f))].sort((a, b) => a.localeCompare(b, 'pt-BR'))
   const familia = sp.familia && familias.includes(sp.familia) ? sp.familia : null
   const daFamilia = familia ? todas.filter((l) => l.familia === familia) : todas
@@ -59,29 +53,25 @@ export default async function CustoCardapioPage({ searchParams }: { searchParams
       : ord === 'custo' ? b.custo - a.custo
         : (b.situacao === 'suspeito' ? -1 : b.cmv ?? -1) - (a.situacao === 'suspeito' ? -1 : a.cmv ?? -1))
 
-  const params: Record<string, string> = { ver: ver === 'preparacao' ? 'preparacoes' : '', filtro, familia: familia ?? '', q: sp.q ?? '', ord: ord === 'cmv' ? '' : ord }
+  const params: Record<string, string> = { filtro, familia: familia ?? '', q: sp.q ?? '', ord: ord === 'cmv' ? '' : ord }
   const href = (over: Record<string, string>) => {
     const q = new URLSearchParams()
     for (const [k, v] of Object.entries({ ...params, ...over })) if (v) q.set(k, v)
-    return `/custo-cardapio${q.size ? `?${q}` : ''}`
+    return `${caminho}${q.size ? `?${q}` : ''}`
   }
   const chipBase = 'inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold u-motion u-press-sm'
   const chip = (ativo: boolean) => `${chipBase} ${ativo ? 'bg-brand-fill text-white' : 'bg-surface-2 text-text-muted hover:bg-[var(--border)] hover:text-text'}`
   const t = base.taxas
-  const pratos = ver === 'prato'
+  const pratos = tipo === 'prato'
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Custo e Cardápio" icon={ChefHat}
-        description={`Quanto custa cada ${pratos ? 'prato' : 'preparação'} pela ficha técnica, contra o preço de venda e a meta de CMV de ${pct(t.metaCmv, 0)}.`}
-        actions={<Link href="/custo-cardapio/taxas" className={btnClass('outline')}><Settings2 className="size-4" /> Meta e taxas</Link>} />
+      <PageHeader title={pratos ? 'Pratos' : 'Preparações'} icon={ChefHat}
+        description={`Quanto custa cada ${pratos ? 'prato' : 'preparação'} pela ficha técnica${pratos ? `, contra o preço de venda e a meta de CMV de ${pct(t.metaCmv, 0)}` : ''}.`} />
 
       {base.avisos.map((a) => <p key={a} className="rounded-[var(--r-md)] bg-warn/10 px-3 py-2 text-[13px] text-warn">{a}</p>)}
 
       <div className="flex flex-wrap items-center gap-2">
-        <Link href={href({ ver: '', filtro: '' })} className={chip(pratos)}>Pratos</Link>
-        <Link href={href({ ver: 'preparacoes', filtro: '' })} className={chip(!pratos)}>Preparações</Link>
-        <span className="mx-1 h-5 w-px bg-border" aria-hidden />
         <span className="text-[13px] text-text-muted">
           Custo dos insumos: {base.modo === 'omie' ? `custo médio do Omie${base.dataCusto ? ` em ${base.dataCusto.split('-').reverse().join('/')}` : ''}` : 'custo médio do estoque'}
         </span>
@@ -102,7 +92,7 @@ export default async function CustoCardapioPage({ searchParams }: { searchParams
         </div>
       )}
 
-      <form action="/custo-cardapio" className="flex flex-wrap items-center gap-2">
+      <form action={caminho} className="flex flex-wrap items-center gap-2">
         {Object.entries(params).filter(([k, v]) => v && k !== 'q').map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
         <input name="q" defaultValue={sp.q ?? ''} placeholder={`Buscar ${pratos ? 'prato' : 'preparação'} ou código`}
           className="h-9 w-full max-w-[320px] rounded-full bg-surface-2 px-4 text-[14px] outline-none focus:ring-2 focus:ring-brand/40" />
@@ -140,7 +130,7 @@ export default async function CustoCardapioPage({ searchParams }: { searchParams
             {lista.map((l) => (
               <tr key={l.codigo}>
                 <td>
-                  <Link href={`/custo-cardapio/${l.codigo}`} className="block min-w-0 hover:text-brand">
+                  <Link href={`/cozinha/pratos/${l.codigo}`} className="block min-w-0 hover:text-brand">
                     <span className="block truncate font-medium text-text">{l.descricao}</span>
                     <span className="block truncate text-[12px] text-text-muted">
                       {l.codigoTexto}{l.familia ? ` · ${l.familia}` : ''}{l.suspeitos > 0 ? ' · custo de insumo a conferir' : ''}{l.semCusto > 0 ? ` · ${l.semCusto} insumo${l.semCusto > 1 ? 's' : ''} sem custo` : ''}{l.ciclo ? ' · ficha em ciclo' : ''}

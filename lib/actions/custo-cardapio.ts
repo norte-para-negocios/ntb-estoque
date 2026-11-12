@@ -32,6 +32,6 @@ export async function salvarTaxasCardapio(t: Taxas): Promise<{ ok: true } | { er
     if (/custo_cardapio_config/.test(error.message)) return { error: 'A tabela das taxas ainda não existe nesta base (migration 473 pendente).' }
     return { error: error.message }
   }
-  revalidatePath('/custo-cardapio', 'layout')
+  revalidatePath('/cozinha', 'layout')
   return { ok: true }
 }

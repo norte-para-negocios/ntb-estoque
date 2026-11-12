@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ChefHat, FileText, Layers } from 'lucide-react'
-import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
+import { getAtorGestao, getCurrentLojaId, requirePermissao } from '@/lib/auth'
+import { EstruturaProduto } from '@/components/produtos/EstruturaProduto'
 import { exigirDev } from '@/lib/recursos-dev'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
@@ -17,13 +18,15 @@ export default async function CustoPratoPage({ params }: { params: Promise<{ cod
   if (!(await getAtorGestao()).podeGerir) notFound()
   const codigo = Number((await params).codigo)
   if (!Number.isFinite(codigo)) notFound()
-  const base = await carregarBase(await getCurrentLojaId())
+  const lojaId = await getCurrentLojaId()
+  const base = await carregarBase(lojaId)
+  const podeEditar = await requirePermissao(lojaId, 'Produtos - Editar')
   if (!base) notFound()
   const produto = base.produtos.get(codigo)
   const arvore = arvoreDoPrato(base, codigo)
   const titulo = produto?.descricao ?? `Produto ${codigo}`
   const prep = ehPreparacao(produto)
-  const voltar = prep ? '/custo-cardapio?ver=preparacoes' : '/custo-cardapio'
+  const voltar = prep ? '/cozinha/preparacoes' : '/cozinha/pratos'
 
   if (!arvore) {
     return (
@@ -43,9 +46,10 @@ export default async function CustoPratoPage({ params }: { params: Promise<{ cod
       <PageHeader title={titulo} icon={ChefHat} voltarHref={voltar}
         description={`${produto?.codigoTexto ?? codigo}${produto?.familia ? ` · ${produto.familia}` : ''}${prep ? ' · preparação' : ''}${rend}. Custo por 1 ${(produto?.unidade ?? 'unidade').toLowerCase()}.`}
         actions={<>
-          <a href={`/custo-cardapio/${codigo}/ficha`} className={btnClass('outline')}><FileText className="size-4" /> Ficha em PDF</a>
-          <a href={`/custo-cardapio/${codigo}/ficha?cozinha=1`} className={btnClass('outline')}>Para a cozinha</a>
-          <Link href={`/produto?q=${encodeURIComponent(produto?.codigoTexto ?? String(codigo))}`} className={btnClass('ghost')}><Layers className="size-4" /> Editar ficha</Link>
+          <a href={`/cozinha/pratos/${codigo}/ficha`} className={btnClass('outline')}><FileText className="size-4" /> Ficha em PDF</a>
+          <a href={`/cozinha/pratos/${codigo}/ficha?cozinha=1`} className={btnClass('outline')}>Para a cozinha</a>
+          {/* Mesmo editor do cadastro de produto (Omie: grava a estrutura no Omie; próprio: nova versão da ficha). */}
+          <EstruturaProduto codigoProduto={codigo} descricao={titulo} tipoItem={produto?.tipo ?? null} podeEditar={podeEditar} />
         </>} />
       {arvore.ciclo && <p className="rounded-[var(--r-md)] bg-err/10 px-3 py-2 text-[13px] text-err">A ficha tem um ciclo (uma preparação usa a si mesma). O custo pode estar errado.</p>}
       <PainelPrato itens={arvore.filhos} taxas={base.taxas} precoCadastro={prep || !precoReal(produto?.preco) ? null : produto!.preco} semCusto={arvore.semCusto} suspeitos={contar(arvore.filhos)} />
