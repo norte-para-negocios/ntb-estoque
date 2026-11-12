@@ -24,7 +24,7 @@
 | 1 | Assinaturas e bloqueio no ERP | Catálogo de módulos, estado por loja (ativo, teste, bloqueado, suspenso), tela de administração da Norte, menu e rotas do ERP respeitando, vitrine do módulo bloqueado; Cozinha e Pacioli saem das regras soltas | — | M |
 | 2 | Porta + Conta Norte | Porta pós-login (Pacioli com o resumo do dia, módulos, troca de loja), pessoas vinculadas (ERP ↔ Vendas), cadastro de equipe num lugar só | 1 | G |
 | 3 | Vendas na plataforma | Passe curto da porta para o Vendas; login do Vendas aceitando a Conta Norte (nome + loja + senha); assinatura `vendas` respeitada com falha aberta; apps nativos com versão nova não obrigatória | 1, 2 | G |
-| 4 | Cozinha sozinha | Loja só com `cozinha`: insumos, importação por planilha, compra simples, contagem simples dentro da Cozinha, gravando nas tabelas do estoque próprio | 1 | M |
+| 4 | Cozinha sozinha | Bloqueio de servidor para rotas do ERP em vitrine também na navegação dentro do app (proxy com cache curto), limitação conhecida da fase 1. Loja só com `cozinha`: insumos, importação por planilha, compra simples, contagem simples dentro da Cozinha, gravando nas tabelas do estoque próprio | 1 | M |
 | 5 | ERP reorganizado | Por módulo (Estoque → Compras → Produção → Fiscal → Finanças): inventário de telas e botões, protótipo, aprovação, implementação, teste com a operação | 1, trilha de design | G |
 | 6 | Cobrança (opcional) | Mensalidade automática | 1 | M |
 
