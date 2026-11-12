@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Pacioli</title>
+<style>
+  html,body{margin:0;width:100vw;height:100vh;background:#1c1c1f;overflow:hidden}
+  body{display:flex;align-items:center;justify-content:center}
+  #big{width:92vmin;height:92vmin;display:block}
+  #ico{position:fixed;right:max(10px,3vmin);bottom:max(10px,3vmin);width:24px;height:24px;display:block}
+  body.semico #ico{display:none}
+</style>
+</head>
+<body>
+<canvas id="big"></canvas><canvas id="ico"></canvas>
+<script src="pacioli.js"></script>
+<script>
+  // ver.html?a=12-fazendo-prato [&tema=claro] [&bg=hex] [&veste=chef] [&t=N] [&freeze] [&transp] [&semico]
+  const q = new URLSearchParams(location.search);
+  if (q.has('semico')) document.body.classList.add('semico');
+  if (q.has('transp')) document.documentElement.style.background = document.body.style.background = 'transparent';
+  else if (q.get('tema') === 'claro') document.documentElement.style.background = document.body.style.background = '#' + (q.get('bg') || 'F5F5F9');
+  const big = document.getElementById('big');
+  const m = PacioliMotor.criar(big, { acao: q.get('a') || '01-vigiando', tema: q.get('tema') || 'escuro', fundo: q.get('bg'), veste: q.get('veste'),
+    ico: document.getElementById('ico'), warm: +(q.get('warm') || q.get('t') || 0), congelar: q.has('freeze'), titulo: true, semMouse: true, dpr: 3 });
+  // a página inteira conta: o mouse em qualquer lugar mexe os olhos
+  addEventListener('pointermove', (e) => { const r = big.getBoundingClientRect(), w = r.width / (92 / 64);
+    m.olhar([0.5 + (e.clientX - (r.left + r.width / 2)) / w, 0.5 + (e.clientY - (r.top + r.height / 2)) / w]); });
+  document.documentElement.addEventListener('pointerleave', () => m.olhar(null));
+  addEventListener('blur', () => m.olhar(null));
+  addEventListener('pointerdown', (e) => { if (e.target !== big) m.reagir(); });
+  // página que embute: { acao } troca a ação; { bg } troca o fundo; { olhar: [x, y] | null }; { veste }
+  addEventListener('message', (e) => { const d = e.data || {};
+    if (d.acao) m.trocar(d.acao); if (d.bg) m.fundo(d.bg); if ('olhar' in d) m.olhar(d.olhar); if ('veste' in d) m.veste(d.veste); });
+</script>
+</body>
+</html>

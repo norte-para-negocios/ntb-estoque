@@ -10,6 +10,7 @@
     "test": "node --test 'lib/**/*.test.ts' 'components/**/*.test.ts' 'scripts/**/*.test.ts'"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
     "@base-ui/react": "^1.5.0",
     "@hookform/resolvers": "^5.4.0",
     "@react-pdf/renderer": "^4.5.1",
