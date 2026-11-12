@@ -210,7 +210,7 @@ export function ModoCozinhar({ nome, rotulo, fotoUrl, ingredientes, passos, obse
               </ol>
               {observacoes && (
                 <div className="rounded-[14px] bg-surface-2 p-4">
-                  <p className="mb-1 text-[0.8em] font-semibold uppercase tracking-wide text-text-muted">Observações</p>
+                  <p className="mb-1 text-[0.8em] font-semibold text-text-muted">Observações</p>
                   <p className="whitespace-pre-line leading-relaxed">{observacoes}</p>
                 </div>
               )}

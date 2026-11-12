@@ -92,7 +92,7 @@ export function ProximoPasso({ eventoId, passo, modo, consumo, finalizadoEm, fin
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.04em] text-text-muted">{passo.concluido || passo.acao === 'cancelado' ? 'Situação' : 'Próximo passo'}</p>
+          <p className="text-[13px] font-medium text-text-muted">{passo.concluido || passo.acao === 'cancelado' ? 'Situação' : 'Próximo passo'}</p>
           <p className="text-[19px] font-semibold tracking-[-0.01em]">{passo.titulo}</p>
           <p className="text-[13px] text-text-muted">{passo.texto}</p>
           {finalizado && (

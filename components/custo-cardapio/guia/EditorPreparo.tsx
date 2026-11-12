@@ -171,7 +171,7 @@ export function EditorPreparo({ codigo, nome, info }: { codigo: number; nome: st
             )}
             {info?.observacoes && (
               <div className="rounded-[var(--r-md)] bg-surface-2 px-3 py-2.5">
-                <p className="mb-0.5 text-[12px] font-semibold uppercase tracking-wide text-text-muted">Observações</p>
+                <p className="mb-0.5 text-[12px] font-semibold text-text-muted">Observações</p>
                 <p className="whitespace-pre-line text-[14px] leading-relaxed">{info.observacoes}</p>
               </div>
             )}

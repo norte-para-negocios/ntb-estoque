@@ -59,7 +59,7 @@ export function CartaoReceita({ receita: r, ctx, passados, contexto }: { receita
             {aberto[k] && n.filhos.length > 0 && (
               <div className="ml-5">
                 <Arvore nos={n.filhos} chave={k} nivel={nivel + 1} />
-                {sub && sub.passos.length > 0 && <div className="mt-2.5"><p className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-text-muted">Como fazer</p><Passos passos={sub.passos} /></div>}
+                {sub && sub.passos.length > 0 && <div className="mt-2.5"><p className="mb-1.5 text-[12px] font-semibold text-text-muted">Como fazer</p><Passos passos={sub.passos} /></div>}
                 {sub?.observacoes && <p className="mt-2 whitespace-pre-line text-[13px] text-text-muted">{sub.observacoes}</p>}
                 <Link href={`${hrefGuia({ ctx, p: n.codigo, b: n.quantidade, passados })}#receita`} scroll={false} className="mt-2 inline-flex items-center gap-1 text-[13px] font-semibold text-brand hover:underline">
                   Abrir a ficha de {n.descricao.toLowerCase()} nesta quantidade <ChevronRight className="size-3.5" />
@@ -82,7 +82,7 @@ export function CartaoReceita({ receita: r, ctx, passados, contexto }: { receita
         <header className="space-y-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-text-muted">{r.tipo === 'preparacao' ? 'Preparação' : 'Prato'}{contexto && r.base === 'contexto' ? ` · ${contexto}` : ''}</p>
+              <p className="text-[12px] font-semibold text-text-muted">{r.tipo === 'preparacao' ? 'Preparação' : 'Prato'}{contexto && r.base === 'contexto' ? ` · ${contexto}` : ''}</p>
               <h2 className="text-[24px] font-semibold leading-tight sm:text-[28px]">{r.descricao}</h2>
             </div>
             <button type="button" onClick={() => setCozinhando(true)} className={`${btnClass('primary')} h-11 px-5 text-[15px]`}><Play className="size-4" /> Modo cozinhar</button>
@@ -124,7 +124,7 @@ export function CartaoReceita({ receita: r, ctx, passados, contexto }: { receita
             </div>
             {r.observacoes && (
               <div className="rounded-[var(--r-md)] bg-surface-2 px-4 py-3">
-                <p className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-text-muted">Observações</p>
+                <p className="mb-1 text-[12px] font-semibold text-text-muted">Observações</p>
                 <p className="whitespace-pre-line text-[15px] leading-relaxed">{r.observacoes}</p>
               </div>
             )}
