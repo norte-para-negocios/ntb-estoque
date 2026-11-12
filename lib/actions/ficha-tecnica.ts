@@ -46,7 +46,7 @@ export async function salvarFichaTecnica(dados: {
   obs?: string
 }): Promise<{ ok: true; versao: number } | Erro> {
   const __d = viaDesktop('ficha-tecnica#salvarFichaTecnica', salvarFichaTecnica, [dados]); if (__d) return __d as never
-  await guardaModulo('ficha-tecnica#salvarFichaTecnica')
+  const __g = await guardaModulo('ficha-tecnica#salvarFichaTecnica'); if (__g) return __g as never
   const ctx = await contexto('Produtos - Editar')
   if ('error' in ctx) return ctx
   const erros = validarFicha(dados.codigoProduto, dados.rendimento, dados.itens)
@@ -83,7 +83,7 @@ async function caminhoDoCiclo(lojaId: number, produto: number, insumos: number[]
 /** Desativa a receita: o produto volta a baixar a si mesmo na venda. */
 export async function desativarFichaTecnica(codigoProduto: number): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('ficha-tecnica#desativarFichaTecnica', desativarFichaTecnica, [codigoProduto]); if (__d) return __d as never
-  await guardaModulo('ficha-tecnica#desativarFichaTecnica')
+  const __g = await guardaModulo('ficha-tecnica#desativarFichaTecnica'); if (__g) return __g as never
   const ctx = await contexto('Produtos - Editar')
   if ('error' in ctx) return ctx
   try {
@@ -109,7 +109,7 @@ export async function produzirLoteAction(dados: {
   data?: string
 }): Promise<{ ok: true; custoUnitario: number; custoTotal: number; duplicado: boolean; dataProducao: string | null; avisos: string[] } | Erro> {
   const __d = viaDesktop('ficha-tecnica#produzirLoteAction', produzirLoteAction, [dados]); if (__d) return __d as never
-  await guardaModulo('ficha-tecnica#produzirLoteAction')
+  const __g = await guardaModulo('ficha-tecnica#produzirLoteAction'); if (__g) return __g as never
   const ctx = await contexto('Ordem de Producao - Criar')
   if ('error' in ctx) return ctx
   if (!(dados.quantidade > 0)) return { error: 'Informe a quantidade a produzir.' }

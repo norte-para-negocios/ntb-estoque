@@ -67,7 +67,7 @@ export async function entradaManual(dados: {
   data?: string | null
 }): Promise<Resposta> {
   const __d = viaDesktop('estoque-proprio#entradaManual', entradaManual, [dados]); if (__d) return __d as never
-  await guardaModulo('estoque-proprio#entradaManual')
+  const __g = await guardaModulo('estoque-proprio#entradaManual'); if (__g) return __g as never
   const ctx = await contexto()
   if ('error' in ctx) return ctx
   const lote = dados.lote?.trim() || null
@@ -130,7 +130,7 @@ export async function ajusteManual(dados: {
   motivo: string
 }): Promise<Resposta> {
   const __d = viaDesktop('estoque-proprio#ajusteManual', ajusteManual, [dados]); if (__d) return __d as never
-  await guardaModulo('estoque-proprio#ajusteManual')
+  const __g = await guardaModulo('estoque-proprio#ajusteManual'); if (__g) return __g as never
   const ctx = await contexto()
   if ('error' in ctx) return ctx
   if (!dados.motivo?.trim()) return { error: 'Informe o motivo do ajuste.' }
@@ -170,7 +170,7 @@ export async function definirMinimo(dados: {
   minimo: number | string | null
 }): Promise<Resposta> {
   const __d = viaDesktop('estoque-proprio#definirMinimo', definirMinimo, [dados]); if (__d) return __d as never
-  await guardaModulo('estoque-proprio#definirMinimo')
+  const __g = await guardaModulo('estoque-proprio#definirMinimo'); if (__g) return __g as never
   const ctx = await contexto('Movimentacoes - Criar')
   if ('error' in ctx) return ctx
   const minimo = dados.minimo === '' || dados.minimo == null ? null : numero(dados.minimo)
@@ -195,7 +195,7 @@ export async function transferirEntreLocais(dados: {
   obs?: string
 }): Promise<Resposta> {
   const __d = viaDesktop('estoque-proprio#transferirEntreLocais', transferirEntreLocais, [dados]); if (__d) return __d as never
-  await guardaModulo('estoque-proprio#transferirEntreLocais')
+  const __g = await guardaModulo('estoque-proprio#transferirEntreLocais'); if (__g) return __g as never
   const ctx = await contexto('Transferencias - Criar')
   if ('error' in ctx) return ctx
   const quantidade = numero(dados.quantidade)
@@ -221,7 +221,7 @@ export async function transferirEntreLocais(dados: {
 
 export async function estornarMovimento(idMovimento: number): Promise<Resposta> {
   const __d = viaDesktop('estoque-proprio#estornarMovimento', estornarMovimento, [idMovimento]); if (__d) return __d as never
-  await guardaModulo('estoque-proprio#estornarMovimento')
+  const __g = await guardaModulo('estoque-proprio#estornarMovimento'); if (__g) return __g as never
   const ctx = await contexto('Movimentacoes - Criar')
   if ('error' in ctx) return ctx
   // Só estorna movimento desta loja.

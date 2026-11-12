@@ -36,7 +36,7 @@ export type ItemTransferenciaLoja = { codigoProduto: number; codigoLocal: number
 
 export async function registrarTransferenciaLoja(input: { destino: number; itens: ItemTransferenciaLoja[]; obs?: string; chave: string }): Promise<{ ok: true; id: number; numero: number } | Erro> {
   const __d = viaDesktop('transferencia-loja#registrarTransferenciaLoja', registrarTransferenciaLoja, [input]); if (__d) return __d as never
-  await guardaModulo('transferencia-loja#registrarTransferenciaLoja')
+  const __g = await guardaModulo('transferencia-loja#registrarTransferenciaLoja'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto()
   if ('error' in ctx) return ctx
@@ -58,7 +58,7 @@ export async function registrarTransferenciaLoja(input: { destino: number; itens
 
 export async function cancelarTransferenciaLoja(id: number, motivo: string): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('transferencia-loja#cancelarTransferenciaLoja', cancelarTransferenciaLoja, [id, motivo]); if (__d) return __d as never
-  await guardaModulo('transferencia-loja#cancelarTransferenciaLoja')
+  const __g = await guardaModulo('transferencia-loja#cancelarTransferenciaLoja'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto()
   if ('error' in ctx) return ctx

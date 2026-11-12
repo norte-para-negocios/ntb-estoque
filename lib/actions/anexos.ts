@@ -10,7 +10,7 @@ import { BUCKET_ANEXOS, contextoAnexo, ehEntidadeAnexo } from '@/lib/anexos/serv
 
 export async function excluirAnexo(id: number): Promise<{ ok: true } | { error: string }> {
   const __d = viaDesktop('anexos#excluirAnexo', excluirAnexo, [id]); if (__d) return __d as never
-  await guardaModulo('anexos#excluirAnexo')
+  const __g = await guardaModulo('anexos#excluirAnexo'); if (__g) return __g as never
   if (!Number.isInteger(id) || id <= 0) return { error: 'Anexo inválido' }
   const lojaId = await getCurrentLojaId()
   const sb = createServiceClient()

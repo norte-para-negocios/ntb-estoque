@@ -14,7 +14,7 @@ import { contextoCompras, msgErroCompras, type ErroCompras } from '@/lib/compras
 /** Comprador: nome, usuário do sistema (opcional, para "só as minhas" no painel de tarefas) e situação. Gestor de compras. */
 export async function salvarComprador(dados: { id?: number | null; nome: string; userId?: string | null; ativo?: boolean }): Promise<{ id: number } | ErroCompras> {
   const __d = viaDesktop('compras-cadastros#salvarComprador', salvarComprador, [dados]); if (__d) return __d as never
-  await guardaModulo('compras-cadastros#salvarComprador')
+  const __g = await guardaModulo('compras-cadastros#salvarComprador'); if (__g) return __g as never
   const ctx = await contextoCompras(['Compras - Aprovar pedidos'])
   if ('error' in ctx) return ctx
   const nome = (dados.nome ?? '').trim()
@@ -33,7 +33,7 @@ export async function salvarComprador(dados: { id?: number | null; nome: string;
 /** Prazo de entrega do fornecedor, em dias (1 a 365); null tira o prazo. Usado pela sugestão quando o produto não tem prazo próprio. */
 export async function salvarLeadTimeFornecedor(fornecedorId: number, dias: number | null): Promise<{ ok: true } | ErroCompras> {
   const __d = viaDesktop('compras-cadastros#salvarLeadTimeFornecedor', salvarLeadTimeFornecedor, [fornecedorId, dias]); if (__d) return __d as never
-  await guardaModulo('compras-cadastros#salvarLeadTimeFornecedor')
+  const __g = await guardaModulo('compras-cadastros#salvarLeadTimeFornecedor'); if (__g) return __g as never
   const ctx = await contextoCompras(['Compras - Pedidos'])
   if ('error' in ctx) return ctx
   if (!Number.isInteger(fornecedorId) || fornecedorId <= 0) return { error: 'Fornecedor inválido.' }

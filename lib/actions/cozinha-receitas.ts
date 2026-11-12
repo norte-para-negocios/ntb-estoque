@@ -34,7 +34,7 @@ function revalidar(codigo: number) {
 
 export async function salvarInfoReceita(codigo: number, dados: DadosReceita): Promise<Resultado> {
   const __d = viaDesktop('cozinha-receitas#salvarInfoReceita', salvarInfoReceita, [codigo, dados]); if (__d) return __d as never
-  await guardaModulo('cozinha-receitas#salvarInfoReceita')
+  const __g = await guardaModulo('cozinha-receitas#salvarInfoReceita'); if (__g) return __g as never
   const ctx = await contexto(Number(codigo))
   if ('error' in ctx) return ctx
   const v = validarReceita(dados)
@@ -49,7 +49,7 @@ export async function salvarInfoReceita(codigo: number, dados: DadosReceita): Pr
 
 export async function removerFotoReceita(codigo: number): Promise<Resultado> {
   const __d = viaDesktop('cozinha-receitas#removerFotoReceita', removerFotoReceita, [codigo]); if (__d) return __d as never
-  await guardaModulo('cozinha-receitas#removerFotoReceita')
+  const __g = await guardaModulo('cozinha-receitas#removerFotoReceita'); if (__g) return __g as never
   const ctx = await contexto(Number(codigo))
   if ('error' in ctx) return ctx
   const sb = createServiceClient()

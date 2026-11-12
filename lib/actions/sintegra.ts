@@ -28,7 +28,7 @@ export async function consultarCnpj(cnpjCpf: string): Promise<
   { error: string } | { ok: true; parceiro: ParceiroOmie | null }
 > {
   const __d = viaDesktop('sintegra#consultarCnpj', consultarCnpj, [cnpjCpf]); if (__d) return __d as never
-  await guardaModulo('sintegra#consultarCnpj')
+  const __g = await guardaModulo('sintegra#consultarCnpj'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Fornecedores'))) return { error: 'Sem permissão' }
 
@@ -80,7 +80,7 @@ export async function importarParceiro(
   p: ParceiroOmie
 ): Promise<{ error: string } | { ok: true; importados: string[] }> {
   const __d = viaDesktop('sintegra#importarParceiro', importarParceiro, [p]); if (__d) return __d as never
-  await guardaModulo('sintegra#importarParceiro')
+  const __g = await guardaModulo('sintegra#importarParceiro'); if (__g) return __g as never
   const { lojaId, supabase } = await getLoja()
   if (!(await requirePermissao(lojaId, 'Fornecedores'))) return { error: 'Sem permissão' }
 

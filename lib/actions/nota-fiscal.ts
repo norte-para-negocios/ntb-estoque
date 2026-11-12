@@ -21,7 +21,7 @@ import { confirmarEntradaNF, desfazerEntradaNF, excluirNotaProprio } from '@/lib
 
 export async function setQuantidadeNFItem(itemId: number, quantidade: number | null) {
   const __d = viaDesktop('nota-fiscal#setQuantidadeNFItem', setQuantidadeNFItem, [itemId, quantidade]); if (__d) return __d as never
-  await guardaModulo('nota-fiscal#setQuantidadeNFItem')
+  const __g = await guardaModulo('nota-fiscal#setQuantidadeNFItem'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
   const { error } = await supabase
@@ -36,7 +36,7 @@ export async function setQuantidadeNFItem(itemId: number, quantidade: number | n
 
 export async function setCategoriaContabilNFItem(itemId: number, categoriaId: number | null) {
   const __d = viaDesktop('nota-fiscal#setCategoriaContabilNFItem', setCategoriaContabilNFItem, [itemId, categoriaId]); if (__d) return __d as never
-  await guardaModulo('nota-fiscal#setCategoriaContabilNFItem')
+  const __g = await guardaModulo('nota-fiscal#setCategoriaContabilNFItem'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
   const { error } = await supabase
@@ -52,7 +52,7 @@ export async function setCategoriaContabilNFItem(itemId: number, categoriaId: nu
 /** Categoria da nota inteira: grava em todos os itens da nota (a classificação continua por item; a nota só dá o valor de partida). */
 export async function setCategoriaContabilNota(notaId: number, categoriaId: number | null) {
   const __d = viaDesktop('nota-fiscal#setCategoriaContabilNota', setCategoriaContabilNota, [notaId, categoriaId]); if (__d) return __d as never
-  await guardaModulo('nota-fiscal#setCategoriaContabilNota')
+  const __g = await guardaModulo('nota-fiscal#setCategoriaContabilNota'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Notas Fiscais'))) return { error: 'Sem permissão' }
   const supabase = createServiceClient()
@@ -73,7 +73,7 @@ export async function setCategoriaContabilNota(notaId: number, categoriaId: numb
 /** Classifica pelo produto: cada item SEM categoria recebe a categoria de compra do tipo do produto dele (revenda, matéria-prima, uso e consumo…). Não mexe em item já classificado. */
 export async function classificarItensPeloProduto(notaId: number) {
   const __d = viaDesktop('nota-fiscal#classificarItensPeloProduto', classificarItensPeloProduto, [notaId]); if (__d) return __d as never
-  await guardaModulo('nota-fiscal#classificarItensPeloProduto')
+  const __g = await guardaModulo('nota-fiscal#classificarItensPeloProduto'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Notas Fiscais'))) return { error: 'Sem permissão' }
   const supabase = createServiceClient()
@@ -148,7 +148,7 @@ async function carregarNFdaLoja(notaId: number, permissao: string) {
  */
 export async function manifestarNF(notaId: number) {
   const __d = viaDesktop('nota-fiscal#manifestarNF', manifestarNF, [notaId]); if (__d) return __d as never
-  await guardaModulo('nota-fiscal#manifestarNF')
+  const __g = await guardaModulo('nota-fiscal#manifestarNF'); if (__g) return __g as never
   // Loja de estoque proprio: 'manifestar' = confirmar a entrada no estoque (sem Omie).
   if ((await modoDaLoja(await getCurrentLojaId())) === 'proprio') {
     const r = await confirmarEntradaNF(notaId)
@@ -185,7 +185,7 @@ export async function manifestarNF(notaId: number) {
 /** Reverte a conclusão -- volta a nota pra Pendente. */
 export async function reverterManifestacaoNF(notaId: number) {
   const __d = viaDesktop('nota-fiscal#reverterManifestacaoNF', reverterManifestacaoNF, [notaId]); if (__d) return __d as never
-  await guardaModulo('nota-fiscal#reverterManifestacaoNF')
+  const __g = await guardaModulo('nota-fiscal#reverterManifestacaoNF'); if (__g) return __g as never
   if ((await modoDaLoja(await getCurrentLojaId())) === 'proprio') {
     const r = await desfazerEntradaNF(notaId)
     return 'error' in r ? { error: r.error } : { ok: true as const, aviso: r.aviso }
@@ -223,7 +223,7 @@ export async function reverterManifestacaoNF(notaId: number) {
  */
 export async function excluirRecebimentoNF(notaId: number) {
   const __d = viaDesktop('nota-fiscal#excluirRecebimentoNF', excluirRecebimentoNF, [notaId]); if (__d) return __d as never
-  await guardaModulo('nota-fiscal#excluirRecebimentoNF')
+  const __g = await guardaModulo('nota-fiscal#excluirRecebimentoNF'); if (__g) return __g as never
   if ((await modoDaLoja(await getCurrentLojaId())) === 'proprio') {
     const r = await excluirNotaProprio(notaId)
     return 'error' in r ? { error: r.error } : { ok: true as const, fantasma: false, aviso: r.aviso }

@@ -21,7 +21,7 @@ export async function buscarProdutos(
   filtros?: { tipo?: string; familia?: string }
 ): Promise<ProdutoBusca[]> {
   const __d = viaDesktop('produtos-search#buscarProdutos', buscarProdutos, [termo, filtros]); if (__d) return __d as never
-  await guardaModulo('produtos-search#buscarProdutos')
+  const __g = await guardaModulo('produtos-search#buscarProdutos'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   const supabase = await createClient()
   const t = termo.trim()
@@ -73,7 +73,7 @@ export async function buscarProdutos(
 
 export async function buscarProdutoPorCodigo(codigo: string): Promise<ProdutoBusca | null> {
   const __d = viaDesktop('produtos-search#buscarProdutoPorCodigo', buscarProdutoPorCodigo, [codigo]); if (__d) return __d as never
-  await guardaModulo('produtos-search#buscarProdutoPorCodigo')
+  const __g = await guardaModulo('produtos-search#buscarProdutoPorCodigo'); if (__g) return __g as never
   const termo = codigo.trim()
   if (!termo) return null
   const lojaId = await getCurrentLojaId()

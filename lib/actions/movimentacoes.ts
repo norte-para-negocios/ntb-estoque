@@ -37,7 +37,7 @@ export async function criarAjusteManual(input: {
   motivoOmie?: 'INV' | 'PER'
 }) {
   const __d = viaDesktop('movimentacoes#criarAjusteManual', criarAjusteManual, [input]); if (__d) return __d as never
-  await guardaModulo('movimentacoes#criarAjusteManual')
+  const __g = await guardaModulo('movimentacoes#criarAjusteManual'); if (__g) return __g as never
   if (!TIPOS_MANUAIS.has(input.tipo)) {
     return { error: 'Tipo de ajuste invalido' }
   }
@@ -216,7 +216,6 @@ export async function retryMovimentosManuaisPendentes(
   opts: { limitePorLoja?: number } = {}
 ): Promise<{ loja_id: number; tentadas: number; sucesso: number; falhas: number; encerradas?: number; erro?: string }[]> {
   const __d = viaDesktop('movimentacoes#retryMovimentosManuaisPendentes', retryMovimentosManuaisPendentes, [lojas, opts]); if (__d) return __d as never
-  await guardaModulo('movimentacoes#retryMovimentosManuaisPendentes')
   const limitePorLoja = opts.limitePorLoja ?? 30
   const supabase = createServiceClient()
   const resultados: { loja_id: number; tentadas: number; sucesso: number; falhas: number; encerradas?: number; erro?: string }[] = []

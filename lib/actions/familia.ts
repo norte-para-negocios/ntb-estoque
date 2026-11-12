@@ -35,7 +35,7 @@ async function getLoja(lojaId: number) {
  */
 export async function criarFamilia(dados: FamiliaInput): Promise<{ ok?: boolean; error?: string; omieError?: string }> {
   const __d = viaDesktop('familia#criarFamilia', criarFamilia, [dados]); if (__d) return __d as never
-  await guardaModulo('familia#criarFamilia')
+  const __g = await guardaModulo('familia#criarFamilia'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Familias - Criar'))) return { error: 'Sem permissão' }
   if (!dados.nome.trim()) return { error: 'Informe o nome da família' }
@@ -78,7 +78,7 @@ export async function criarFamilia(dados: FamiliaInput): Promise<{ ok?: boolean;
 
 export async function editarFamilia(id: number, dados: FamiliaInput): Promise<{ ok?: boolean; error?: string; omieError?: string }> {
   const __d = viaDesktop('familia#editarFamilia', editarFamilia, [id, dados]); if (__d) return __d as never
-  await guardaModulo('familia#editarFamilia')
+  const __g = await guardaModulo('familia#editarFamilia'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Familias - Editar'))) return { error: 'Sem permissão' }
   if (!dados.nome.trim()) return { error: 'Informe o nome da família' }
@@ -151,7 +151,7 @@ export async function editarFamilia(id: number, dados: FamiliaInput): Promise<{ 
 
 export async function excluirFamilia(id: number): Promise<{ ok?: boolean; error?: string; omieError?: string }> {
   const __d = viaDesktop('familia#excluirFamilia', excluirFamilia, [id]); if (__d) return __d as never
-  await guardaModulo('familia#excluirFamilia')
+  const __g = await guardaModulo('familia#excluirFamilia'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Familias - Excluir'))) return { error: 'Sem permissão' }
 
@@ -197,7 +197,7 @@ export async function excluirFamilia(id: number): Promise<{ ok?: boolean; error?
  */
 export async function puxarFamiliasDoOmie() {
   const __d = viaDesktop('familia#puxarFamiliasDoOmie', puxarFamiliasDoOmie, []); if (__d) return __d as never
-  await guardaModulo('familia#puxarFamiliasDoOmie')
+  const __g = await guardaModulo('familia#puxarFamiliasDoOmie'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Familias - Sincronizar'))) return { error: 'Sem permissão' }
   if ((await modoDaLoja(lojaId)) !== 'omie') return { error: 'Esta loja não usa sincronização com sistema externo.' }

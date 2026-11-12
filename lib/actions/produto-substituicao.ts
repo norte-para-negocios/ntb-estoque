@@ -16,7 +16,7 @@ export type ProdutoSubstituicaoInput = {
 // Puramente local: nao existe conceito de "produto substituto" no Omie.
 export async function criarProdutoSubstituicao(dados: ProdutoSubstituicaoInput) {
   const __d = viaDesktop('produto-substituicao#criarProdutoSubstituicao', criarProdutoSubstituicao, [dados]); if (__d) return __d as never
-  await guardaModulo('produto-substituicao#criarProdutoSubstituicao')
+  const __g = await guardaModulo('produto-substituicao#criarProdutoSubstituicao'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produto Substituicoes - Criar'))) return { error: 'Sem permissão' }
   if (dados.n_cod_prod === dados.substitui_n_cod_prod) {
@@ -38,7 +38,7 @@ export async function criarProdutoSubstituicao(dados: ProdutoSubstituicaoInput) 
 
 export async function excluirProdutoSubstituicao(id: number) {
   const __d = viaDesktop('produto-substituicao#excluirProdutoSubstituicao', excluirProdutoSubstituicao, [id]); if (__d) return __d as never
-  await guardaModulo('produto-substituicao#excluirProdutoSubstituicao')
+  const __g = await guardaModulo('produto-substituicao#excluirProdutoSubstituicao'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produto Substituicoes - Excluir'))) return { error: 'Sem permissão' }
 

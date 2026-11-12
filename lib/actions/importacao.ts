@@ -43,7 +43,7 @@ export type PreviaImportacao = {
 
 export async function previaImportacao(formData: FormData): Promise<PreviaImportacao | Erro> {
   const __d = viaDesktop('importacao#previaImportacao', previaImportacao, [formData]); if (__d) return __d as never
-  await guardaModulo('importacao#previaImportacao')
+  const __g = await guardaModulo('importacao#previaImportacao'); if (__g) return __g as never
   const tipo = formData.get('tipo')
   if (tipo !== 'produtos' && tipo !== 'fornecedores') return { error: 'Tipo de importação inválido' }
   const ctx = await contexto(tipo)
@@ -94,7 +94,7 @@ export async function previaImportacao(formData: FormData): Promise<PreviaImport
 
 export async function confirmarImportacao(id: number, tipo: TipoImportacao): Promise<{ ok: true; criados: number; atualizados: number; duplicado: boolean } | Erro> {
   const __d = viaDesktop('importacao#confirmarImportacao', confirmarImportacao, [id, tipo]); if (__d) return __d as never
-  await guardaModulo('importacao#confirmarImportacao')
+  const __g = await guardaModulo('importacao#confirmarImportacao'); if (__g) return __g as never
   if (tipo !== 'produtos' && tipo !== 'fornecedores') return { error: 'Tipo de importação inválido' }
   if (!Number.isInteger(id) || id <= 0) return { error: 'Prévia inválida' }
   const ctx = await contexto(tipo)

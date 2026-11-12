@@ -27,7 +27,7 @@ export type DetalheOP = {
 
 export async function buscarDetalheOP(opId: number): Promise<{ error: string } | DetalheOP> {
   const __d = viaDesktop('detalhe-movimento#buscarDetalheOP', buscarDetalheOP, [opId]); if (__d) return __d as never
-  await guardaModulo('detalhe-movimento#buscarDetalheOP')
+  const __g = await guardaModulo('detalhe-movimento#buscarDetalheOP'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
   const { data: opSupabase } = await supabase
@@ -97,7 +97,7 @@ export type DetalheTransferencia = {
 // entao le so o Supabase, igual a tela de referencia /transferencia/[id]/contagem.
 export async function buscarDetalheTransferencia(id: number): Promise<{ error: string } | DetalheTransferencia> {
   const __d = viaDesktop('detalhe-movimento#buscarDetalheTransferencia', buscarDetalheTransferencia, [id]); if (__d) return __d as never
-  await guardaModulo('detalhe-movimento#buscarDetalheTransferencia')
+  const __g = await guardaModulo('detalhe-movimento#buscarDetalheTransferencia'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
   const podeEditar = await requirePermissao(lojaId, 'Transferencias - Editar')
@@ -175,7 +175,7 @@ export type DetalheNotaFiscal = {
 
 export async function buscarDetalheNotaFiscal(id: string): Promise<{ error: string } | DetalheNotaFiscal> {
   const __d = viaDesktop('detalhe-movimento#buscarDetalheNotaFiscal', buscarDetalheNotaFiscal, [id]); if (__d) return __d as never
-  await guardaModulo('detalhe-movimento#buscarDetalheNotaFiscal')
+  const __g = await guardaModulo('detalhe-movimento#buscarDetalheNotaFiscal'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
 
@@ -240,7 +240,7 @@ export type DetalheInventario = {
 // complementarMovimentos), entao toda linha de inventario exibida ja existe aqui.
 export async function buscarDetalheInventario(id: number): Promise<{ error: string } | DetalheInventario> {
   const __d = viaDesktop('detalhe-movimento#buscarDetalheInventario', buscarDetalheInventario, [id]); if (__d) return __d as never
-  await guardaModulo('detalhe-movimento#buscarDetalheInventario')
+  const __g = await guardaModulo('detalhe-movimento#buscarDetalheInventario'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
   const podeEditar = await requirePermissao(lojaId, 'Inventarios - Editar')

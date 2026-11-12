@@ -32,7 +32,7 @@ const msgErro = (e: { message?: string; code?: string } | null | undefined) => {
 /** Fecha o mês (YYYY-MM). Com pendência, só fecha com `aceitarPendencias` (a tela mostra a lista antes). */
 export async function fecharMes(mes: string, opts?: { obs?: string | null; aceitarPendencias?: boolean }): Promise<{ ok: true; duplicado: boolean } | (Erro & { pendencias?: Pendencia[] })> {
   const __d = viaDesktop('periodo-fechado#fecharMes', fecharMes, [mes, opts]); if (__d) return __d as never
-  await guardaModulo('periodo-fechado#fecharMes')
+  const __g = await guardaModulo('periodo-fechado#fecharMes'); if (__g) return __g as never
   const ctx = await contexto('Fechamento - Fechar mes')
   if ('error' in ctx) return ctx
   const inval = validarFechamento(mes, hojeBahiaISO())
@@ -52,7 +52,7 @@ export async function fecharMes(mes: string, opts?: { obs?: string | null; aceit
 /** Reabre o mês (YYYY-MM): permissão própria e motivo obrigatório, registrados. */
 export async function reabrirMes(mes: string, motivo: string): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('periodo-fechado#reabrirMes', reabrirMes, [mes, motivo]); if (__d) return __d as never
-  await guardaModulo('periodo-fechado#reabrirMes')
+  const __g = await guardaModulo('periodo-fechado#reabrirMes'); if (__g) return __g as never
   const ctx = await contexto('Fechamento - Reabrir mes')
   if ('error' in ctx) return ctx
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) return { error: 'Mês inválido.' }
@@ -70,7 +70,7 @@ export async function reabrirMes(mes: string, motivo: string): Promise<{ ok: tru
 /** O que impede (ou fica parado ao) fechar o mês, para a tela mostrar antes de confirmar. */
 export async function pendenciasDoMes(mes: string): Promise<{ pendencias: Pendencia[] } | Erro> {
   const __d = viaDesktop('periodo-fechado#pendenciasDoMes', pendenciasDoMes, [mes]); if (__d) return __d as never
-  await guardaModulo('periodo-fechado#pendenciasDoMes')
+  const __g = await guardaModulo('periodo-fechado#pendenciasDoMes'); if (__g) return __g as never
   const ctx = await contexto('Fechamento - Fechar mes')
   if ('error' in ctx) return ctx
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) return { error: 'Mês inválido.' }

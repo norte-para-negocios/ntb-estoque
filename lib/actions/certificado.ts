@@ -13,7 +13,7 @@ import { criptografar } from '@/lib/cripto'
 // sensivel (arquivo/senha) e logado.
 export async function salvarCertificado(formData: FormData) {
   const __d = viaDesktop('certificado#salvarCertificado', salvarCertificado, [formData]); if (__d) return __d as never
-  await guardaModulo('certificado#salvarCertificado')
+  const __g = await guardaModulo('certificado#salvarCertificado'); if (__g) return __g as never
   if (!(await isAdmin())) return { error: 'Sem permissão' }
 
   const lojaId = Number(formData.get('loja_id'))

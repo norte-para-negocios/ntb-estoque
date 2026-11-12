@@ -13,7 +13,7 @@ import { validarConfigCompras, type ConfigCompras } from '@/lib/custo-cardapio/c
 // `compras` (opcional, migration 474): cobertura da lista de compras, WhatsApp de compras (só dígitos) e dia da contagem.
 export async function salvarTaxasCardapio(t: Taxas, compras?: ConfigCompras | null): Promise<{ ok: true } | { error: string }> {
   const __d = viaDesktop('custo-cardapio#salvarTaxasCardapio', salvarTaxasCardapio, [t, compras]); if (__d) return __d as never
-  await guardaModulo('custo-cardapio#salvarTaxasCardapio')
+  const __g = await guardaModulo('custo-cardapio#salvarTaxasCardapio'); if (__g) return __g as never
   const ator = await getAtorGestao()
   if (!ator.podeGerir) return { error: 'Sem permissão' }
   const lojaId = await getCurrentLojaId()

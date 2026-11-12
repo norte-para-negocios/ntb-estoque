@@ -1,7 +1,6 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
-import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { isAdmin } from '@/lib/auth'
@@ -34,7 +33,6 @@ function urlPublica(): string {
 // deste projeto e do ntb-vendas). Regenerar invalida a chave anterior.
 export async function gerarChaveIntegracaoNtbVendas(lojaId: number) {
   const __d = viaDesktop('integracao-ntb-vendas#gerarChaveIntegracaoNtbVendas', gerarChaveIntegracaoNtbVendas, [lojaId]); if (__d) return __d as never
-  await guardaModulo('integracao-ntb-vendas#gerarChaveIntegracaoNtbVendas')
   if (!(await isAdmin())) return { error: 'Apenas administradores' }
   const supabase = createServiceClient()
 
@@ -59,7 +57,6 @@ export async function gerarChaveIntegracaoNtbVendas(lojaId: number) {
 // e reconfigurada do outro lado). Apenas admin.
 export async function removerChaveIntegracaoNtbVendas(lojaId: number) {
   const __d = viaDesktop('integracao-ntb-vendas#removerChaveIntegracaoNtbVendas', removerChaveIntegracaoNtbVendas, [lojaId]); if (__d) return __d as never
-  await guardaModulo('integracao-ntb-vendas#removerChaveIntegracaoNtbVendas')
   if (!(await isAdmin())) return { error: 'Apenas administradores' }
   const supabase = createServiceClient()
   const { error } = await supabase

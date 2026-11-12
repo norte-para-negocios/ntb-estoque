@@ -10,6 +10,7 @@ test('módulo de cada arquivo de ação', () => {
   assert.equal(moduloDaAcao('plataforma-assinaturas'), null)
   assert.equal(moduloDaAcao('loja-selector'), null)
   assert.equal(moduloDaAcao('auth'), null)
+  for (const f of ['convite', 'onboarding-loja', 'integracao-ntb-vendas', 'sync-status', 'central', 'central-numeros']) assert.equal(moduloDaAcao(f), null)
   assert.equal(moduloDaAcao('estoque-omie'), 'erp')
 })
 test('leitura passa em suspenso', () => {
@@ -17,4 +18,9 @@ test('leitura passa em suspenso', () => {
   assert.equal(barraAcao('consulta', 'fila'), true)
   assert.equal(barraAcao('vitrine', 'leitura'), true)
   assert.equal(barraAcao('abre', 'fila'), false)
+})
+test('leitura extra passa em suspenso', () => {
+  assert.equal(barraAcao('consulta', 'fila', 'estrutura#verEstrutura'), false)
+  assert.equal(barraAcao('consulta', 'fila', 'estrutura#outra'), true)
+  assert.equal(barraAcao('vitrine', 'fila', 'estrutura#verEstrutura'), true)
 })

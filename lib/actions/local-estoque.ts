@@ -19,7 +19,7 @@ import { criarLocalProprio, editarLocalProprio, localTemMovimento, type LocalPro
  */
 export async function excluirLocalEstoque(id: number) {
   const __d = viaDesktop('local-estoque#excluirLocalEstoque', excluirLocalEstoque, [id]); if (__d) return __d as never
-  await guardaModulo('local-estoque#excluirLocalEstoque')
+  const __g = await guardaModulo('local-estoque#excluirLocalEstoque'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Locais de Estoque - Excluir'))) return { error: 'Sem permissão' }
   if (!id) return { error: 'Local inválido' }
@@ -53,7 +53,7 @@ export async function excluirLocalEstoque(id: number) {
  */
 export async function criarLocalEstoque(dados: { descricao: string; codigo?: string } & Partial<Omit<LocalProprioCampos, 'descricao' | 'codigo'>>) {
   const __d = viaDesktop('local-estoque#criarLocalEstoque', criarLocalEstoque, [dados]); if (__d) return __d as never
-  await guardaModulo('local-estoque#criarLocalEstoque')
+  const __g = await guardaModulo('local-estoque#criarLocalEstoque'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Locais de Estoque - Criar'))) return { error: 'Sem permissão' }
   if (!dados.descricao?.trim()) return { error: 'Informe a descrição do local' }
@@ -99,7 +99,7 @@ export async function editarLocalEstoque(dados: {
   codigo?: string
 } & Partial<Omit<LocalProprioCampos, 'descricao' | 'codigo'>>) {
   const __d = viaDesktop('local-estoque#editarLocalEstoque', editarLocalEstoque, [dados]); if (__d) return __d as never
-  await guardaModulo('local-estoque#editarLocalEstoque')
+  const __g = await guardaModulo('local-estoque#editarLocalEstoque'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Locais de Estoque - Editar'))) return { error: 'Sem permissão' }
   if (!dados.codigoLocalEstoque) return { error: 'Local inválido' }

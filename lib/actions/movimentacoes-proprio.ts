@@ -26,7 +26,7 @@ export type DetalheKardex =
 /** Detalhe de um movimento: documento de origem (OP, NF/compra, inventário, venda, transferência) e movimentos ligados (estorno, pernas). */
 export async function detalheMovimentoProprio(id: number): Promise<DetalheKardex> {
   const __d = viaDesktop('movimentacoes-proprio#detalheMovimentoProprio', detalheMovimentoProprio, [id]); if (__d) return __d as never
-  await guardaModulo('movimentacoes-proprio#detalheMovimentoProprio')
+  const __g = await guardaModulo('movimentacoes-proprio#detalheMovimentoProprio'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Movimentacoes'))) return { error: 'Sem permissão' }
   if ((await modoDaLoja(lojaId)) !== 'proprio') return { error: 'Esta loja não usa o estoque próprio.' }

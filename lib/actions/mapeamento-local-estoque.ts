@@ -20,7 +20,7 @@ export async function salvarMapeamentoLocalEstoque(
   barCodigo: number | null
 ) {
   const __d = viaDesktop('mapeamento-local-estoque#salvarMapeamentoLocalEstoque', salvarMapeamentoLocalEstoque, [lojaId, cozinhaCodigo, barCodigo]); if (__d) return __d as never
-  await guardaModulo('mapeamento-local-estoque#salvarMapeamentoLocalEstoque')
+  const __g = await guardaModulo('mapeamento-local-estoque#salvarMapeamentoLocalEstoque'); if (__g) return __g as never
   if (!(await isAdmin())) return { error: 'Apenas administradores' }
 
   const supabase = createServiceClient()

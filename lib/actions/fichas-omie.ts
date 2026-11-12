@@ -28,7 +28,7 @@ const lidos = (itens: EstruturaItem[] | undefined): ItemLido[] =>
 
 export async function trocarInsumoNoPrato(input: { de: number; para: number; quantidadeFixa: number | null; produto: number }): Promise<RespostaTroca> {
   const __d = viaDesktop('fichas-omie#trocarInsumoNoPrato', trocarInsumoNoPrato, [input]); if (__d) return __d as never
-  await guardaModulo('fichas-omie#trocarInsumoNoPrato')
+  const __g = await guardaModulo('fichas-omie#trocarInsumoNoPrato'); if (__g) return __g as never
   const falha = (error: string, etapa: EtapaTroca = 'nada_feito', parar = true): RespostaTroca => ({ error, etapa, parar })
   const ctx = await contextoEscritaOmie('Fichas - Trocar insumo')
   if ('error' in ctx) return falha(ctx.error)

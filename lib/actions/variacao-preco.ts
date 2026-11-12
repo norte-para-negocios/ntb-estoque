@@ -18,7 +18,7 @@ type Resposta = { ok: true } | { error: string }
 
 export async function salvarLimiteVariacaoPreco(pct: number | string): Promise<Resposta> {
   const __d = viaDesktop('variacao-preco#salvarLimiteVariacaoPreco', salvarLimiteVariacaoPreco, [pct]); if (__d) return __d as never
-  await guardaModulo('variacao-preco#salvarLimiteVariacaoPreco')
+  const __g = await guardaModulo('variacao-preco#salvarLimiteVariacaoPreco'); if (__g) return __g as never
   await exigirDevAcao()
   const lojaId = await getCurrentLojaId()
   if ((await modoDaLoja(lojaId)) !== 'proprio') return { error: 'Esta loja não usa o estoque próprio.' }

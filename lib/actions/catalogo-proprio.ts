@@ -58,7 +58,7 @@ async function fiscalValidado(lojaId: number, ean: string | null | undefined, ex
 // ---------------------------------------------------------------------------------------------- grupos
 export async function listarGrupos(): Promise<GrupoLinha[]> {
   const __d = viaDesktop('catalogo-proprio#listarGrupos', listarGrupos, []); if (__d) return __d as never
-  await guardaModulo('catalogo-proprio#listarGrupos')
+  const __g = await guardaModulo('catalogo-proprio#listarGrupos'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
   const [{ data: grupos }, { data: usos }] = await Promise.all([
@@ -75,7 +75,7 @@ export async function listarGrupos(): Promise<GrupoLinha[]> {
 
 export async function criarGrupo(dados: { nome: string; paiId: number | null }): Promise<{ ok: true; id: number } | Erro> {
   const __d = viaDesktop('catalogo-proprio#criarGrupo', criarGrupo, [dados]); if (__d) return __d as never
-  await guardaModulo('catalogo-proprio#criarGrupo')
+  const __g = await guardaModulo('catalogo-proprio#criarGrupo'); if (__g) return __g as never
   const ctx = await lojaProprio('Familias - Criar')
   if ('error' in ctx) return ctx
   const nome = dados.nome?.trim()
@@ -92,7 +92,7 @@ export async function criarGrupo(dados: { nome: string; paiId: number | null }):
 
 export async function editarGrupo(id: number, dados: { nome?: string; paiId?: number | null; ordem?: number; ativo?: boolean }): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('catalogo-proprio#editarGrupo', editarGrupo, [id, dados]); if (__d) return __d as never
-  await guardaModulo('catalogo-proprio#editarGrupo')
+  const __g = await guardaModulo('catalogo-proprio#editarGrupo'); if (__g) return __g as never
   const ctx = await lojaProprio('Familias - Editar')
   if ('error' in ctx) return ctx
   const upd: Record<string, unknown> = {}
@@ -110,7 +110,7 @@ export async function editarGrupo(id: number, dados: { nome?: string; paiId?: nu
 /** Só apaga grupo vazio (sem subgrupos nem produtos); senão, inative. */
 export async function excluirGrupo(id: number): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('catalogo-proprio#excluirGrupo', excluirGrupo, [id]); if (__d) return __d as never
-  await guardaModulo('catalogo-proprio#excluirGrupo')
+  const __g = await guardaModulo('catalogo-proprio#excluirGrupo'); if (__g) return __g as never
   const ctx = await lojaProprio('Familias - Excluir')
   if ('error' in ctx) return ctx
   const supabase = createServiceClient()
@@ -158,7 +158,7 @@ function limparAtributos(a?: Record<string, string>): Record<string, string> {
 
 export async function criarProdutoCatalogo(d: ProdutoCatalogoInput): Promise<{ ok: true; codigo: string; codigoProduto: number; variacoes: { codigo: string; descricao: string }[] } | Erro> {
   const __d = viaDesktop('catalogo-proprio#criarProdutoCatalogo', criarProdutoCatalogo, [d]); if (__d) return __d as never
-  await guardaModulo('catalogo-proprio#criarProdutoCatalogo')
+  const __g = await guardaModulo('catalogo-proprio#criarProdutoCatalogo'); if (__g) return __g as never
   const ctx = await lojaProprio('Produtos - Criar')
   if ('error' in ctx) return ctx
   const supabase = createServiceClient()
@@ -211,7 +211,7 @@ export type ProdutoCatalogo = {
 
 export async function carregarProdutoCatalogo(codigo: string): Promise<ProdutoCatalogo | null> {
   const __d = viaDesktop('catalogo-proprio#carregarProdutoCatalogo', carregarProdutoCatalogo, [codigo]); if (__d) return __d as never
-  await guardaModulo('catalogo-proprio#carregarProdutoCatalogo')
+  const __g = await guardaModulo('catalogo-proprio#carregarProdutoCatalogo'); if (__g) return __g as never
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
   const cols = 'id, codigo, codigo_produto, descricao, unidade, ncm, tipo_item, valor_unitario, estoque_minimo, pdv, inativo, codigo_familia, grupo_id, eh_mae, produto_pai_codigo, atributos, vendas_ref, ean, full_object, validade_dias'
@@ -240,7 +240,7 @@ export async function salvarProdutoCatalogo(
   variacoes: { codigo: string | null; descricao: string; preco: number; inativo: boolean; atributos: Record<string, string> }[] = []
 ): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('catalogo-proprio#salvarProdutoCatalogo', salvarProdutoCatalogo, [codigo, d, variacoes]); if (__d) return __d as never
-  await guardaModulo('catalogo-proprio#salvarProdutoCatalogo')
+  const __g = await guardaModulo('catalogo-proprio#salvarProdutoCatalogo'); if (__g) return __g as never
   const ctx = await lojaProprio('Produtos - Editar')
   if ('error' in ctx) return ctx
   const supabase = createServiceClient()
@@ -290,7 +290,7 @@ export async function salvarProdutoCatalogo(
 // ---------------------------------------------------------------------------------------------- sincronização
 export async function sincronizarAgora(): Promise<{ ok: true; resumo: string } | Erro> {
   const __d = viaDesktop('catalogo-proprio#sincronizarAgora', sincronizarAgora, []); if (__d) return __d as never
-  await guardaModulo('catalogo-proprio#sincronizarAgora')
+  const __g = await guardaModulo('catalogo-proprio#sincronizarAgora'); if (__g) return __g as never
   const ctx = await lojaProprio('Produtos - Editar')
   if ('error' in ctx) return ctx
   // Fase G (revisão I1): o que vem do Norte Vendas grava no histórico como "Sistema".

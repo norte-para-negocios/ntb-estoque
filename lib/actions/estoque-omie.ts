@@ -45,7 +45,7 @@ function atualizarTelas() {
 /** Entrada no Omie (ENT) pelo custo digitado (opcional) ou pelo custo médio atual do produto (lido na hora). */
 export async function entradaOmie(dados: { codigoProduto: number; codigoLocal: number; quantidade: number | string; obs?: string; custoUnitario?: number | string | null }): Promise<Resposta> {
   const __d = viaDesktop('estoque-omie#entradaOmie', entradaOmie, [dados]); if (__d) return __d as never
-  await guardaModulo('estoque-omie#entradaOmie')
+  const __g = await guardaModulo('estoque-omie#entradaOmie'); if (__g) return __g as never
   const ctx = await contextoEscritaOmie(PERM, 'Movimentacoes - Criar')
   if ('error' in ctx) return ctx
   const quantidade = numero(dados.quantidade)
@@ -75,7 +75,7 @@ export async function ajusteOmie(dados: {
   perda?: boolean
 }): Promise<Resposta> {
   const __d = viaDesktop('estoque-omie#ajusteOmie', ajusteOmie, [dados]); if (__d) return __d as never
-  await guardaModulo('estoque-omie#ajusteOmie')
+  const __g = await guardaModulo('estoque-omie#ajusteOmie'); if (__g) return __g as never
   const ctx = await contextoEscritaOmie(PERM, 'Movimentacoes - Criar')
   if ('error' in ctx) return ctx
   if (!dados.motivo?.trim()) return { error: 'Informe o motivo do ajuste.' }
@@ -113,7 +113,7 @@ export async function ajusteOmie(dados: {
  */
 export async function transferirOmie(dados: { codigoProduto: number; de: number; para: number; quantidade: number | string; obs?: string }): Promise<Resposta> {
   const __d = viaDesktop('estoque-omie#transferirOmie', transferirOmie, [dados]); if (__d) return __d as never
-  await guardaModulo('estoque-omie#transferirOmie')
+  const __g = await guardaModulo('estoque-omie#transferirOmie'); if (__g) return __g as never
   const ctx = await contextoEscritaOmie(PERM, 'Transferencias - Criar', 'Transferencias - Editar')
   if ('error' in ctx) return ctx
   if (dados.de === dados.para) return { error: 'Origem e destino não podem ser o mesmo local.' }
@@ -239,7 +239,7 @@ export async function corrigirCustoAjuste(input: {
   movimentoId: number; custoNovo: number; custoAtualVisto: number; confirmarMesFechado?: boolean
 }): Promise<RespostaCusto> {
   const __d = viaDesktop('estoque-omie#corrigirCustoAjuste', corrigirCustoAjuste, [input]); if (__d) return __d as never
-  await guardaModulo('estoque-omie#corrigirCustoAjuste')
+  const __g = await guardaModulo('estoque-omie#corrigirCustoAjuste'); if (__g) return __g as never
   const ctx = await contextoEscritaOmie(PERM_CUSTO)
   if ('error' in ctx) return ctx
   const { loja, lojaId } = ctx
@@ -331,7 +331,7 @@ export async function corrigirCustoAjuste(input: {
 /** "Refazer" de uma correção parada: relança (procurando antes o CUSTO-<id> no Omie) ou confere se a exclusão aconteceu. */
 export async function relancarCorrecaoCusto(correcaoId: number): Promise<RespostaCusto> {
   const __d = viaDesktop('estoque-omie#relancarCorrecaoCusto', relancarCorrecaoCusto, [correcaoId]); if (__d) return __d as never
-  await guardaModulo('estoque-omie#relancarCorrecaoCusto')
+  const __g = await guardaModulo('estoque-omie#relancarCorrecaoCusto'); if (__g) return __g as never
   const ctx = await contextoEscritaOmie(PERM_CUSTO)
   if ('error' in ctx) return ctx
   const { loja, lojaId } = ctx

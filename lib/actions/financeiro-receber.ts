@@ -62,7 +62,7 @@ export type FormaRecebimentoInput = {
 /** Cadastro de uma forma de recebimento da loja atual (adquirente, taxa, prazo, conta de destino). */
 export async function salvarFormaRecebimento(input: FormaRecebimentoInput): Promise<{ ok: true; mudou: boolean } | Erro> {
   const __d = viaDesktop('financeiro-receber#salvarFormaRecebimento', salvarFormaRecebimento, [input]); if (__d) return __d as never
-  await guardaModulo('financeiro-receber#salvarFormaRecebimento')
+  const __g = await guardaModulo('financeiro-receber#salvarFormaRecebimento'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.contasReceber)
   if ('error' in ctx) return ctx
@@ -91,7 +91,7 @@ export type ResultadoGeracao = { criados: number; atualizados: number; iguais: n
 /** "Gerar agora" do período (o cron faz o mesmo de hora em hora, nos últimos dias). Só com a chave da loja ligada. */
 export async function gerarContasReceberVendas(de: string, ate: string): Promise<({ ok: true } & ResultadoGeracao) | Erro> {
   const __d = viaDesktop('financeiro-receber#gerarContasReceberVendas', gerarContasReceberVendas, [de, ate]); if (__d) return __d as never
-  await guardaModulo('financeiro-receber#gerarContasReceberVendas')
+  const __g = await guardaModulo('financeiro-receber#gerarContasReceberVendas'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.contasReceber)
   if ('error' in ctx) return ctx
@@ -115,7 +115,7 @@ export type RecebimentoInput = { tituloId: number; contaId?: number | null; data
 /** Baixa: valor que a adquirente/banco depositou e a data. Vazio = o líquido previsto. A diferença fica registrada. */
 export async function registrarRecebimento(input: RecebimentoInput): Promise<{ ok: true; diferenca: number } | Erro> {
   const __d = viaDesktop('financeiro-receber#registrarRecebimento', registrarRecebimento, [input]); if (__d) return __d as never
-  await guardaModulo('financeiro-receber#registrarRecebimento')
+  const __g = await guardaModulo('financeiro-receber#registrarRecebimento'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.receber)
   if ('error' in ctx) return ctx
@@ -139,7 +139,7 @@ export async function registrarRecebimento(input: RecebimentoInput): Promise<{ o
 
 export async function estornarRecebimento(recebimentoId: number, motivo: string): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('financeiro-receber#estornarRecebimento', estornarRecebimento, [recebimentoId, motivo]); if (__d) return __d as never
-  await guardaModulo('financeiro-receber#estornarRecebimento')
+  const __g = await guardaModulo('financeiro-receber#estornarRecebimento'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.receber)
   if ('error' in ctx) return ctx

@@ -64,7 +64,7 @@ export type ContaInput = {
 
 export async function salvarContaCorrente(input: ContaInput): Promise<{ ok: true; id: number } | Erro> {
   const __d = viaDesktop('financeiro#salvarContaCorrente', salvarContaCorrente, [input]); if (__d) return __d as never
-  await guardaModulo('financeiro#salvarContaCorrente')
+  const __g = await guardaModulo('financeiro#salvarContaCorrente'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.contasCorrentes)
   if ('error' in ctx) return ctx
@@ -91,7 +91,7 @@ export type CategoriaInput = {
 
 export async function salvarCategoriaFinanceira(input: CategoriaInput): Promise<{ ok: true; id: number } | Erro> {
   const __d = viaDesktop('financeiro#salvarCategoriaFinanceira', salvarCategoriaFinanceira, [input]); if (__d) return __d as never
-  await guardaModulo('financeiro#salvarCategoriaFinanceira')
+  const __g = await guardaModulo('financeiro#salvarCategoriaFinanceira'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.categorias)
   if ('error' in ctx) return ctx
@@ -111,7 +111,7 @@ export async function salvarCategoriaFinanceira(input: CategoriaInput): Promise<
 
 export async function criarCategoriasPadrao(): Promise<{ ok: true; criadas: number } | Erro> {
   const __d = viaDesktop('financeiro#criarCategoriasPadrao', criarCategoriasPadrao, []); if (__d) return __d as never
-  await guardaModulo('financeiro#criarCategoriasPadrao')
+  const __g = await guardaModulo('financeiro#criarCategoriasPadrao'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.categorias)
   if ('error' in ctx) return ctx
@@ -131,7 +131,7 @@ export type TituloInput = {
 
 export async function salvarTituloPagar(input: TituloInput): Promise<{ ok: true; id: number; numero: number } | Erro> {
   const __d = viaDesktop('financeiro#salvarTituloPagar', salvarTituloPagar, [input]); if (__d) return __d as never
-  await guardaModulo('financeiro#salvarTituloPagar')
+  const __g = await guardaModulo('financeiro#salvarTituloPagar'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.contasPagar)
   if ('error' in ctx) return ctx
@@ -156,7 +156,7 @@ export async function salvarTituloPagar(input: TituloInput): Promise<{ ok: true;
 
 export async function cancelarTituloPagar(id: number, motivo: string): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('financeiro#cancelarTituloPagar', cancelarTituloPagar, [id, motivo]); if (__d) return __d as never
-  await guardaModulo('financeiro#cancelarTituloPagar')
+  const __g = await guardaModulo('financeiro#cancelarTituloPagar'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.contasPagar)
   if ('error' in ctx) return ctx
@@ -178,7 +178,7 @@ export type PagamentoInput = {
 
 export async function registrarPagamentoTitulo(input: PagamentoInput): Promise<{ ok: true; status: string; restante: number } | Erro> {
   const __d = viaDesktop('financeiro#registrarPagamentoTitulo', registrarPagamentoTitulo, [input]); if (__d) return __d as never
-  await guardaModulo('financeiro#registrarPagamentoTitulo')
+  const __g = await guardaModulo('financeiro#registrarPagamentoTitulo'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.pagar)
   if ('error' in ctx) return ctx
@@ -213,7 +213,7 @@ export async function registrarPagamentoTitulo(input: PagamentoInput): Promise<{
 
 export async function estornarPagamentoTitulo(pagamentoId: number, motivo: string): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('financeiro#estornarPagamentoTitulo', estornarPagamentoTitulo, [pagamentoId, motivo]); if (__d) return __d as never
-  await guardaModulo('financeiro#estornarPagamentoTitulo')
+  const __g = await guardaModulo('financeiro#estornarPagamentoTitulo'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.pagar)
   if ('error' in ctx) return ctx
@@ -233,7 +233,7 @@ export async function estornarPagamentoTitulo(pagamentoId: number, motivo: strin
  *  Idempotente: parcela que já tem conta não é gerada de novo. */
 export async function gerarContasPagarDaNota(notaId: number): Promise<{ ok: true; gerados: number; jaExistiam: number; motivo: string | null } | Erro> {
   const __d = viaDesktop('financeiro#gerarContasPagarDaNota', gerarContasPagarDaNota, [notaId]); if (__d) return __d as never
-  await guardaModulo('financeiro#gerarContasPagarDaNota')
+  const __g = await guardaModulo('financeiro#gerarContasPagarDaNota'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.contasPagar)
   if ('error' in ctx) return ctx
@@ -255,7 +255,7 @@ const SEM_360 = 'Recurso ainda não ativado nesta instalação (migration 360).'
 /** Mapa família → categoria financeira da loja atual (null desliga). A conta da nota leva a categoria da família de maior valor. */
 export async function salvarFamiliaCategoria(codigoFamilia: number, categoriaId: number | null): Promise<{ ok: true; mudou: boolean } | Erro> {
   const __d = viaDesktop('financeiro#salvarFamiliaCategoria', salvarFamiliaCategoria, [codigoFamilia, categoriaId]); if (__d) return __d as never
-  await guardaModulo('financeiro#salvarFamiliaCategoria')
+  const __g = await guardaModulo('financeiro#salvarFamiliaCategoria'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.categorias)
   if ('error' in ctx) return ctx
@@ -277,7 +277,7 @@ const TETO_GERAR = 50
  *  À MÃO: vale com a chave da loja desligada. Cada nota numa transação; uma nota que falha não para as outras. */
 export async function gerarContasNotasSemConta(notaIds: number[]): Promise<{ ok: true; resultados: ResultadoGerarNota[] } | Erro> {
   const __d = viaDesktop('financeiro#gerarContasNotasSemConta', gerarContasNotasSemConta, [notaIds]); if (__d) return __d as never
-  await guardaModulo('financeiro#gerarContasNotasSemConta')
+  const __g = await guardaModulo('financeiro#gerarContasNotasSemConta'); if (__g) return __g as never
   await exigirDevAcao()
   const sel = selecaoParaGerar(Array.isArray(notaIds) ? notaIds : [], TETO_GERAR)
   if (sel.erro) return { error: sel.erro }
@@ -317,7 +317,7 @@ export async function gerarContasNotasSemConta(notaIds: number[]): Promise<{ ok:
  *  'manter' só registra a decisão. Motivo obrigatório. */
 export async function decidirNotaDesfeita(tituloId: number, acao: 'estornar' | 'manter', motivo: string): Promise<{ ok: true; status: string } | Erro> {
   const __d = viaDesktop('financeiro#decidirNotaDesfeita', decidirNotaDesfeita, [tituloId, acao, motivo]); if (__d) return __d as never
-  await guardaModulo('financeiro#decidirNotaDesfeita')
+  const __g = await guardaModulo('financeiro#decidirNotaDesfeita'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.decidirNotaDesfeita)
   if ('error' in ctx) return ctx
@@ -344,7 +344,7 @@ export type ConfigInput = { ativa: boolean; ate: number | string; altoAcima: num
 /** Liga/desliga a aprovação e define as faixas (padrão do dono: desligada, R$ 1.000 / R$ 5.000, autor pode aprovar, 45 dias). */
 export async function salvarConfigFinanceiro(input: ConfigInput): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('financeiro#salvarConfigFinanceiro', salvarConfigFinanceiro, [input]); if (__d) return __d as never
-  await guardaModulo('financeiro#salvarConfigFinanceiro')
+  const __g = await guardaModulo('financeiro#salvarConfigFinanceiro'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.configurarAprovacao)
   if ('error' in ctx) return ctx
@@ -369,7 +369,7 @@ export async function salvarConfigFinanceiro(input: ConfigInput): Promise<{ ok: 
 /** Aprovar ou reprovar uma conta a pagar. O nível vem das permissões (gerente = 1, alto valor = 2); o banco confere a faixa. */
 export async function decidirAprovacaoTitulo(tituloId: number, acao: 'aprovar' | 'reprovar', motivo: string): Promise<{ ok: true; aprovacao: string } | Erro> {
   const __d = viaDesktop('financeiro#decidirAprovacaoTitulo', decidirAprovacaoTitulo, [tituloId, acao, motivo]); if (__d) return __d as never
-  await guardaModulo('financeiro#decidirAprovacaoTitulo')
+  const __g = await guardaModulo('financeiro#decidirAprovacaoTitulo'); if (__g) return __g as never
   await exigirDevAcao()
   const lojaId = await getCurrentLojaId()
   if ((await modoDaLoja(lojaId)) !== 'proprio') return { error: 'O financeiro do Norte só existe na loja de estoque próprio.' }
@@ -393,7 +393,7 @@ export async function decidirAprovacaoTitulo(tituloId: number, acao: 'aprovar' |
 /** Conta de recorrente com valor estimado: grava o valor de verdade (só depois disso ela pode ser paga). */
 export async function confirmarValorTitulo(tituloId: number, valor: number | string): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('financeiro#confirmarValorTitulo', confirmarValorTitulo, [tituloId, valor]); if (__d) return __d as never
-  await guardaModulo('financeiro#confirmarValorTitulo')
+  const __g = await guardaModulo('financeiro#confirmarValorTitulo'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.contasPagar)
   if ('error' in ctx) return ctx
@@ -416,7 +416,7 @@ export type RecorrenteInput = {
 
 export async function salvarRecorrente(input: RecorrenteInput): Promise<{ ok: true; id: number } | Erro> {
   const __d = viaDesktop('financeiro#salvarRecorrente', salvarRecorrente, [input]); if (__d) return __d as never
-  await guardaModulo('financeiro#salvarRecorrente')
+  const __g = await guardaModulo('financeiro#salvarRecorrente'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.recorrentes)
   if ('error' in ctx) return ctx
@@ -441,7 +441,7 @@ export async function salvarRecorrente(input: RecorrenteInput): Promise<{ ok: tr
 /** "Gerar agora" (a mesma função do cron diário, só na loja atual; idempotente). */
 export async function gerarRecorrentesAgora(): Promise<{ ok: true; gerados: number; falhas: number } | Erro> {
   const __d = viaDesktop('financeiro#gerarRecorrentesAgora', gerarRecorrentesAgora, []); if (__d) return __d as never
-  await guardaModulo('financeiro#gerarRecorrentesAgora')
+  const __g = await guardaModulo('financeiro#gerarRecorrentesAgora'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.recorrentes)
   if ('error' in ctx) return ctx
@@ -458,7 +458,7 @@ export type AvulsoInput = { contaId: number; data: string; tipo: 'entrada' | 'sa
 
 export async function registrarLancamentoAvulso(input: AvulsoInput): Promise<{ ok: true; id: number } | Erro> {
   const __d = viaDesktop('financeiro#registrarLancamentoAvulso', registrarLancamentoAvulso, [input]); if (__d) return __d as never
-  await guardaModulo('financeiro#registrarLancamentoAvulso')
+  const __g = await guardaModulo('financeiro#registrarLancamentoAvulso'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.lancamentos)
   if ('error' in ctx) return ctx
@@ -480,7 +480,7 @@ export async function registrarLancamentoAvulso(input: AvulsoInput): Promise<{ o
 
 export async function estornarLancamentoAvulso(id: number, motivo: string): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('financeiro#estornarLancamentoAvulso', estornarLancamentoAvulso, [id, motivo]); if (__d) return __d as never
-  await guardaModulo('financeiro#estornarLancamentoAvulso')
+  const __g = await guardaModulo('financeiro#estornarLancamentoAvulso'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.lancamentos)
   if ('error' in ctx) return ctx
@@ -498,7 +498,7 @@ export type TransferenciaInput = { origemId: number; destinoId: number; data: st
 
 export async function registrarTransferencia(input: TransferenciaInput): Promise<{ ok: true; id: number } | Erro> {
   const __d = viaDesktop('financeiro#registrarTransferencia', registrarTransferencia, [input]); if (__d) return __d as never
-  await guardaModulo('financeiro#registrarTransferencia')
+  const __g = await guardaModulo('financeiro#registrarTransferencia'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.lancamentos)
   if ('error' in ctx) return ctx
@@ -521,7 +521,7 @@ export async function registrarTransferencia(input: TransferenciaInput): Promise
 
 export async function estornarTransferencia(id: number, motivo: string): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('financeiro#estornarTransferencia', estornarTransferencia, [id, motivo]); if (__d) return __d as never
-  await guardaModulo('financeiro#estornarTransferencia')
+  const __g = await guardaModulo('financeiro#estornarTransferencia'); if (__g) return __g as never
   await exigirDevAcao()
   const ctx = await contexto(PERM.lancamentos)
   if ('error' in ctx) return ctx

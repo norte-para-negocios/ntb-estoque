@@ -116,7 +116,7 @@ async function tocar(lojaId: number, eventoId: number) {
 
 export async function criarEvento(nome: string, dataEvento: string | null, convidados: number): Promise<ResultadoId> {
   const __d = viaDesktop('cozinha-eventos#criarEvento', criarEvento, [nome, dataEvento, convidados]); if (__d) return __d as never
-  await guardaModulo('cozinha-eventos#criarEvento')
+  const __g = await guardaModulo('cozinha-eventos#criarEvento'); if (__g) return __g as never
   const c = await contexto()
   if ('error' in c) return c
   const v = validarDados({ nome, dataEvento, convidados, status: 'orcamento', precoPorPessoa: null, obs: null, folgaPct: 0 })
@@ -129,7 +129,7 @@ export async function criarEvento(nome: string, dataEvento: string | null, convi
 
 export async function salvarEvento(id: number, dados: DadosEvento): Promise<Resultado> {
   const __d = viaDesktop('cozinha-eventos#salvarEvento', salvarEvento, [id, dados]); if (__d) return __d as never
-  await guardaModulo('cozinha-eventos#salvarEvento')
+  const __g = await guardaModulo('cozinha-eventos#salvarEvento'); if (__g) return __g as never
   const c = await contexto()
   if ('error' in c) return c
   if (!idValido(id)) return { error: 'Evento inválido.' }
@@ -147,7 +147,7 @@ export async function salvarEvento(id: number, dados: DadosEvento): Promise<Resu
 
 export async function excluirEvento(id: number): Promise<Resultado> {
   const __d = viaDesktop('cozinha-eventos#excluirEvento', excluirEvento, [id]); if (__d) return __d as never
-  await guardaModulo('cozinha-eventos#excluirEvento')
+  const __g = await guardaModulo('cozinha-eventos#excluirEvento'); if (__g) return __g as never
   const c = await contexto()
   if ('error' in c) return c
   if (!idValido(id)) return { error: 'Evento inválido.' }
@@ -163,7 +163,7 @@ export async function excluirEvento(id: number): Promise<Resultado> {
 
 export async function adicionarItemEvento(eventoId: number, codigo: number, porcoesPorConvidado: number): Promise<Resultado> {
   const __d = viaDesktop('cozinha-eventos#adicionarItemEvento', adicionarItemEvento, [eventoId, codigo, porcoesPorConvidado]); if (__d) return __d as never
-  await guardaModulo('cozinha-eventos#adicionarItemEvento')
+  const __g = await guardaModulo('cozinha-eventos#adicionarItemEvento'); if (__g) return __g as never
   const c = await contexto()
   if ('error' in c) return c
   const porcoes = validarPorcoes(porcoesPorConvidado)
@@ -188,7 +188,7 @@ export async function adicionarItemEvento(eventoId: number, codigo: number, porc
 
 export async function definirPorcoesItemEvento(itemId: number, porcoesPorConvidado: number): Promise<Resultado> {
   const __d = viaDesktop('cozinha-eventos#definirPorcoesItemEvento', definirPorcoesItemEvento, [itemId, porcoesPorConvidado]); if (__d) return __d as never
-  await guardaModulo('cozinha-eventos#definirPorcoesItemEvento')
+  const __g = await guardaModulo('cozinha-eventos#definirPorcoesItemEvento'); if (__g) return __g as never
   const c = await contexto()
   if ('error' in c) return c
   const porcoes = validarPorcoes(porcoesPorConvidado)
@@ -209,7 +209,7 @@ export async function definirPorcoesItemEvento(itemId: number, porcoesPorConvida
 
 export async function removerItemEvento(itemId: number): Promise<Resultado> {
   const __d = viaDesktop('cozinha-eventos#removerItemEvento', removerItemEvento, [itemId]); if (__d) return __d as never
-  await guardaModulo('cozinha-eventos#removerItemEvento')
+  const __g = await guardaModulo('cozinha-eventos#removerItemEvento'); if (__g) return __g as never
   const c = await contexto()
   if ('error' in c) return c
   if (!idValido(itemId)) return { error: 'Item inválido.' }
@@ -228,7 +228,7 @@ export async function removerItemEvento(itemId: number): Promise<Resultado> {
 /** Muda só a situação (botão do "Próximo passo"). Evento finalizado não muda por aqui. */
 export async function definirStatusEvento(id: number, status: string): Promise<Resultado> {
   const __d = viaDesktop('cozinha-eventos#definirStatusEvento', definirStatusEvento, [id, status]); if (__d) return __d as never
-  await guardaModulo('cozinha-eventos#definirStatusEvento')
+  const __g = await guardaModulo('cozinha-eventos#definirStatusEvento'); if (__g) return __g as never
   const c = await contexto()
   if ('error' in c) return c
   if (!idValido(id)) return { error: 'Evento inválido.' }
@@ -249,7 +249,7 @@ export async function definirStatusEvento(id: number, status: string): Promise<R
  */
 export async function finalizarEvento(id: number, consumo: { codigo: number; quantidade: number }[]): Promise<Resultado> {
   const __d = viaDesktop('cozinha-eventos#finalizarEvento', finalizarEvento, [id, consumo]); if (__d) return __d as never
-  await guardaModulo('cozinha-eventos#finalizarEvento')
+  const __g = await guardaModulo('cozinha-eventos#finalizarEvento'); if (__g) return __g as never
   const c = await contexto()
   if ('error' in c) return c
   if (!idValido(id)) return { error: 'Evento inválido.' }
@@ -283,7 +283,7 @@ async function temMovimentoDeBaixa(lojaId: number, eventoId: number): Promise<bo
 /** Reabre um evento finalizado. Só se nada foi lançado no estoque (nem em parte). */
 export async function reabrirEvento(id: number): Promise<Resultado> {
   const __d = viaDesktop('cozinha-eventos#reabrirEvento', reabrirEvento, [id]); if (__d) return __d as never
-  await guardaModulo('cozinha-eventos#reabrirEvento')
+  const __g = await guardaModulo('cozinha-eventos#reabrirEvento'); if (__g) return __g as never
   const c = await contexto()
   if ('error' in c) return c
   if (!idValido(id)) return { error: 'Evento inválido.' }
@@ -310,7 +310,7 @@ export async function reabrirEvento(id: number): Promise<Resultado> {
  */
 export async function darBaixaEvento(id: number, local: number): Promise<{ ok: true; itens: number; local: number } | { error: string }> {
   const __d = viaDesktop('cozinha-eventos#darBaixaEvento', darBaixaEvento, [id, local]); if (__d) return __d as never
-  await guardaModulo('cozinha-eventos#darBaixaEvento')
+  const __g = await guardaModulo('cozinha-eventos#darBaixaEvento'); if (__g) return __g as never
   const c = await contexto()
   if ('error' in c) return c
   if (!idValido(id) || !idValido(local)) return { error: 'Pedido inválido.' }
@@ -361,7 +361,7 @@ export async function darBaixaEvento(id: number, local: number): Promise<{ ok: t
 /** Loja Omie: o consumo é lançado à mão no ERP; aqui só registra que foi lançado (trava a reabertura). Não escreve no Omie. */
 export async function marcarConsumoLancado(id: number): Promise<Resultado> {
   const __d = viaDesktop('cozinha-eventos#marcarConsumoLancado', marcarConsumoLancado, [id]); if (__d) return __d as never
-  await guardaModulo('cozinha-eventos#marcarConsumoLancado')
+  const __g = await guardaModulo('cozinha-eventos#marcarConsumoLancado'); if (__g) return __g as never
   const c = await contexto()
   if ('error' in c) return c
   if (!idValido(id)) return { error: 'Evento inválido.' }

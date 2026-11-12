@@ -46,7 +46,7 @@ function revalidar(id?: number) {
 
 export async function criarCardapio(nome: string, canal: string): Promise<ResultadoId> {
   const __d = viaDesktop('cozinha-cardapios#criarCardapio', criarCardapio, [nome, canal]); if (__d) return __d as never
-  await guardaModulo('cozinha-cardapios#criarCardapio')
+  const __g = await guardaModulo('cozinha-cardapios#criarCardapio'); if (__g) return __g as never
   const c = await contexto()
   if ('error' in c) return c
   const v = validarNomeCanal(nome, canal)
@@ -60,7 +60,7 @@ export async function criarCardapio(nome: string, canal: string): Promise<Result
 
 export async function editarCardapio(id: number, nome: string, canal: string): Promise<Resultado> {
   const __d = viaDesktop('cozinha-cardapios#editarCardapio', editarCardapio, [id, nome, canal]); if (__d) return __d as never
-  await guardaModulo('cozinha-cardapios#editarCardapio')
+  const __g = await guardaModulo('cozinha-cardapios#editarCardapio'); if (__g) return __g as never
   const c = await contexto()
   if ('error' in c) return c
   if (!idValido(id)) return { error: 'Cardápio inválido.' }
@@ -76,7 +76,7 @@ export async function editarCardapio(id: number, nome: string, canal: string): P
 
 export async function arquivarCardapio(id: number, ativo: boolean): Promise<Resultado> {
   const __d = viaDesktop('cozinha-cardapios#arquivarCardapio', arquivarCardapio, [id, ativo]); if (__d) return __d as never
-  await guardaModulo('cozinha-cardapios#arquivarCardapio')
+  const __g = await guardaModulo('cozinha-cardapios#arquivarCardapio'); if (__g) return __g as never
   const c = await contexto()
   if ('error' in c) return c
   if (!idValido(id)) return { error: 'Cardápio inválido.' }
@@ -90,7 +90,7 @@ export async function arquivarCardapio(id: number, ativo: boolean): Promise<Resu
 
 export async function adicionarPratoCardapio(cardapioId: number, codigo: number): Promise<Resultado> {
   const __d = viaDesktop('cozinha-cardapios#adicionarPratoCardapio', adicionarPratoCardapio, [cardapioId, codigo]); if (__d) return __d as never
-  await guardaModulo('cozinha-cardapios#adicionarPratoCardapio')
+  const __g = await guardaModulo('cozinha-cardapios#adicionarPratoCardapio'); if (__g) return __g as never
   const c = await contexto()
   if ('error' in c) return c
   if (!idValido(cardapioId) || !idValido(codigo)) return { error: 'Pedido inválido.' }
@@ -112,7 +112,7 @@ export async function adicionarPratoCardapio(cardapioId: number, codigo: number)
 
 export async function removerItemCardapio(itemId: number): Promise<Resultado> {
   const __d = viaDesktop('cozinha-cardapios#removerItemCardapio', removerItemCardapio, [itemId]); if (__d) return __d as never
-  await guardaModulo('cozinha-cardapios#removerItemCardapio')
+  const __g = await guardaModulo('cozinha-cardapios#removerItemCardapio'); if (__g) return __g as never
   const c = await contexto()
   if ('error' in c) return c
   if (!idValido(itemId)) return { error: 'Item inválido.' }
@@ -126,7 +126,7 @@ export async function removerItemCardapio(itemId: number): Promise<Resultado> {
 /** Sobe ou desce o prato uma posição (renumera a ordem do cardápio inteiro). */
 export async function moverItemCardapio(itemId: number, direcao: string): Promise<Resultado> {
   const __d = viaDesktop('cozinha-cardapios#moverItemCardapio', moverItemCardapio, [itemId, direcao]); if (__d) return __d as never
-  await guardaModulo('cozinha-cardapios#moverItemCardapio')
+  const __g = await guardaModulo('cozinha-cardapios#moverItemCardapio'); if (__g) return __g as never
   const c = await contexto()
   if ('error' in c) return c
   if (!idValido(itemId) || (direcao !== 'cima' && direcao !== 'baixo')) return { error: 'Pedido inválido.' }
@@ -152,7 +152,7 @@ export async function moverItemCardapio(itemId: number, direcao: string): Promis
 /** Preço só deste cardápio (null = volta a usar o preço do cadastro). Não mexe no Omie nem no produto. */
 export async function definirPrecoItemCardapio(itemId: number, preco: number | null): Promise<Resultado> {
   const __d = viaDesktop('cozinha-cardapios#definirPrecoItemCardapio', definirPrecoItemCardapio, [itemId, preco]); if (__d) return __d as never
-  await guardaModulo('cozinha-cardapios#definirPrecoItemCardapio')
+  const __g = await guardaModulo('cozinha-cardapios#definirPrecoItemCardapio'); if (__g) return __g as never
   const c = await contexto()
   if ('error' in c) return c
   if (!idValido(itemId)) return { error: 'Item inválido.' }
@@ -172,7 +172,7 @@ export async function definirPrecoItemCardapio(itemId: number, preco: number | n
 /** Grava vários preços do cardápio de uma vez (ex.: "usar os preços sugeridos"). Só itens deste cardápio e desta loja. */
 export async function definirPrecosCardapio(cardapioId: number, precos: { itemId: number; preco: number }[]): Promise<Resultado> {
   const __d = viaDesktop('cozinha-cardapios#definirPrecosCardapio', definirPrecosCardapio, [cardapioId, precos]); if (__d) return __d as never
-  await guardaModulo('cozinha-cardapios#definirPrecosCardapio')
+  const __g = await guardaModulo('cozinha-cardapios#definirPrecosCardapio'); if (__g) return __g as never
   const c = await contexto()
   if ('error' in c) return c
   if (!idValido(cardapioId) || !Array.isArray(precos) || precos.length === 0 || precos.length > 500) return { error: 'Pedido inválido.' }
@@ -193,7 +193,7 @@ export async function definirPrecosCardapio(cardapioId: number, precos: { itemId
 /** Porções deste prato no conjunto (ex.: 2 porções no rodízio). Entre 0,001 e 1000, 3 casas. */
 export async function definirPorcoesItemCardapio(itemId: number, porcoes: number): Promise<Resultado> {
   const __d = viaDesktop('cozinha-cardapios#definirPorcoesItemCardapio', definirPorcoesItemCardapio, [itemId, porcoes]); if (__d) return __d as never
-  await guardaModulo('cozinha-cardapios#definirPorcoesItemCardapio')
+  const __g = await guardaModulo('cozinha-cardapios#definirPorcoesItemCardapio'); if (__g) return __g as never
   const c = await contexto()
   if ('error' in c) return c
   if (!idValido(itemId)) return { error: 'Item inválido.' }
@@ -209,7 +209,7 @@ export async function definirPorcoesItemCardapio(itemId: number, porcoes: number
 /** Copia o cardápio (nome "(cópia)", mesmo canal, mesmos pratos, preços próprios, porções e ordem). Nasce ativo. */
 export async function duplicarCardapio(id: number): Promise<ResultadoId> {
   const __d = viaDesktop('cozinha-cardapios#duplicarCardapio', duplicarCardapio, [id]); if (__d) return __d as never
-  await guardaModulo('cozinha-cardapios#duplicarCardapio')
+  const __g = await guardaModulo('cozinha-cardapios#duplicarCardapio'); if (__g) return __g as never
   const c = await contexto()
   if ('error' in c) return c
   if (!idValido(id)) return { error: 'Cardápio inválido.' }

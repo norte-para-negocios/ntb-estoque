@@ -24,7 +24,7 @@ type OPRow = { id: number; identificacao_n_cod_op: number | null; concluida: boo
 
 export async function acaoOPLote(input: { acao: AcaoLoteOP; opId: number; dataISO?: string | null }): Promise<RespostaLoteOP> {
   const __d = viaDesktop('ops-lote#acaoOPLote', acaoOPLote, [input]); if (__d) return __d as never
-  await guardaModulo('ops-lote#acaoOPLote')
+  const __g = await guardaModulo('ops-lote#acaoOPLote'); if (__g) return __g as never
   const ctx = await contextoEscritaOmie('OP - Acoes em lote')
   if ('error' in ctx) return { error: ctx.error, parar: true }
   if (!['concluir', 'excluir', 'data'].includes(input.acao)) return { error: 'Ação inválida.', parar: true }
