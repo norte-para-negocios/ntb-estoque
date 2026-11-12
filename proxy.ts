@@ -70,6 +70,8 @@ export async function proxy(request: NextRequest) {
   const isPublic =
     path.startsWith('/login') ||
     path.startsWith('/cadastro') ||
+    // Plataforma Norte: login novo (o /login continua igual para todos os clientes).
+    path === '/entrar' ||
     path === '/manifest.webmanifest' ||
     path.startsWith('/api/webhook') ||
     path.startsWith('/api/cron') ||
@@ -81,6 +83,10 @@ export async function proxy(request: NextRequest) {
 
   if (!user && !isPublic) {
     return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  if (user && path === '/entrar') {
+    return NextResponse.redirect(new URL('/porta', request.url))
   }
 
   if (user && (path.startsWith('/login') || path.startsWith('/cadastro'))) {

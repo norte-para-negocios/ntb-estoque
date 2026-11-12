@@ -28,5 +28,5 @@ test('moduloDaRota casa por segmento', () => {
   assert.equal(moduloDaRota('/home'), 'dashboard')
 })
 test('rotas livres', () => {
-  for (const r of ['/modulos/cozinha', '/plataforma/modulos', '/usuario', '/loja', '/minha-loja', '/cargo', '/login', '/central', '/api/x']) assert.equal(moduloDaRota(r), null)
+  for (const r of ['/modulos/cozinha', '/plataforma/modulos', '/usuario', '/loja', '/minha-loja', '/cargo', '/login', '/central', '/api/x', '/porta', '/entrar']) assert.equal(moduloDaRota(r), null)
 })

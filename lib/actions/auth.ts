@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { criarLimitador, ipDoCliente } from '@/lib/seguranca/regras'
+import { destinoDoLogin } from '@/lib/plataforma/destino-login-puro'
 
 // Fase H: o login não tinha limite de tentativas (o GoTrue vê todo mundo vindo de 127.0.0.1, então o limite dele
 // por IP não separa ninguém). 10 tentativas por e-mail+IP e 30 por IP a cada 5 minutos (memória do processo).
@@ -31,7 +32,8 @@ export async function login(_prevState: unknown, formData: FormData) {
     if (process.env.NTB_MODO_LOCAL === '1' && error.message) return { error: error.message }
     return { error: 'E-mail ou senha inválidos.' }
   }
-  redirect('/home')
+  // /entrar (Plataforma Norte) manda destino=/porta. Lista fechada: nunca redireciona para um endereço qualquer.
+  redirect(destinoDoLogin(formData.get('destino')))
 }
 
 export async function logout() {

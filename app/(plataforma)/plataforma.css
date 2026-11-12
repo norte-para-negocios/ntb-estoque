@@ -1,0 +1,143 @@
+/* Plataforma Norte: login novo (/entrar) e porta (/porta). Fiel ao protótipo aprovado
+   (plataforma-norte-prototipo/src/pagina.html, telas LOGIN e PORTA). Tudo sob .pn para não vazar no ERP.
+   Sempre claro: a porta não segue o tema escuro do ERP. */
+.pn {
+  --noite: #14163a; --ink: #14132b; --papel: #f5f5f9; --linha: #e2e2ec; --mudo: #646482; --mudo2: #9a9ab2;
+  --norte: #484db5; --atencao: #a4560a; --erro: #c0182a;
+  --r-g: 26px; --r-m: 16px; --r-p: 11px;
+  --sombra: 0 1px 2px rgba(20, 19, 43, .04), 0 8px 24px -12px rgba(20, 19, 43, .10);
+  --mola: cubic-bezier(.2, .8, .2, 1);
+  min-height: 100vh; background: var(--papel); color: var(--ink); color-scheme: light;
+  font: 15px/1.5 var(--pn-geist), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.pn *, .pn *::before, .pn *::after { box-sizing: border-box }
+.pn :focus-visible { outline: 2px solid var(--norte); outline-offset: 3px; border-radius: 8px }
+.pn .serif { font-family: var(--pn-newsreader), Georgia, serif; font-style: italic; font-weight: 300; letter-spacing: -.01em }
+.pn .num { font-variant-numeric: tabular-nums }
+.pn button { font: inherit; color: inherit; cursor: pointer; background: none; border: 0; padding: 0 }
+.pn svg { display: block }
+.pn svg .para { opacity: .6 } /* "para" do logo horizontal, como no site (Marca.astro) */
+
+/* ---------- login ---------- */
+.pn-login { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); min-height: 100vh }
+.pn-lado { position: relative; background: var(--noite); color: #fff; padding: 52px 56px; display: flex; flex-direction: column; overflow: hidden }
+.pn-lado .pn-logo { height: 64px; width: auto; align-self: flex-start; color: #fff; position: relative; z-index: 2 }
+.pn-frase { margin-top: auto; position: relative; z-index: 2 }
+.pn-lado h1 { font-size: 64px; line-height: 1; margin: 0 0 18px; max-width: 9ch }
+.pn-lado p { color: #b9bbe0; max-width: 34ch; margin: 0; font-size: 17px }
+.pn-familia { display: flex; flex-wrap: wrap; gap: 10px; margin: 34px 0 0; padding: 0; list-style: none }
+.pn-familia li { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #d7d8f2; padding: 7px 12px 7px 7px; border-radius: 99px; background: rgba(255, 255, 255, .07) }
+.pn-familia i { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; color: #fff }
+.pn-familia i svg { width: 14px; height: 14px }
+.pn-rota { position: absolute; inset: 0; z-index: 1; pointer-events: none; width: 100%; height: 100% }
+.pn-rota path { stroke: #8f92e6; stroke-width: 1.6; fill: none; stroke-dasharray: 6 9; opacity: .55; vector-effect: non-scaling-stroke }
+.pn-rota .pn-tinta { stroke-dasharray: 1400; stroke-dashoffset: 1400; animation: pn-desenha 2.6s .3s var(--mola) forwards; stroke: #fff; opacity: .9; stroke-width: 2; vector-effect: none }
+@keyframes pn-desenha { to { stroke-dashoffset: 0 } }
+
+.pn-form { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px }
+.pn-form form { width: 100%; max-width: 360px }
+.pn-form .pn-logo-cel { display: none; height: 44px; width: auto; max-width: 100%; color: var(--noite); margin-bottom: 40px }
+.pn-form h2 { font-size: 28px; letter-spacing: -.02em; margin: 0 0 6px; font-weight: 600 }
+.pn-form .pn-d { color: var(--mudo); margin: 0 0 28px }
+.pn-campo { display: block; margin-bottom: 16px }
+.pn-campo > span { display: block; font-size: 13px; font-weight: 600; margin-bottom: 7px }
+.pn-campo input { width: 100%; height: 50px; border: 0; border-radius: var(--r-p); background: #ebebf2; padding: 0 16px; font: inherit; font-size: 16px; color: var(--ink); transition: box-shadow .2s, background .2s }
+.pn-campo input::placeholder { color: var(--mudo2) }
+.pn-campo input:focus { outline: 0; background: #fff; box-shadow: 0 0 0 2px var(--norte) }
+.pn-erro { display: flex; gap: 8px; align-items: flex-start; color: var(--erro); font-size: 14px; margin: 0 0 16px }
+.pn-entrar { width: 100%; height: 52px; border-radius: 99px; background: var(--norte) !important; color: #fff !important; font-weight: 600; font-size: 16px; transition: transform .15s, background .2s }
+.pn-entrar:hover { background: #3f43a0 !important }
+.pn-entrar:active { transform: scale(.985) }
+.pn-entrar:disabled { opacity: .7; cursor: progress }
+
+/* ---------- porta ---------- */
+.pn-barra { position: sticky; top: 0; z-index: 20; min-height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 32px; background: rgba(245, 245, 249, .82); -webkit-backdrop-filter: saturate(1.6) blur(18px); backdrop-filter: saturate(1.6) blur(18px) }
+.pn-barra .pn-esq { display: flex; align-items: center; gap: 18px; min-width: 0 }
+.pn-barra .pn-logo { height: 38px; width: auto; align-self: center; color: var(--noite); flex: none }
+.pn-loja { position: relative; display: flex; align-items: center; height: 38px; border-radius: 99px; background: #fff; box-shadow: var(--sombra); font-weight: 600; font-size: 14px; min-width: 0 }
+.pn-loja select { appearance: none; -webkit-appearance: none; border: 0; background: transparent; font: inherit; color: var(--ink); height: 38px; padding: 0 34px 0 14px; border-radius: 99px; cursor: pointer; max-width: 260px; text-overflow: ellipsis }
+.pn-loja select:focus-visible { outline: 2px solid var(--norte); outline-offset: 3px }
+.pn-loja select:disabled { opacity: .6 }
+.pn-loja svg { position: absolute; right: 14px; width: 12px; color: var(--mudo); pointer-events: none }
+.pn-loja .pn-so { padding: 0 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px }
+.pn-eu { display: flex; align-items: center; gap: 12px; flex: none }
+.pn-eu b { font-size: 14px; font-weight: 600; display: block; line-height: 1.25 }
+.pn-eu small { display: block; color: var(--mudo); font-size: 12px; line-height: 1.2 }
+.pn-av { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; color: #fff; background: var(--noite); flex: none; font-size: 14px }
+.pn-sair { font-size: 13px; color: var(--mudo) !important; padding: 8px 12px !important; border-radius: 99px; transition: background .15s }
+.pn-sair:hover { background: #ebebf2 !important; color: var(--ink) !important }
+
+.pn-porta { max-width: 1180px; margin: 0 auto; padding: 28px 32px 120px }
+.pn-abertura { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 34px; align-items: center; padding: 12px 0 40px }
+.pn-mascote { width: 220px; height: 220px; border-radius: 40px; background: #fff; box-shadow: var(--sombra); overflow: hidden }
+.pn-mascote iframe { width: 100%; height: 100%; border: 0; display: block; pointer-events: none }
+.pn-abertura h1 { font-size: 54px; line-height: 1.02; margin: 0 0 18px; font-weight: 300 }
+.pn-resumo { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; max-width: 62ch }
+.pn-resumo li { display: flex; gap: 14px; align-items: baseline; font-size: 18px; line-height: 1.4 }
+.pn-resumo .pn-pt { width: 9px; height: 9px; border-radius: 50%; flex: none; transform: translateY(-2px) }
+.pn-resumo a { color: inherit; text-decoration: none; border-bottom: 1.5px solid var(--linha); transition: border-color .2s }
+.pn-resumo a:hover { border-color: currentColor }
+.pn-q { color: var(--mudo) }
+
+.pn-titulo { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 8px 0 16px }
+.pn-titulo h2 { font-size: 20px; font-weight: 600; letter-spacing: -.01em; margin: 0 }
+.pn-titulo span { color: var(--mudo); font-size: 14px; text-align: right }
+
+.pn-grade { display: grid; grid-template-columns: repeat(12, 1fr); gap: 18px }
+.pn-app { grid-column: span 3; position: relative; text-align: left; color: var(--ink) !important; text-decoration: none; background: #fff; border-radius: var(--r-g); padding: 26px 26px 22px; min-height: 248px; display: flex; flex-direction: column; box-shadow: var(--sombra); overflow: hidden; transition: transform .35s var(--mola), box-shadow .35s var(--mola) }
+.pn-grade.pn-tres .pn-app { grid-column: span 4 }
+.pn-grade.pn-dois .pn-app { grid-column: span 6 }
+.pn-app:hover { transform: translateY(-4px); box-shadow: 0 2px 4px rgba(20, 19, 43, .04), 0 22px 44px -18px rgba(20, 19, 43, .22) }
+.pn-app:active { transform: translateY(-1px) scale(.995) }
+.pn-app:focus-visible { border-radius: var(--r-g) }
+.pn-simb { width: 58px; height: 58px; border-radius: 17px; display: grid; place-items: center; background: var(--c); color: #fff; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .12) }
+.pn-simb svg { width: 36px; height: 36px }
+.pn-app h3 { margin: 22px 0 2px; font-size: 22px; font-weight: 600; letter-spacing: -.02em; display: flex; align-items: center; gap: 8px }
+.pn-app h3 svg { width: 16px; height: 16px; color: var(--mudo2) }
+.pn-para { color: var(--mudo); font-size: 14px; margin: 0 }
+.pn-vivo { margin-top: auto; padding-top: 22px; display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500 }
+.pn-vivo .pn-pt { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; box-shadow: 0 0 0 4px color-mix(in srgb, var(--c), transparent 82%) }
+.pn-selo { position: absolute; top: 22px; right: 22px; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 99px; background: #fff2db; color: var(--atencao) }
+.pn-selo.pn-susp { background: #fde7ea; color: var(--erro) }
+.pn-app::after { content: ""; position: absolute; right: -60px; bottom: -60px; width: 180px; height: 180px; border-radius: 50%; background: var(--c); opacity: .05; transition: opacity .35s, transform .5s var(--mola) }
+.pn-app:hover::after { opacity: .09; transform: scale(1.12) }
+
+.pn-extras { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px }
+.pn-extra { display: flex; gap: 16px; align-items: center; text-align: left; color: var(--ink) !important; text-decoration: none; padding: 18px 20px; border-radius: var(--r-m); box-shadow: inset 0 0 0 1.5px var(--linha); transition: background .2s, box-shadow .2s }
+.pn-extra:hover { background: #fff; box-shadow: inset 0 0 0 1.5px transparent, var(--sombra) }
+.pn-extra .pn-simb { width: 46px; height: 46px; border-radius: 14px; background: #ebebf2; color: var(--mudo2); box-shadow: none; flex: none }
+.pn-extra .pn-simb svg { width: 28px; height: 28px }
+.pn-extra b { display: flex; align-items: center; gap: 6px; font-weight: 600 }
+.pn-extra b svg { width: 11px; height: 11px; color: var(--mudo2) }
+.pn-extra small { color: var(--mudo); font-size: 13px; display: block }
+.pn-extra .pn-ir { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--c); white-space: nowrap }
+
+@media (max-width: 1080px) {
+  .pn-grade .pn-app, .pn-grade.pn-tres .pn-app { grid-column: span 6 }
+}
+@media (max-width: 980px) {
+  .pn-login { grid-template-columns: 1fr }
+  .pn-lado { display: none }
+  .pn-form .pn-logo-cel { display: block }
+  .pn-form { justify-content: flex-start; padding: 56px 24px }
+  .pn-abertura { grid-template-columns: 1fr; gap: 22px }
+  .pn-extras { grid-template-columns: 1fr }
+}
+@media (max-width: 640px) {
+  .pn-barra { padding: 10px 16px; flex-wrap: wrap }
+  .pn-barra .pn-logo { height: 30px }
+  .pn-eu > div { display: none }
+  .pn-porta { padding: 16px 16px 80px }
+  .pn-mascote { width: 132px; height: 132px; border-radius: 30px }
+  .pn-abertura h1 { font-size: 40px }
+  .pn-resumo li { font-size: 16px }
+  .pn-grade .pn-app, .pn-grade.pn-tres .pn-app, .pn-grade.pn-dois .pn-app { grid-column: span 12; min-height: 0 }
+  .pn-titulo { flex-direction: column; gap: 2px }
+  .pn-titulo span { text-align: left }
+  .pn-loja select, .pn-loja .pn-so { max-width: 46vw }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pn *, .pn *::after { animation: none !important; transition: none !important }
+  .pn-rota .pn-tinta { stroke-dashoffset: 0 }
+}

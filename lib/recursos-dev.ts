@@ -33,6 +33,8 @@ export const ROTAS_SO_DEV = [
   '/migracao-omie',
   // Plataforma Norte (fase 1): módulos e preços de cada loja. Só a equipe da Norte.
   '/plataforma',
+  // Plataforma Norte: a porta depois do login (/entrar). Só a equipe da Norte até a reunião aprovar.
+  '/porta',
 ] as const
 
 export async function ehDesenvolvedor(): Promise<boolean> {

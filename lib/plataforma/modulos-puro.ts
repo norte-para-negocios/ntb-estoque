@@ -35,7 +35,7 @@ export function acesso(estado: Estado, _modulo: ModuloId, quem: Quem): Acesso {
   return 'vitrine'
 }
 
-const LIVRES = ['modulos', 'plataforma', 'usuario', 'loja', 'minha-loja', 'cargo', 'login', 'central', 'api']
+const LIVRES = ['modulos', 'plataforma', 'usuario', 'loja', 'minha-loja', 'cargo', 'login', 'central', 'api', 'porta', 'entrar']
 
 /** Módulo dono da rota; null = rota livre (nunca bloqueada). Casa por segmento. */
 export function moduloDaRota(pathname: string): ModuloId | null {
