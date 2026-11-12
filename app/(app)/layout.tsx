@@ -9,7 +9,11 @@ import { estadoPedidoCompraLoja } from '@/lib/compras/pedido-compra-loja'
 import { gravacaoPedidosOmieLigada } from '@/lib/compras/pedido-omie-gravar-puro'
 import { leituraPedidosOmieLigada } from '@/lib/compras/pedidos-omie-puro'
 import { ModoEstoqueProvider } from '@/components/estoque-proprio/ModoEstoque'
-import { pacioliLiberado } from '@/lib/pacioli'
+import { headers } from 'next/headers'
+import { redirect } from 'next/navigation'
+import { carregarAcessos } from '@/lib/plataforma/assinaturas'
+import { moduloDaRota } from '@/lib/plataforma/modulos-puro'
+import { FaixaModulo } from '@/components/plataforma/FaixaModulo'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await getProfile()
@@ -45,13 +49,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     return data
   }
 
-  const [permissoes, lojas, modoEstoque] = await Promise.all([
+  const [permissoes, lojas, modoEstoque, { acessos }, cabecalhos] = await Promise.all([
     // Quais rotas do menu o usuario pode ver (4.2). Admin e super admin recebem null = todas.
     getPermissoesNomes(profile.current_loja_id),
     lojasDoSeletor(),
     // Itens soEstoqueProprio do menu: só para loja em modo estoque próprio.
     profile.current_loja_id != null ? modoDaLoja(profile.current_loja_id) : Promise.resolve(null),
+    // Plataforma Norte: acesso da loja a cada módulo (falha aberta: erro de leitura = padrões, menu como hoje).
+    carregarAcessos(),
+    headers(),
   ])
+  // Tela de um módulo que a loja não tem (vitrine): vai para a página do módulo. Rota livre (null) nunca é bloqueada.
+  const moduloAtual = moduloDaRota(cabecalhos.get('x-ntb-rota') ?? '')
+  if (moduloAtual && acessos[moduloAtual] === 'vitrine') redirect('/modulos/' + moduloAtual)
   const rotasVisiveis = isAdmin || superAdmin ? null : Array.from(rotasPermitidas(permissoes))
   const estoqueProprio = modoEstoque === 'proprio'
   // Tela de Estoque vale para loja propria e para loja Omie (espelho); some so em 'nenhum'.
@@ -71,11 +81,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       estoqueProprio={estoqueProprio}
       temEstoque={temEstoque}
       pedidosOmie={pedidosOmie}
-      pacioli={pacioliLiberado(profile.current_loja_id, isAdmin, superAdmin)}
+      pacioli={acessos.pacioli === 'abre'}
+      modulos={acessos}
       centralUserId={superAdmin ? profile.id : undefined}
       lojaSelector={<LojaSelector lojas={lojas ?? []} currentLojaId={profile.current_loja_id} />}
       userMenu={<UserMenu nome={profile.name} perfil={profile.perfil} />}
     >
+      <FaixaModulo acessos={acessos} />
       <ModoEstoqueProvider proprio={estoqueProprio}>{children}</ModoEstoqueProvider>
     </AppShell>
   )

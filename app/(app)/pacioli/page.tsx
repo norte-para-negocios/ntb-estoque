@@ -1,17 +1,16 @@
-import { notFound } from 'next/navigation'
 import { ExternalLink } from 'lucide-react'
 import { getProfile } from '@/lib/auth'
-import { PACIOLI_URL, LOJAS_PACIOLI, pacioliLiberado } from '@/lib/pacioli'
+import { exigirModulo } from '@/lib/plataforma/assinaturas'
+import { PACIOLI_URL, LOJAS_PACIOLI } from '@/lib/pacioli'
 
 export const metadata = { title: 'Pacioli' }
 
 // Pacioli (robô de correções) dentro do Norte Estoque: a tela do robô (servidor norte-faxina) embutida, já na loja
-// selecionada aqui. Só dev (admin) e lojas que contrataram o robô (lib/pacioli.ts); o login do Pacioli é dele mesmo.
+// selecionada aqui. Abre conforme o módulo Pacioli da loja (Plataforma Norte; sem linha gravada = dev/admin e as lojas
+// de lib/pacioli.ts, como antes); fora dele vai para /modulos/pacioli. O login do Pacioli é dele mesmo.
 export default async function PacioliPage() {
+  await exigirModulo('pacioli')
   const profile = await getProfile()
-  const isAdmin = profile.perfil === 'Admin'
-  const superAdmin = profile.is_super_admin === true
-  if (!pacioliLiberado(profile.current_loja_id, isAdmin, superAdmin)) notFound()
   const loja = profile.current_loja_id != null ? LOJAS_PACIOLI[profile.current_loja_id] : undefined
   const src = `${PACIOLI_URL}/${loja ? `?loja=${loja}` : ''}`
   return (

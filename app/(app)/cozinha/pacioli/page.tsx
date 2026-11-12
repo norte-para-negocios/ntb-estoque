@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import { ChefHat } from 'lucide-react'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
-import { exigirDev } from '@/lib/recursos-dev'
+import { exigirModulo } from '@/lib/plataforma/assinaturas'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { PacioliChat } from '@/components/custo-cardapio/pacioli/PacioliChat'
@@ -9,10 +9,10 @@ import { carregarTaxas } from '@/lib/custo-cardapio/carregar'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { pct } from '@/lib/custo-cardapio/formato'
 
-// Norte Cozinha (só dev): Pacioli, o assistente da cozinha. Só lê (fichas, custo médio, preços, estoque); nunca grava.
+// Norte Cozinha (módulo da loja): Pacioli, o assistente da cozinha. Só lê (fichas, custo médio, preços, estoque); nunca grava.
 // A conversa fica só nesta página (nada no banco). Sem ANTHROPIC_API_KEY no servidor a tela abre no modo rápido.
 export default async function PacioliPage() {
-  await exigirDev()
+  await exigirModulo('cozinha')
   if (!(await getAtorGestao()).podeGerir) notFound()
   const lojaId = await getCurrentLojaId()
   const modo = await modoDaLoja(lojaId)

@@ -11,7 +11,7 @@ import { listarCardapios, type CardapioComConta } from '@/lib/custo-cardapio/car
 import { NOME_CANAL } from '@/lib/custo-cardapio/cardapios-puro'
 import { brl, pct } from '@/lib/custo-cardapio/formato'
 
-// Norte Cozinha (só dev), Cardápios: seleções de pratos por canal, com o CMV de cada uma.
+// Norte Cozinha (módulo da loja), Cardápios: seleções de pratos por canal, com o CMV de cada uma.
 export default async function CardapiosPage({ searchParams }: { searchParams: Promise<{ arquivados?: string }> }) {
   const sp = await searchParams
   const lojaId = await getCurrentLojaId()

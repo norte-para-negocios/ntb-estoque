@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getAtorGestao, getCurrentLojaId, getProfile } from '@/lib/auth'
-import { ehDesenvolvedor } from '@/lib/recursos-dev'
+import { carregarAcessos } from '@/lib/plataforma/assinaturas'
 import { createServiceClient } from '@/lib/supabase/server'
 import { carregarBase } from '@/lib/custo-cardapio/carregar'
 import { BUCKET_FOTOS } from '@/lib/custo-cardapio/receita-info'
 import { caminhoFoto, fotoEhDe, LIMITE_FOTO_BYTES, validarFoto } from '@/lib/custo-cardapio/guia-puro'
 
-// Norte Cozinha (só dev): envio/troca da foto do prato (multipart, campo "foto"). Rota e não server action porque
+// Norte Cozinha (módulo da loja): envio/troca da foto do prato (multipart, campo "foto"). Rota e não server action porque
 // o corpo de server action é limitado a 1 MB. Tipo decidido pelo conteúdo (JPG, PNG, WebP), até 5 MB.
 // Bucket privado cozinha-fotos, caminho <loja>/<produto>-<momento>.<ext>; a foto anterior é apagada depois de gravar a nova.
 
@@ -25,7 +25,9 @@ const erro = (msg: string, status: number) => NextResponse.json({ error: msg }, 
 
 export async function POST(req: Request, { params }: { params: Promise<{ codigo: string }> }) {
   if (!origemAceita(req)) return erro('Origem não permitida', 403)
-  if (!(await ehDesenvolvedor())) return erro('Recurso ainda em teste.', 404)
+  const { cozinha } = (await carregarAcessos()).acessos
+  if (cozinha === 'vitrine') return erro('Não encontrado.', 404)
+  if (cozinha === 'consulta') return erro('Módulo suspenso: dá para consultar, mas não lançar.', 403)
   const ator = await getAtorGestao()
   if (!ator.podeGerir) return erro('Sem permissão', 403)
   const lojaId = await getCurrentLojaId()

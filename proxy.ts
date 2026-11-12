@@ -92,6 +92,9 @@ export async function proxy(request: NextRequest) {
   // login. O cabeçalho que vier de fora é sempre apagado; sem usuário, sem chave ou sem token, a página confere sozinha.
   const headers = new Headers(request.headers)
   headers.delete(CABECALHO_SESSAO)
+  // Plataforma Norte: a rota pedida, para o layout do app saber de qual módulo é a tela (app/(app)/layout.tsx).
+  // Sempre sobrescrito aqui: o valor que vier de fora nunca chega à página.
+  headers.set('x-ntb-rota', path)
   const chave = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (user && chave) {
     const { data: { session } } = await supabase.auth.getSession()

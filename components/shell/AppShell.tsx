@@ -10,6 +10,7 @@ import { BuscaGlobal } from './BuscaGlobal'
 import { Sininho } from './Sininho'
 import { BannerSync } from '@/components/desktop/BannerSync'
 import { CentralProvider } from '@/components/central/central-estado'
+import type { Acesso, ModuloId } from '@/lib/plataforma/modulos-puro'
 
 export function AppShell({
   isAdmin,
@@ -20,6 +21,7 @@ export function AppShell({
   temEstoque = false,
   pedidosOmie = false,
   pacioli = false,
+  modulos,
   centralUserId,
   lojaSelector,
   userMenu,
@@ -36,6 +38,8 @@ export function AppShell({
   pedidosOmie?: boolean
   /** Pacioli (robô) liberado: dev ou loja que contratou (lib/pacioli.ts). */
   pacioli?: boolean
+  /** Plataforma Norte: acesso da loja a cada módulo (lib/plataforma/modulos-puro.ts). Módulo em vitrine some do menu. */
+  modulos?: Record<ModuloId, Acesso>
   /** Só desenvolvedores: id do usuário (favoritos da central). */
   centralUserId?: string
   lojaSelector: React.ReactNode
@@ -48,9 +52,9 @@ export function AppShell({
   const centralCtx = React.useMemo(
     () =>
       isSuperAdmin
-        ? { ctx: { isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, pacioli, desktop: process.env.NEXT_PUBLIC_DESKTOP === '1' }, userId: centralUserId ?? '' }
+        ? { ctx: { isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, pacioli, modulos, desktop: process.env.NEXT_PUBLIC_DESKTOP === '1' }, userId: centralUserId ?? '' }
         : null,
-    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, pacioli, centralUserId]
+    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, pacioli, modulos, centralUserId]
   )
 
   React.useEffect(() => {
@@ -91,9 +95,9 @@ export function AppShell({
 
   return (
     <div className="flex min-h-screen bg-bg">
-      <div className="contents print:hidden"><Sidebar isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} estoqueProprio={estoqueProprio} temEstoque={temEstoque} pedidosOmie={pedidosOmie} pacioli={pacioli} lojaSelector={lojaSelector} userMenu={userMenu} /></div>
+      <div className="contents print:hidden"><Sidebar isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} estoqueProprio={estoqueProprio} temEstoque={temEstoque} pedidosOmie={pedidosOmie} pacioli={pacioli} modulos={modulos} lojaSelector={lojaSelector} userMenu={userMenu} /></div>
       <div className="flex-1 min-w-0 flex flex-col">
-        <div className="contents print:hidden"><MobileNav isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} estoqueProprio={estoqueProprio} temEstoque={temEstoque} pedidosOmie={pedidosOmie} pacioli={pacioli} lojaSelector={lojaSelector} userMenu={userMenu} onBuscar={() => setBuscaAberta(true)} /></div>
+        <div className="contents print:hidden"><MobileNav isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} estoqueProprio={estoqueProprio} temEstoque={temEstoque} pedidosOmie={pedidosOmie} pacioli={pacioli} modulos={modulos} lojaSelector={lojaSelector} userMenu={userMenu} onBuscar={() => setBuscaAberta(true)} /></div>
         {/* overflow-x-clip (NAO -hidden): clip corta overflow horizontal sem
             virar container de scroll. -hidden faria o overflow-y computar pra
             auto, tornando o <main> um scroll container SEM altura fixa -> o

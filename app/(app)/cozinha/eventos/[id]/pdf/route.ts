@@ -2,16 +2,16 @@ import { NextResponse } from 'next/server'
 import { createElement } from 'react'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
-import { exigirDev } from '@/lib/recursos-dev'
+import { carregarAcessos } from '@/lib/plataforma/assinaturas'
 import { createClient } from '@/lib/supabase/server'
 import { carregarBase } from '@/lib/custo-cardapio/carregar'
 import { carregarEvento, listasDoEvento } from '@/lib/custo-cardapio/eventos'
 import { formatarData, NOME_STATUS } from '@/lib/custo-cardapio/eventos-puro'
 import { EventoPDF } from '@/components/custo-cardapio/eventos/EventoPDF'
 
-// Evento em PDF (só dev): resumo, lista de produção e de compras.
+// Evento em PDF (módulo Norte Cozinha): resumo, lista de produção e de compras.
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  await exigirDev()
+  if ((await carregarAcessos()).acessos.cozinha === 'vitrine') return new NextResponse('Não encontrado', { status: 404 })
   if (!(await getAtorGestao()).podeGerir) return new NextResponse('Sem permissão', { status: 403 })
   const id = Number((await params).id)
   const lojaId = await getCurrentLojaId()

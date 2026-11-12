@@ -2,16 +2,16 @@ import { NextResponse } from 'next/server'
 import { createElement } from 'react'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
-import { exigirDev } from '@/lib/recursos-dev'
+import { carregarAcessos } from '@/lib/plataforma/assinaturas'
 import { createClient } from '@/lib/supabase/server'
 import { arvoreDoPrato, carregarBase, ehPreparacao } from '@/lib/custo-cardapio/carregar'
 import { FichaPDF } from '@/components/custo-cardapio/FichaPDF'
 import { bytesDaFoto, carregarInfoReceita } from '@/lib/custo-cardapio/receita-info'
 import { formatarTempo, passosDoTexto } from '@/lib/custo-cardapio/guia-puro'
 
-// Ficha técnica em PDF (só dev). ?cozinha=1 = sem valores em R$.
+// Ficha técnica em PDF (módulo Norte Cozinha). ?cozinha=1 = sem valores em R$.
 export async function GET(request: Request, { params }: { params: Promise<{ codigo: string }> }) {
-  await exigirDev()
+  if ((await carregarAcessos()).acessos.cozinha === 'vitrine') return new NextResponse('Não encontrado', { status: 404 })
   if (!(await getAtorGestao()).podeGerir) return new NextResponse('Sem permissão', { status: 403 })
   const codigo = Number((await params).codigo)
   const lojaId = await getCurrentLojaId()

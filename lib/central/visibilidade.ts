@@ -35,7 +35,6 @@ export const ROTAS_SO_DEV_ESPELHO: readonly string[] = [
   '/cliente',
   '/historico-cadastro',
   '/migracao-omie',
-  '/cozinha',
 ]
 
 /** Item de menu que governa a visibilidade do item da central (regra explícita ou NAV de maior prefixo). */

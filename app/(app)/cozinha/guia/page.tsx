@@ -1,6 +1,6 @@
 import { BookOpen, ChefHat } from 'lucide-react'
 import { getCurrentLojaId } from '@/lib/auth'
-import { exigirDev } from '@/lib/recursos-dev'
+import { exigirModulo } from '@/lib/plataforma/assinaturas'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { ListaGuia } from '@/components/custo-cardapio/guia/ListaGuia'
@@ -10,10 +10,10 @@ import { carregarGuia } from '@/lib/custo-cardapio/guia'
 
 type Sp = { p?: string; ctx?: string; b?: string; passados?: string }
 
-// Norte Cozinha (só dev), Guia de preparo: a ficha operacional da cozinha, sem nenhum valor em R$.
+// Norte Cozinha (módulo da loja), Guia de preparo: a ficha operacional da cozinha, sem nenhum valor em R$.
 // ?p=<produto> receita aberta · ?ctx=e<id>|c<id> evento ou cardápio (escala) · ?b=<quantidade> base manual · ?passados=1
 export default async function GuiaPage({ searchParams }: { searchParams: Promise<Sp> }) {
-  await exigirDev()
+  await exigirModulo('cozinha')
   const sp = await searchParams
   const lojaId = await getCurrentLojaId()
   const base = await carregarBase(lojaId)

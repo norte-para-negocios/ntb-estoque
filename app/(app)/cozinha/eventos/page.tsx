@@ -13,7 +13,7 @@ import { brl, pct } from '@/lib/custo-cardapio/formato'
 
 const COR_STATUS: Record<StatusEvento, string> = { orcamento: 'bg-text-muted/50', confirmado: 'bg-brand', realizado: 'bg-ok', cancelado: 'bg-err' }
 
-// Norte Cozinha (só dev), Eventos: orçamento por convidado, produção e compras.
+// Norte Cozinha (módulo da loja), Eventos: orçamento por convidado, produção e compras.
 export default async function EventosPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const sp = await searchParams
   const lojaId = await getCurrentLojaId()

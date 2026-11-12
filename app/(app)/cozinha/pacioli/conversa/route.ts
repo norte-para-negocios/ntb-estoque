@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
-import { exigirDev } from '@/lib/recursos-dev'
+import { carregarAcessos } from '@/lib/plataforma/assinaturas'
 import { criarLimitador } from '@/lib/seguranca/regras'
 import { carregarBase } from '@/lib/custo-cardapio/carregar'
 import { criarContexto, executar, FERRAMENTAS, responderRapido } from '@/lib/custo-cardapio/pacioli-ferramentas'
@@ -8,7 +8,7 @@ import {
   acaoDaFerramenta, interpretarPergunta, LIMITES, SISTEMA_FIXO, sistemaDaLoja, validarEntrada, validarHistorico, type AcaoPacioli,
 } from '@/lib/custo-cardapio/pacioli-puro'
 
-// Pacioli: conversa com o assistente da cozinha. POST só (sem server action), só desenvolvedor e quem gere a loja.
+// Pacioli: conversa com o assistente da cozinha. POST só (sem server action), só loja com o módulo Norte Cozinha e quem gere a loja.
 // { modo: 'rapido', pergunta } → resposta pronta calculada aqui, sem modelo (funciona sem chave).
 // { modo: 'conversa', mensagens } → Claude com ferramentas SÓ DE LEITURA; resposta em NDJSON (uma linha por evento):
 //   { t: 'acao', v } troca a animação do mascote · { t: 'texto', v } pedaço da resposta · { t: 'fim', acao } · { t: 'erro', v, codigo }
@@ -24,8 +24,8 @@ const json = (corpo: unknown, status = 200) =>
 const erro = (status: number, codigo: string, mensagem: string) => json({ codigo, mensagem }, status)
 
 export async function POST(req: Request) {
-  // notFound()/redirect() lançam: aqui viram 404/401 em vez de página.
-  try { await exigirDev() } catch { return erro(404, 'nao_encontrado', 'Não encontrado.') }
+  // Módulo Norte Cozinha fora da loja (vitrine) = 404, como se a rota não existisse.
+  if ((await carregarAcessos()).acessos.cozinha === 'vitrine') return erro(404, 'nao_encontrado', 'Não encontrado.')
   let atorId: string
   let lojaId: number
   try {

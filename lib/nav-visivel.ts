@@ -1,5 +1,7 @@
 // Regra única de visibilidade de um item de menu (admin, gestão, dev, modo da loja, permissão).
-// Usada por Sidebar, MobileNav e pela central de módulos. Sem imports: roda no node --test e não carrega nomes de telas.
+// Usada por Sidebar, MobileNav e pela central de módulos. Só importa regra pura: roda no node --test e não carrega nomes de telas.
+// @ts-expect-error: o node --test (type stripping) exige a extensão .ts; o tsc do Next não a aceita
+import { moduloDaRota, type Acesso, type ModuloId } from './plataforma/modulos-puro.ts'
 
 /** Subconjunto estrutural de NavItem (sem o ícone). */
 export type NavRegra = {
@@ -29,6 +31,8 @@ export type CtxVisibilidade = {
   desktop: boolean
   /** Loja atual contratou o Pacioli, ou o usuário é dev/admin. */
   pacioli?: boolean
+  /** Plataforma Norte: acesso da loja atual a cada módulo. Ausente = menu como antes. Módulo em 'vitrine' some do menu. */
+  modulos?: Record<ModuloId, Acesso>
 }
 
 /** Filtro do menu lateral. `permitidas` pode vir pré-calculada (evita refazer o Set a cada item). */
@@ -44,9 +48,16 @@ export function navItemVisivel(
     (!n.soEstoqueProprio || ctx.estoqueProprio || (!!n.ouPedidosOmie && ctx.pedidosOmie)) &&
     (!n.comEstoque || ctx.temEstoque) &&
     (!n.soPacioli || !!ctx.pacioli) &&
+    !moduloEmVitrine(n.href, ctx.modulos) &&
     // Pacioli não depende da permissão por perfil: a loja que paga o robô vê para todos os usuários dela
     (permitidas === null || permitidas.has(n.href) || (!!n.soPacioli && !!ctx.pacioli))
   )
+}
+
+function moduloEmVitrine(href: string, modulos: CtxVisibilidade['modulos']): boolean {
+  if (!modulos) return false
+  const m = moduloDaRota(href)
+  return m != null && modulos[m] === 'vitrine'
 }
 
 /** Menu novo (por módulos) só existe para desenvolvedores; quem não é dev nunca o recebe. */

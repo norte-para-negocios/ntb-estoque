@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { ChefHat, FileText, Layers } from 'lucide-react'
 import { getAtorGestao, getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { EstruturaProduto } from '@/components/produtos/EstruturaProduto'
-import { exigirDev } from '@/lib/recursos-dev'
+import { exigirModulo } from '@/lib/plataforma/assinaturas'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { btnClass } from '@/components/ui-kit/Button'
@@ -16,7 +16,7 @@ import { EditorPreparo } from '@/components/custo-cardapio/guia/EditorPreparo'
 const contar = (nos: NoTela[]): number => nos.reduce((a, n) => a + (n.suspeito ? 1 : 0) + contar(n.filhos), 0)
 
 export default async function CustoPratoPage({ params }: { params: Promise<{ codigo: string }> }) {
-  await exigirDev()
+  await exigirModulo('cozinha')
   if (!(await getAtorGestao()).podeGerir) notFound()
   const codigo = Number((await params).codigo)
   if (!Number.isFinite(codigo)) notFound()

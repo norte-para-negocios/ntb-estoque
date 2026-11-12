@@ -2,16 +2,16 @@ import { NextResponse } from 'next/server'
 import { createElement } from 'react'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
-import { exigirDev } from '@/lib/recursos-dev'
+import { carregarAcessos } from '@/lib/plataforma/assinaturas'
 import { createClient } from '@/lib/supabase/server'
 import { carregarBase } from '@/lib/custo-cardapio/carregar'
 import { carregarCardapio } from '@/lib/custo-cardapio/cardapios'
 import { NOME_CANAL } from '@/lib/custo-cardapio/cardapios-puro'
 import { CardapioPDF } from '@/components/custo-cardapio/cardapios/CardapioPDF'
 
-// Cardápio em PDF (só dev). ?interno=1 = com custo, CMV e preço sugerido.
+// Cardápio em PDF (módulo Norte Cozinha). ?interno=1 = com custo, CMV e preço sugerido.
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  await exigirDev()
+  if ((await carregarAcessos()).acessos.cozinha === 'vitrine') return new NextResponse('Não encontrado', { status: 404 })
   if (!(await getAtorGestao()).podeGerir) return new NextResponse('Sem permissão', { status: 403 })
   const id = Number((await params).id)
   const lojaId = await getCurrentLojaId()

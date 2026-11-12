@@ -110,7 +110,7 @@ export const NAV_ITEMS: NavItem[] = [
   // Fase 8: engenharia de cardápio, só dev (rota em ROTAS_SO_DEV).
   { href: '/relatorio-engenharia-cardapio', label: 'Engenharia de cardápio', icon: LayoutGrid, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
   // Norte Cozinha: custo do prato pela ficha, CMV, preço sugerido, cardápios, eventos e o Pacioli. Só dev (ROTAS_SO_DEV).
-  { href: '/cozinha', label: 'Norte Cozinha', icon: ChefHat, group: 'Operação', comEstoque: true, superAdmin: true },
+  { href: '/cozinha', label: 'Norte Cozinha', icon: ChefHat, group: 'Operação', comEstoque: true },
   { href: '/nota-fiscal', label: 'Notas Fiscais', icon: FileText, group: 'Operação' },
   { href: '/ordem-producao', label: 'Ordens de Produção', icon: Factory, group: 'Operação' },
   { href: '/transferencia', label: 'Transferências', icon: ArrowLeftRight, group: 'Operação' },
