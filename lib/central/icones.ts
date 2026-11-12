@@ -1,6 +1,6 @@
 import {
   Activity, Archive, ArrowDownUp, ArrowLeftRight, BadgeCheck, BadgeDollarSign, Banknote, BarChart3, BookOpen, BookOpenCheck, Bot,
-  Boxes, Building2, Calculator, CalendarClock, CalendarRange, ChartBar, ChartBarDecreasing, ChartBarStacked, ChartColumnStacked,
+  Boxes, Building2, Calculator, ChefHat, CalendarClock, CalendarRange, ChartBar, ChartBarDecreasing, ChartBarStacked, ChartColumnStacked,
   ChartLine, ChartSpline, ClipboardCheck, ClipboardList, ClipboardPen, Coins, Cog, Database, Factory, FileCode2, FileDown,
   FileOutput, FilePenLine, FileQuestion, FileSearch, FileSpreadsheet, FileExclamationPoint, FileText, FileUp, FileX, FolderTree, Gauge, Goal, Group,
   HandCoins, History, Hourglass, Rocket, IdCard, Landmark, Layers, LayoutDashboard, LayoutGrid, Lightbulb, List, ListChecks, ListOrdered,
@@ -147,6 +147,8 @@ export const ICONE_POR_ROTA: Record<string, Icone> = {
   '/relatorio-produtos-fornecedor': [PackageSearch, 'relatorio'],
   // Produção
   '/ordem-producao': [Factory, 'marca'],
+  '/custo-cardapio': [ChefHat, 'marca'],
+  '/custo-cardapio/taxas': [SlidersHorizontal, 'neutro'],
   '/ordem-producao/abertas': [Hourglass, 'marca'],
   '/impressoes': [Printer, 'marca'],
   '/relatorio-ops': [ChartBarStacked, 'relatorio'],

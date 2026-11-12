@@ -208,6 +208,9 @@ export const MODULOS: ModuloCentral[] = [
       { label: 'Ordens de Produção', href: '/ordem-producao', desc: 'Abertas e concluídas', principal: true },
       { label: 'OPs abertas', href: '/ordem-producao/abertas', desc: 'O que ainda está para produzir' },
       { label: 'Impressões', href: '/impressoes', desc: 'Etiquetas e listas de contagem' },
+      // Só dev (herda o superAdmin do item de menu).
+      { label: 'Custo e Cardápio', href: '/custo-cardapio', desc: 'Custo de cada prato, CMV e preço para a meta', comEstoque: true },
+      { label: 'Meta e taxas do cardápio', href: '/custo-cardapio/taxas', desc: 'Meta de CMV, imposto, cartão, app e embalagem', comEstoque: true },
     ],
     secoes: [
       {

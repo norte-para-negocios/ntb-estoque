@@ -31,6 +31,8 @@ export const ROTAS_SO_DEV = [
   '/historico-cadastro',
   // Fase 10: prontidão de cada loja Omie para ir ao Norte ERP (só leitura).
   '/migracao-omie',
+  // Custo e Cardápio (migration 473): custo do prato pela ficha, CMV e preço sugerido.
+  '/custo-cardapio',
 ] as const
 
 export async function ehDesenvolvedor(): Promise<boolean> {
