@@ -16,6 +16,10 @@ const LEITURAS_EXTRA = [
   'central#previaRefazerInventario',
 ]
 
+// Ações que escrevem mas cujo nome não começa por verbo de escrita: barradas com o módulo suspenso.
+// consultarNfeSaida consulta a SEFAZ e grava a situação/protocolo da NF-e (gravarResultado, nfe_registrar_*).
+const ESCRITAS_EXTRA = ['nfe-saida#consultarNfeSaida']
+
 /** Módulo dono do arquivo de ações (parte antes do '#'); null = livre. */
 export function moduloDaAcao(arquivo: string): ModuloId | null {
   if (LIVRES.includes(arquivo) || arquivo.startsWith('plataforma-')) return null
@@ -28,6 +32,8 @@ const VERBOS_ESCRITA = [
   'registrar', 'definir', 'marcar', 'importar', 'adicionar', 'mover', 'duplicar', 'arquivar', 'finalizar', 'reabrir', 'trocar',
   'corrigir', 'confirmar', 'aprovar', 'estornar', 'desfazer', 'ajustar', 'transferir', 'incluir', 'alterar', 'dar', 'refazer',
   'reprocessar', 'sincronizar', 'vincular', 'desvincular', 'revogar', 'emitir', 'usar', 'aplicar',
+  'ajuste', 'relancar', 'puxar', 'decidir', 'manifestar', 'reverter', 'set', 'classificar', 'descartar', 'mudar', 'fechar', 'acao',
+  'force', 'trazer',
 ]
 
 /** Primeira palavra do camelCase da ação ('salvarAjuste' -> 'salvar'). */
@@ -42,6 +48,7 @@ export function barraAcao(acesso: Acesso, politica: string | null, nome = ''): b
   if (acesso === 'vitrine') return true
   if (acesso === 'abre') return false
   if (LEITURAS_EXTRA.includes(nome)) return false
+  if (ESCRITAS_EXTRA.includes(nome)) return true
   if (politica === 'local' || politica === 'fila' || politica === 'depende') return true
   return VERBOS_ESCRITA.includes(primeiraPalavra(nome))
 }

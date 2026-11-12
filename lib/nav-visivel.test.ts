@@ -38,3 +38,16 @@ test('rota livre nunca some pelo módulo', () => {
   assert.equal(navItemVisivel({ href: '/usuario' }, { ...base, modulos: tudoVitrine }), true)
   assert.equal(navItemVisivel({ href: '/estoque' }, { ...base, modulos: tudoVitrine }), false)
 })
+
+test('não admin sem /cozinha nas rotas: cozinha aberta aparece, vitrine/consulta seguem a regra de sempre', () => {
+  const naoAdmin = { ...base, rotasVisiveis: ['/estoque'] }
+  assert.equal(navItemVisivel({ href: '/cozinha' }, { ...naoAdmin, modulos: modulos('abre') }), true)
+  assert.equal(navItemVisivel({ href: '/cozinha/eventos' }, { ...naoAdmin, modulos: modulos('abre') }), true)
+  assert.equal(navItemVisivel({ href: '/cozinha' }, { ...naoAdmin, modulos: modulos('vitrine') }), false)
+  assert.equal(navItemVisivel({ href: '/cozinha' }, { ...naoAdmin, modulos: modulos('consulta') }), false)
+  // sem ctx.modulos (padrão de antes): continua escondido
+  assert.equal(navItemVisivel({ href: '/cozinha' }, naoAdmin), false)
+  // outras rotas não ganham o atalho
+  assert.equal(navItemVisivel({ href: '/produto' }, { ...naoAdmin, modulos: modulos('abre') }), false)
+  assert.equal(navItemVisivel({ href: '/estoque' }, { ...naoAdmin, modulos: modulos('abre') }), true)
+})

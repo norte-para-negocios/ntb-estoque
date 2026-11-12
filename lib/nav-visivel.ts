@@ -49,9 +49,14 @@ export function navItemVisivel(
     (!n.comEstoque || ctx.temEstoque) &&
     (!n.soPacioli || !!ctx.pacioli) &&
     !moduloEmVitrine(n.href, ctx.modulos) &&
-    // Pacioli não depende da permissão por perfil: a loja que paga o robô vê para todos os usuários dela
-    (permitidas === null || permitidas.has(n.href) || (!!n.soPacioli && !!ctx.pacioli))
+    // Pacioli não depende da permissão por perfil: a loja que paga o robô vê para todos os usuários dela.
+    // Cozinha idem: não tem entrada em permissoes-menu; com o módulo aberto ('abre') aparece para todos da loja.
+    (permitidas === null || permitidas.has(n.href) || (!!n.soPacioli && !!ctx.pacioli) || cozinhaAberta(n.href, ctx.modulos))
   )
+}
+
+function cozinhaAberta(href: string, modulos: CtxVisibilidade['modulos']): boolean {
+  return moduloDaRota(href) === 'cozinha' && modulos?.cozinha === 'abre'
 }
 
 function moduloEmVitrine(href: string, modulos: CtxVisibilidade['modulos']): boolean {

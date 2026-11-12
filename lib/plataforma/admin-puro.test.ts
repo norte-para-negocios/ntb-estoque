@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { validarAssinatura, validarPreco, tabelaAusente, ordenarLojas, PLANOS_VENDAS } from './admin-puro.ts'
+import { validarAssinatura, validarPreco, tabelaAusente, ordenarLojas, PLANOS_VENDAS, lerValorBR } from './admin-puro.ts'
 
 test('validarAssinatura aceita estado conhecido ou null, módulo conhecido, loja inteira positiva', () => {
   assert.equal(validarAssinatura(5, 'cozinha', { estado: 'bloqueado', planoId: null, precoCombinado: null }), null)
@@ -44,4 +44,14 @@ test('ordenarLojas: reais primeiro, depois as de teste; por nome dentro de cada 
     { id: 8, nome: 'A', is_test: true },
   ])
   assert.deepEqual(r.map((l) => l.id), [2, 3, 8, 9])
+})
+
+test('lerValorBR: dinheiro digitado no jeito brasileiro', () => {
+  const casos: [string, number | null][] = [
+    ['', null], ['  ', null], ['70', 70], ['R$ 70', 70], ['r$70,00', 70],
+    ['1.500', 1500], ['1.500,50', 1500.5], ['12,9', 12.9], ['12.90', 12.9], ['70.5', 70.5],
+    ['1.234.567', 1234567], ['1.234.567,89', 1234567.89], ['1500,5', 1500.5], ['0,99', 0.99],
+  ]
+  for (const [t, esperado] of casos) assert.equal(lerValorBR(t), esperado, t)
+  for (const t of ['abc', '1.50.0', '12.345,6,7', '1,500.50', '12.3456', '-5']) assert.ok(Number.isNaN(lerValorBR(t)), t)
 })

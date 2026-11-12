@@ -3,21 +3,13 @@
 import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { MODULOS, type ModuloId } from '@/lib/plataforma/modulos-puro'
-import { PLANOS } from '@/lib/plataforma/admin-puro'
+import { PLANOS, lerValorBR as lerValor } from '@/lib/plataforma/admin-puro'
 import { salvarPrecoPlano } from '@/lib/actions/plataforma-modulos'
 import { IDENTIDADE } from './simbolos'
 
 // Preço mensal de cada plano (vazio = "definir"). Só a equipe da Norte vê; nunca vai para o site nem para o cliente.
 
 const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-/** "1.234,50" / "1234.5" / "R$ 70" → número; "" → null; lixo → NaN. */
-function lerValor(t: string): number | null {
-  const s = t.replace(/r\$\s*/i, '').trim()
-  if (!s) return null
-  const n = s.includes(',') ? Number(s.replace(/\./g, '').replace(',', '.')) : Number(s)
-  return Number.isFinite(n) ? n : Number.NaN
-}
-
 function CampoPreco({ planoId, rotulo, inicial, desabilitado }: { planoId: string; rotulo: string; inicial: number | null; desabilitado: boolean }) {
   const [salvo, setSalvo] = useState(inicial)
   const [texto, setTexto] = useState(inicial == null ? '' : brl(inicial))

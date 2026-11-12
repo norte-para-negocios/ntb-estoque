@@ -45,3 +45,25 @@ export function ordenarLojas<T extends { id: number; nome: string; is_test: bool
   return [...lojas].sort((a, b) =>
     Number(!!a.is_test) - Number(!!b.is_test) || a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }) || a.id - b.id)
 }
+
+/** Valor em reais digitado à mão → número; "" → null; o que não for valor → NaN.
+ *  Regra: tira "R$" e espaços. Com vírgula: a vírgula é o decimal e os pontos são milhar ("1.500,50" → 1500.5,
+ *  "12,9" → 12.9). Sem vírgula: ponto seguido de 1 ou 2 dígitos no fim é decimal ("12.90" → 12.9, "70.5" → 70.5);
+ *  pontos em grupos de 3 dígitos são milhar ("1.500" → 1500, "1.234.567" → 1234567). Qualquer outra forma é NaN. */
+export function lerValorBR(t: string): number | null {
+  const s = t.replace(/r\$/i, '').replace(/\s+/g, '')
+  if (!s) return null
+  let norm: string
+  if (s.includes(',')) {
+    if (!/^(\d{1,3}(\.\d{3})+|\d+),\d*$/.test(s)) return Number.NaN
+    norm = s.replace(/\./g, '').replace(',', '.')
+  } else if (/^\d+(\.\d{1,2})?$/.test(s)) {
+    norm = s
+  } else if (/^\d{1,3}(\.\d{3})+$/.test(s)) {
+    norm = s.replace(/\./g, '')
+  } else {
+    return Number.NaN
+  }
+  const n = Number(norm)
+  return Number.isFinite(n) ? n : Number.NaN
+}

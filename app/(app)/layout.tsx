@@ -60,7 +60,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     headers(),
   ])
   // Tela de um módulo que a loja não tem (vitrine): vai para a página do módulo. Rota livre (null) nunca é bloqueada.
-  const moduloAtual = moduloDaRota(cabecalhos.get('x-ntb-rota') ?? '')
+  // Sem o cabeçalho (rota que o proxy não marcou): não decide módulo, senão '' vira 'erp' e pode redirecionar em loop.
+  const rotaAtual = cabecalhos.get('x-ntb-rota')
+  const moduloAtual = rotaAtual ? moduloDaRota(rotaAtual) : null
   if (moduloAtual && acessos[moduloAtual] === 'vitrine') redirect('/modulos/' + moduloAtual)
   const rotasVisiveis = isAdmin || superAdmin ? null : Array.from(rotasPermitidas(permissoes))
   const estoqueProprio = modoEstoque === 'proprio'
