@@ -8,7 +8,7 @@ export async function guardaModulo(nomeAcao: string): Promise<{ error: string } 
   const modulo = moduloDaAcao(nomeAcao.split('#')[0])
   if (modulo === null) return null
   const { acessos } = await carregarAcessos()
-  if (!barraAcao(acessos[modulo], politicaDe(nomeAcao) ?? '', nomeAcao)) return null
+  if (!barraAcao(acessos[modulo], politicaDe(nomeAcao), nomeAcao)) return null
   try {
     await exigirEscritaModulo(modulo) // lança a mensagem certa (vitrine ou suspenso)
   } catch (e) {

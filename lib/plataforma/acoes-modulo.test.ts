@@ -10,7 +10,7 @@ test('módulo de cada arquivo de ação', () => {
   assert.equal(moduloDaAcao('plataforma-assinaturas'), null)
   assert.equal(moduloDaAcao('loja-selector'), null)
   assert.equal(moduloDaAcao('auth'), null)
-  for (const f of ['convite', 'onboarding-loja', 'integracao-ntb-vendas', 'sync-status', 'central', 'central-numeros']) assert.equal(moduloDaAcao(f), null)
+  for (const f of ['convite', 'onboarding-loja', 'integracao-ntb-vendas', 'sync-status', 'central', 'central-numeros', 'notificacoes', 'busca-global']) assert.equal(moduloDaAcao(f), null)
   assert.equal(moduloDaAcao('estoque-omie'), 'erp')
 })
 test('leitura passa em suspenso', () => {
@@ -23,4 +23,14 @@ test('leitura extra passa em suspenso', () => {
   assert.equal(barraAcao('consulta', 'fila', 'estrutura#verEstrutura'), false)
   assert.equal(barraAcao('consulta', 'fila', 'estrutura#outra'), true)
   assert.equal(barraAcao('vitrine', 'fila', 'estrutura#verEstrutura'), true)
+})
+test('suspenso barra só escrita', () => {
+  assert.equal(barraAcao('consulta', null, 'notificacoes#minhasNotificacoes'), false)
+  assert.equal(barraAcao('consulta', null, 'estoque#listarSaldos'), false)
+  assert.equal(barraAcao('consulta', null, 'estoque#salvarAjuste'), true)
+  assert.equal(barraAcao('consulta', 'fila', 'x#qualquer'), true)
+  assert.equal(barraAcao('vitrine', null, 'x#listar'), true)
+  assert.equal(barraAcao('abre', 'fila', 'x#salvar'), false)
+  assert.equal(barraAcao('consulta', null, 'x#salvarTudo'), true)
+  assert.equal(barraAcao('consulta', null, 'x#daqui'), false)
 })

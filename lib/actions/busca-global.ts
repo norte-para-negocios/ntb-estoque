@@ -1,7 +1,6 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
-import { guardaModulo } from '@/lib/plataforma/guarda'
 
 import { createClient } from '@/lib/supabase/server'
 import { getProfile } from '@/lib/auth'
@@ -31,7 +30,6 @@ const DIAS_CUPOM = 45
  */
 export async function buscaGlobal(termo: string): Promise<BuscaItem[]> {
   const __d = viaDesktop('busca-global#buscaGlobal', buscaGlobal, [termo]); if (__d) return __d as never
-  const __g = await guardaModulo('busca-global#buscaGlobal'); if (__g) return __g as never
   const t = (termo ?? '').trim()
   if (t.length < 2) return []
 
