@@ -6,7 +6,6 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { EtiquetaPDF, type Etiqueta, type EtiquetaConfig } from '@/components/etiqueta/EtiquetaPDF'
 import { carregarEtiquetaConfig } from '@/lib/etiqueta-config'
-import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { PdfErro } from '@/components/relatorio/PdfChrome'
 
 // Achado real (reuniao 09/07): o erro de "nenhum item com quantidade definida"
@@ -116,7 +115,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     etiquetas.push({
       codigo_produto: String(codigoProduto),
-      descricao: formatarNomeProduto(item.c_descricao_produto),
+      descricao: item.c_descricao_produto ?? '',
       lote: '',
       quantidade: '',
       qtde_nf: `${num(qtdeRecebida, 0)}(${unidade})`,
