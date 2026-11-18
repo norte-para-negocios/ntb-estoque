@@ -190,4 +190,18 @@ export const RESSALVAS: Ressalva[] = [
       'As funções que faltam frente ao app Norte Cozinha separado (22 itens) estão em e2e/robo/cozinha-faltando.md.',
     ],
   },
+  {
+    ticket: 'geral', titulo: 'limites da prova (revisão do código da integração)', status: 'ressalvas registradas',
+    naoProvado: [
+      'Ticket 10 e passeio (02): o login "dono" é super admin (gerar-usuarios.mjs). "Dono com 0 furos" e o passeio como dono NÃO provam o que um dono comum enxerga ou pode fazer; falta um login de dono sem o papel de super admin.',
+      'Tickets 08 e 11 (CMV e cozinha): o gabarito usa o custo médio calculado pelo próprio ERP (cmc_apos, estoque_custos). Confere a multiplicação (quantidade x custo) e as somas, não o custo em si.',
+      'A trava do Omie barra também leitura. "Compara com o Omie" usa só o espelho local (kardex e tabelas copiadas), nunca o Omie ao vivo.',
+      'A chave SSH do Contabo é de root, sem restrição de comando: "só lê o servidor" (ls + scp) é convenção do script local.sh, não uma garantia técnica.',
+      'Ticket 04, critério 11 (nota na loja Omie): foi provado pela recusa 400 do próprio ERP, não pela trava do Omie.',
+    ],
+    ressalvas: [
+      '`npm test` agora inclui e2e/**/*.test.ts (os testes à mão do robô rodam junto com os do ERP).',
+      'A trava do robô (e2e/robo/trava.ts) confere o .env.local, variáveis exportadas no shell e, por sonda, o servidor que atende a 3107: a URL do Supabase não aparece no código do navegador (o ERP só a usa no servidor), então o robô manda ao /login uma sessão emitida pelo GoTrue local e exige que o servidor a aceite.',
+    ],
+  },
 ]

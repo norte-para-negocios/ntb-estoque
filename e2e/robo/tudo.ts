@@ -2,12 +2,13 @@
 //   --seco (ou ROBO_TUDO_SECO=1): só mostra a ordem e os comandos, sem executar nada.
 //   ROBO_TUDO_SO=saldo,cmv / ROBO_TUDO_PULAR=cozinha: escolhe etapas.
 // Os filtros que cada robô já tem (ROBO_LOJAS, ROBO_CENARIOS, ROBO_SEM_RESET, ROBO_SO...) passam direto para ele.
-// Trava de sempre: só http://127.0.0.1|localhost:3107, .env.local com Supabase local e NTB_OMIE_BLOQUEADO=1.
+// Trava de sempre: só http://127.0.0.1|localhost:3107, .env.local com Supabase local e NTB_OMIE_BLOQUEADO=1, shell sem sobreposição e servidor da 3107 provado local (trava.ts).
 // A suíte inteira leva horas (a cozinha sozinha ~16 min). Ao fim gera .local-data/robo-tudo/lista-final.md.
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { validarUrlBase, validarAmbienteLocal, PORTA_ERP_LOCAL } from './trava-url.ts'
+import { verificarTravaLocal } from './trava.ts'
+import { PORTA_ERP_LOCAL } from './base.ts'
 import { montarPlano, formatarPlano } from './tudo-plano.ts'
 
 const RAIZ = path.resolve(import.meta.dirname, '..', '..')
@@ -22,19 +23,15 @@ const plano = montarPlano(process.env)
 if (plano.erro) recusar(plano.erro)
 
 // ---- Trava: só a cópia local, Omie bloqueado ----
-const v = validarUrlBase(process.env.ROBO_URL_BASE ?? `http://127.0.0.1:${PORTA_ERP_LOCAL}`)
-const envLocal = path.join(RAIZ, '.env.local')
-const va = fs.existsSync(envLocal) ? validarAmbienteLocal(fs.readFileSync(envLocal, 'utf8')) : ({ ok: false, motivo: '.env.local da cópia local não existe' } as const)
+const trava = await verificarTravaLocal(RAIZ)
 if (seco) {
   console.log(formatarPlano(plano))
   console.log('')
-  console.log(`Trava de endereço: ${v.ok ? `ok (${v.origem})` : `RECUSARIA: ${v.motivo}`}`)
-  console.log(`Trava do ambiente: ${va.ok ? 'ok (Supabase local e NTB_OMIE_BLOQUEADO=1)' : `RECUSARIA: ${va.motivo}`}`)
+  console.log(`Trava (endereço, .env.local, shell e servidor da porta ${PORTA_ERP_LOCAL}): ${trava.ok ? `ok (${trava.origem})` : `RECUSARIA: ${trava.motivo}`}`)
   console.log('\nModo seco: nada foi executado.')
   process.exit(0)
 }
-if (!v.ok) recusar(v.motivo)
-if (!va.ok) recusar(va.motivo)
+if (!trava.ok) recusar(trava.motivo)
 
 console.log(formatarPlano(plano))
 console.log(`\nInício: ${new Date().toISOString()}. A suíte leva horas; não pare nem troque o ERP da porta ${PORTA_ERP_LOCAL}.\n`)

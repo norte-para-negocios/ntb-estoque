@@ -7,7 +7,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { chromium, type BrowserContext, type Page } from 'playwright'
-import { validarUrlBase, validarAmbienteLocal, PORTA_API_LOCAL, PORTA_ERP_LOCAL } from './trava-url.ts'
+import { verificarTravaLocal } from './trava.ts'
+import { ORIGEM_API_LOCAL, valorEnv as valorEnvBase } from './base.ts'
 import { coletar } from './coletor.ts'
 import { type Falha, type TipoFalha, gravidadeDoTipo } from './relatorio.ts'
 import {
@@ -27,15 +28,13 @@ function sair(msg: string, codigo = 2): never {
 }
 
 // ---- 1) Trava: só a cópia local, Omie bloqueado ----
-const urlBase = process.env.ROBO_URL_BASE ?? `http://127.0.0.1:${PORTA_ERP_LOCAL}`
-const v = validarUrlBase(urlBase)
-if (!v.ok) sair(v.motivo)
-const ORIGEM = v.origem
-const envTexto = fs.existsSync(path.join(RAIZ, '.env.local')) ? fs.readFileSync(path.join(RAIZ, '.env.local'), 'utf8') : sair('.env.local da cópia local não existe')
-const va = validarAmbienteLocal(envTexto)
-if (!va.ok) sair(va.motivo)
-const API = `http://127.0.0.1:${PORTA_API_LOCAL}`
-const valorEnv = (k: string) => envTexto.match(new RegExp(`^${k}=(.*)$`, 'm'))?.[1].trim().replace(/^["']|["']$/g, '') ?? ''
+const trava = await verificarTravaLocal(RAIZ)
+if (!trava.ok) sair(trava.motivo)
+const ORIGEM = trava.origem
+const envLocal = path.join(RAIZ, '.env.local')
+const envTexto = trava.envTexto
+const API = ORIGEM_API_LOCAL
+const valorEnv = (k: string) => valorEnvBase(envTexto, k) ?? ''
 const CHAVE = valorEnv('SUPABASE_SERVICE_ROLE_KEY')
 if (!CHAVE) sair('SUPABASE_SERVICE_ROLE_KEY ausente no .env.local')
 

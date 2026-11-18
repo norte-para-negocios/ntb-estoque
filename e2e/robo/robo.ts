@@ -5,7 +5,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { chromium, type BrowserContext, type Page } from 'playwright'
-import { validarUrlBase, validarAmbienteLocal, PORTA_API_LOCAL, PORTA_ERP_LOCAL } from './trava-url.ts'
+import { verificarTravaLocal } from './trava.ts'
+import { ORIGEM_API_LOCAL, lerLoginsTeste } from './base.ts'
 import { coletar } from './coletor.ts'
 import {
   gravidadeDoTipo, formatarListaFalhas, formatarInventario, valoresInvalidos, ehPaginaNaoEncontrada, ordenarFalhas,
@@ -22,15 +23,12 @@ function sair(msg: string, codigo = 2): never {
 }
 
 // ---- 1) Trava: URL base local, ambiente local, Omie bloqueado ----
-const urlBase = process.env.ROBO_URL_BASE ?? `http://127.0.0.1:${PORTA_ERP_LOCAL}`
-const v = validarUrlBase(urlBase)
-if (!v.ok) sair(v.motivo)
-const ORIGEM = v.origem
+const trava = await verificarTravaLocal(RAIZ)
+if (!trava.ok) sair(trava.motivo)
+const ORIGEM = trava.origem
 const envLocal = path.join(RAIZ, '.env.local')
-if (!fs.existsSync(envLocal)) sair('.env.local da cópia local não existe (rode scripts/local/local.sh subir)')
-const va = validarAmbienteLocal(fs.readFileSync(envLocal, 'utf8'))
-if (!va.ok) sair(va.motivo)
-const ORIGEM_API = `http://127.0.0.1:${PORTA_API_LOCAL}`
+const envTexto = trava.envTexto
+const ORIGEM_API = ORIGEM_API_LOCAL
 
 // ---- 2) Rotas do menu real (extraídas do código) ----
 const { NAV_ITEMS } = (await import('../../components/shell/NavItems.ts')) as { NAV_ITEMS: { href: string }[] }
@@ -39,10 +37,7 @@ const ROTAS_NAV = [...new Set(NAV_ITEMS.map((i) => i.href))].sort()
 // ---- 3) Logins de teste ----
 type Login = { email: string; senha: string; loja: string; lojaNome: string; cargo: string }
 const logins: Login[] = []
-for (const l of fs.readFileSync(path.join(RAIZ, '.local-data', 'logins.txt'), 'utf8').split('\n')) {
-  const m = l.match(/^(\S+@ntb-teste\.local)\s+(\S+)\s+loja=(\d+)\s+cargo=(\w+)/)
-  if (m) logins.push({ email: m[1], senha: m[2], loja: m[3], lojaNome: NOMES_LOJA[m[3]] ?? `Loja ${m[3]}`, cargo: m[4] })
-}
+for (const m of lerLoginsTeste(RAIZ)) logins.push({ ...m, lojaNome: NOMES_LOJA[m.loja] ?? `Loja ${m.loja}` })
 if (!logins.length) sair('.local-data/logins.txt sem logins de teste')
 const filtro = process.env.ROBO_SO // ex.: ROBO_SO=dono.sertao (depuração)
 const alvo = filtro ? logins.filter((l) => l.email.startsWith(filtro)) : logins

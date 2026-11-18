@@ -3,9 +3,15 @@ import assert from 'node:assert/strict'
 import { ETAPAS, montarPlano, formatarPlano } from './tudo-plano.ts'
 
 test('a ordem da suíte é a combinada e cada etapa aponta para um script npm robo:*', () => {
-  assert.deepEqual(ETAPAS.map((e) => e.id), ['passeio', 'saldo', 'financeiro', 'permissoes', 'entrada', 'venda', 'inventario', 'compras', 'cozinha', 'cmv'])
+  assert.deepEqual(ETAPAS.map((e) => e.id), ['passeio', 'saldo', 'permissoes', 'entrada', 'venda', 'inventario', 'compras', 'financeiro', 'cozinha', 'cmv'])
   assert.equal(ETAPAS[0].script, 'robo')
   for (const e of ETAPAS.slice(1)) assert.equal(e.script, `robo:${e.id}`)
+})
+
+test('o financeiro roda DEPOIS dos robôs que geram títulos (entrada e compras), senão compara zero com zero', () => {
+  const ordem = ETAPAS.map((e) => e.id)
+  assert.ok(ordem.indexOf('financeiro') > ordem.indexOf('entrada'))
+  assert.ok(ordem.indexOf('financeiro') > ordem.indexOf('compras'))
 })
 
 test('os robôs que escrevem na cópia estão marcados (e são os quatro que resetam no fim)', () => {

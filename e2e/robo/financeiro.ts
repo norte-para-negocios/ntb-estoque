@@ -5,7 +5,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { chromium, type Page } from 'playwright'
-import { validarUrlBase, validarAmbienteLocal, PORTA_API_LOCAL, PORTA_ERP_LOCAL } from './trava-url.ts'
+import { verificarTravaLocal } from './trava.ts'
+import { PORTA_PG_LOCAL, ORIGEM_API_LOCAL } from './base.ts'
 import { formatarListaFalhas, gravidadeDoTipo, ordenarFalhas, ehPaginaNaoEncontrada, type Falha, type TipoFalha } from './relatorio.ts'
 import { criarLeitor } from './financeiro/banco.ts'
 import {
@@ -20,14 +21,12 @@ const LOJAS = [{ id: 4, nome: 'Sertão' }, { id: 15, nome: 'ODARA' }, { id: 19, 
 const CHAVE_LIGADA_DESDE: Record<number, string> = { 19: '2026-11-05T22:49:00Z' }
 
 const sair = (m: string): never => { console.error(`ROBÔ RECUSOU RODAR: ${m}`); process.exit(2) }
-const v = validarUrlBase(process.env.ROBO_URL_BASE ?? `http://127.0.0.1:${PORTA_ERP_LOCAL}`)
-if (!v.ok) sair(v.motivo)
-const ORIGEM = (v as { origem: string }).origem
+const trava = await verificarTravaLocal(RAIZ)
+if (!trava.ok) sair(trava.motivo)
+const ORIGEM = trava.origem
 const envLocal = path.join(RAIZ, '.env.local')
-if (!fs.existsSync(envLocal)) sair('.env.local da cópia local não existe')
-const va = validarAmbienteLocal(fs.readFileSync(envLocal, 'utf8'))
-if (!va.ok) sair(va.motivo)
-const ORIGEM_API = `http://127.0.0.1:${PORTA_API_LOCAL}`
+const envTexto = trava.envTexto
+const ORIGEM_API = ORIGEM_API_LOCAL
 
 const ID = process.env.ROBO_RODADA ?? new Date().toISOString().replace(/[:.]/g, '-')
 const SAIDA = path.join(RAIZ, '.local-data', 'robo-financeiro', ID)

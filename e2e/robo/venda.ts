@@ -13,13 +13,13 @@ import crypto from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import pg from 'pg'
 import { chromium, type Page, type BrowserContext } from 'playwright'
-import { validarUrlBase, validarAmbienteLocal, PORTA_ERP_LOCAL } from './trava-url.ts'
+import { verificarTravaLocal } from './trava.ts'
+import { PORTA_PG_LOCAL, ORIGEM_API_LOCAL, valorEnv, lerLoginsTeste } from './base.ts'
 import { formatarListaFalhas, ordenarFalhas, type Falha, type TipoFalha } from './relatorio.ts'
 import { parseDec, fmtDec, lerNumeroBR } from './saldo-gabarito.ts'
 import { movimentosEsperados, saldoLiquido, resolverLocal, consumoDaFicha, type FichaGab, type ItemVendaGab, type LojaGab, type MovEsperado } from './venda-gabarito.ts'
 
 const RAIZ = path.resolve(import.meta.dirname, '..', '..')
-const PORTA_PG_LOCAL = 54420
 
 function sair(msg: string): never {
   console.error(`ROBÔ RECUSOU RODAR: ${msg}`)
@@ -27,24 +27,18 @@ function sair(msg: string): never {
 }
 
 // ---- Trava: só a cópia local, com a trava do Omie ligada ----
-const v = validarUrlBase(process.env.ROBO_URL_BASE ?? `http://127.0.0.1:${PORTA_ERP_LOCAL}`)
-if (!v.ok) sair(v.motivo)
-const ORIGEM = v.origem
+const trava = await verificarTravaLocal(RAIZ)
+if (!trava.ok) sair(trava.motivo)
+const ORIGEM = trava.origem
 const envLocal = path.join(RAIZ, '.env.local')
-if (!fs.existsSync(envLocal)) sair('.env.local da cópia local não existe')
-const envTexto = fs.readFileSync(envLocal, 'utf8')
-const va = validarAmbienteLocal(envTexto)
-if (!va.ok) sair(va.motivo)
-const CRON_SECRET = envTexto.match(/^CRON_SECRET=(.*)$/m)?.[1]?.trim().replace(/^["']|["']$/g, '')
+const envTexto = trava.envTexto
+const CRON_SECRET = valorEnv(envTexto, 'CRON_SECRET') ?? undefined
 const senhaPg = fs.readFileSync(path.join(RAIZ, '.local-data', 'env'), 'utf8').match(/^POSTGRES_PASSWORD=(.*)$/m)?.[1]?.trim()
 if (!senhaPg) sair('POSTGRES_PASSWORD ausente em .local-data/env')
 
 function lerLogins() {
   const m = new Map<number, { email: string; senha: string }>()
-  for (const l of fs.readFileSync(path.join(RAIZ, '.local-data', 'logins.txt'), 'utf8').split('\n')) {
-    const x = l.match(/^(\S+@ntb-teste\.local)\s+(\S+)\s+loja=(\d+)\s+cargo=dono/)
-    if (x) m.set(Number(x[3]), { email: x[1], senha: x[2] })
-  }
+  for (const l of lerLoginsTeste(RAIZ)) if (l.cargo === 'dono') m.set(Number(l.loja), { email: l.email, senha: l.senha })
   return m
 }
 let logins = lerLogins()
@@ -139,7 +133,7 @@ async function novoContexto(browser: Awaited<ReturnType<typeof chromium.launch>>
   const ctx = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', reducedMotion: 'reduce' })
   await ctx.route('**/*', (rota) => {
     const u = new URL(rota.request().url())
-    if (u.protocol === 'data:' || u.protocol === 'blob:' || u.origin === ORIGEM || u.origin === 'http://127.0.0.1:54421') return rota.continue()
+    if (u.protocol === 'data:' || u.protocol === 'blob:' || u.origin === ORIGEM || u.origin === ORIGEM_API_LOCAL) return rota.continue()
     externos.push(`${rota.request().method()} ${u.origin}${u.pathname}`)
     return rota.abort('blockedbyclient')
   })

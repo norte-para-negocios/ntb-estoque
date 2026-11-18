@@ -12,7 +12,8 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import pg from 'pg'
 import { chromium, type Page, type BrowserContext } from 'playwright'
-import { validarUrlBase, validarAmbienteLocal, PORTA_ERP_LOCAL, PORTA_API_LOCAL } from './trava-url.ts'
+import { verificarTravaLocal } from './trava.ts'
+import { PORTA_PG_LOCAL, ORIGEM_API_LOCAL } from './base.ts'
 import { coletar } from './coletor.ts'
 import { formatarListaFalhas, ordenarFalhas, ehPaginaNaoEncontrada, valoresInvalidos, gravidadeDoTipo, type Falha, type TipoFalha } from './relatorio.ts'
 import {
@@ -21,18 +22,15 @@ import {
 } from './cozinha-gabarito.ts'
 
 const RAIZ = path.resolve(import.meta.dirname, '..', '..')
-const PORTA_PG_LOCAL = 54420
 const sair = (msg: string): never => { console.error(`ROBÔ RECUSOU RODAR: ${msg}`); process.exit(2) }
 
 // ---- Trava ----
-const v = validarUrlBase(process.env.ROBO_URL_BASE ?? `http://127.0.0.1:${PORTA_ERP_LOCAL}`)
-if (!v.ok) sair(v.motivo)
-const ORIGEM = (v as { origem: string }).origem
-const ORIGEM_API = `http://127.0.0.1:${PORTA_API_LOCAL}`
+const trava = await verificarTravaLocal(RAIZ)
+if (!trava.ok) sair(trava.motivo)
+const ORIGEM = trava.origem
 const envLocal = path.join(RAIZ, '.env.local')
-if (!fs.existsSync(envLocal)) sair('.env.local da cópia local não existe')
-const va = validarAmbienteLocal(fs.readFileSync(envLocal, 'utf8'))
-if (!va.ok) sair(va.motivo)
+const envTexto = trava.envTexto
+const ORIGEM_API = ORIGEM_API_LOCAL
 const senhaPg = fs.readFileSync(path.join(RAIZ, '.local-data', 'env'), 'utf8').match(/^POSTGRES_PASSWORD=(.*)$/m)?.[1]?.trim()
 if (!senhaPg) sair('POSTGRES_PASSWORD ausente em .local-data/env')
 

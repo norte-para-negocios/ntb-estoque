@@ -10,7 +10,8 @@ import crypto from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import pg from 'pg'
 import { chromium, type Page, type BrowserContext } from 'playwright'
-import { validarUrlBase, validarAmbienteLocal, PORTA_ERP_LOCAL } from './trava-url.ts'
+import { verificarTravaLocal } from './trava.ts'
+import { PORTA_PG_LOCAL, ORIGEM_API_LOCAL } from './base.ts'
 import { formatarListaFalhas, ordenarFalhas, ehPaginaNaoEncontrada, type Falha, type TipoFalha } from './relatorio.ts'
 import { parseDec, fmtDec } from './saldo-gabarito.ts'
 import { custoUnitarioBase, novoEstado, quantidadeBase, titulosEsperados, valorEmEstoqueCent, arredondarTexto, type ItemNota } from './custo-gabarito.ts'
@@ -18,7 +19,6 @@ import { totalPedido, proximaEtapa, recebimento, situacaoNaNota, type EtapaGrava
 import { montarXmlAssinado } from './entrada-xml.ts'
 
 const RAIZ = path.resolve(import.meta.dirname, '..', '..')
-const PORTA_PG_LOCAL = 54420
 
 function sair(msg: string): never {
   console.error(`ROBÔ RECUSOU RODAR: ${msg}`)
@@ -26,13 +26,11 @@ function sair(msg: string): never {
 }
 
 // ---- Trava: só a cópia local, com a trava do Omie ligada ----
-const v = validarUrlBase(process.env.ROBO_URL_BASE ?? `http://127.0.0.1:${PORTA_ERP_LOCAL}`)
-if (!v.ok) sair(v.motivo)
-const ORIGEM = v.origem
+const trava = await verificarTravaLocal(RAIZ)
+if (!trava.ok) sair(trava.motivo)
+const ORIGEM = trava.origem
 const envLocal = path.join(RAIZ, '.env.local')
-if (!fs.existsSync(envLocal)) sair('.env.local da cópia local não existe')
-const va = validarAmbienteLocal(fs.readFileSync(envLocal, 'utf8'))
-if (!va.ok) sair(va.motivo)
+const envTexto = trava.envTexto
 const senhaPg = fs.readFileSync(path.join(RAIZ, '.local-data', 'env'), 'utf8').match(/^POSTGRES_PASSWORD=(.*)$/m)?.[1]?.trim()
 if (!senhaPg) sair('POSTGRES_PASSWORD ausente em .local-data/env')
 
@@ -103,7 +101,7 @@ async function novoContexto(browser: Awaited<ReturnType<typeof chromium.launch>>
   const ctx = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', reducedMotion: 'reduce' })
   await ctx.route('**/*', (rota) => {
     const u = new URL(rota.request().url())
-    if (u.protocol === 'data:' || u.protocol === 'blob:' || u.origin === ORIGEM || u.origin === 'http://127.0.0.1:54421') return rota.continue()
+    if (u.protocol === 'data:' || u.protocol === 'blob:' || u.origin === ORIGEM || u.origin === ORIGEM_API_LOCAL) return rota.continue()
     externos.push(`${rota.request().method()} ${u.origin}${u.pathname}`)
     return rota.abort('blockedbyclient')
   })
@@ -699,7 +697,6 @@ const fotoAntes = await foto()
 const extraAntes = Object.fromEntries(await Promise.all([4, 15, 19].map(async (l) => [l, await lojaExtra(l)])))
 fs.writeFileSync(path.join(SAIDA, 'foto-antes.json'), JSON.stringify({ fotoAntes, extraAntes }, null, 1))
 console.log(`foto do estado inicial guardada (${Object.keys(fotoAntes).length} itens)`)
-const envTexto = fs.readFileSync(envLocal, 'utf8')
 const gravarPedidosOmie = /^OMIE_GRAVAR_PEDIDOS_COMPRA=1/m.test(envTexto)
 conferir('(ambiente)', '.env.local', 'OMIE_GRAVAR_PEDIDOS_COMPRA não está ligado na cópia local (pedido de loja Omie nunca é gravado no Omie)', 'desligado', gravarPedidosOmie ? 'ligado' : 'desligado', 'prints/(sem print)', 'tela-quebrada')
 const varr = varreduraEstatica()

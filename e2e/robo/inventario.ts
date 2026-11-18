@@ -14,14 +14,14 @@ import crypto from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import pg from 'pg'
 import { chromium, type Page, type BrowserContext } from 'playwright'
-import { validarUrlBase, validarAmbienteLocal, PORTA_ERP_LOCAL } from './trava-url.ts'
+import { verificarTravaLocal } from './trava.ts'
+import { PORTA_PG_LOCAL, ORIGEM_API_LOCAL } from './base.ts'
 import { formatarListaFalhas, ordenarFalhas, ehPaginaNaoEncontrada, type Falha, type TipoFalha } from './relatorio.ts'
 import { parseDec, fmtDec, saldoPorLedger, type MovLedger } from './saldo-gabarito.ts'
 import { arredondarTexto } from './custo-gabarito.ts'
 import { ajusteEsperado, exigeMotivoEsperado } from './inventario-gabarito.ts'
 
 const RAIZ = path.resolve(import.meta.dirname, '..', '..')
-const PORTA_PG_LOCAL = 54420
 
 function sair(msg: string): never {
   console.error(`ROBÔ RECUSOU RODAR: ${msg}`)
@@ -29,13 +29,11 @@ function sair(msg: string): never {
 }
 
 // ---- Trava: só a cópia local, com a trava do Omie ligada ----
-const v = validarUrlBase(process.env.ROBO_URL_BASE ?? `http://127.0.0.1:${PORTA_ERP_LOCAL}`)
-if (!v.ok) sair(v.motivo)
-const ORIGEM = v.origem
+const trava = await verificarTravaLocal(RAIZ)
+if (!trava.ok) sair(trava.motivo)
+const ORIGEM = trava.origem
 const envLocal = path.join(RAIZ, '.env.local')
-if (!fs.existsSync(envLocal)) sair('.env.local da cópia local não existe')
-const va = validarAmbienteLocal(fs.readFileSync(envLocal, 'utf8'))
-if (!va.ok) sair(va.motivo)
+const envTexto = trava.envTexto
 const senhaPg = fs.readFileSync(path.join(RAIZ, '.local-data', 'env'), 'utf8').match(/^POSTGRES_PASSWORD=(.*)$/m)?.[1]?.trim()
 if (!senhaPg) sair('POSTGRES_PASSWORD ausente em .local-data/env')
 
@@ -139,7 +137,7 @@ async function novoContexto(browser: Awaited<ReturnType<typeof chromium.launch>>
   const ctx = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', reducedMotion: 'reduce' })
   await ctx.route('**/*', (rota) => {
     const u = new URL(rota.request().url())
-    if (u.protocol === 'data:' || u.protocol === 'blob:' || u.origin === ORIGEM || u.origin === 'http://127.0.0.1:54421') return rota.continue()
+    if (u.protocol === 'data:' || u.protocol === 'blob:' || u.origin === ORIGEM || u.origin === ORIGEM_API_LOCAL) return rota.continue()
     externos.push(`${rota.request().method()} ${u.origin}${u.pathname}`)
     return rota.abort('blockedbyclient')
   })

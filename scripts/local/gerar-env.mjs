@@ -47,5 +47,14 @@ NTB_OMIE_BLOQUEADO=1
 OMIE_FIN_DESLIGADO=1
 NTB_VENDAS_INTERNAL_URL=
 `
-fs.writeFileSync(path.join(raiz, '.env.local'), envLocal, { mode: 0o600 })
+const destino = path.join(raiz, '.env.local')
+if (fs.existsSync(destino) && fs.readFileSync(destino, 'utf8') !== envLocal) {
+  const d = new Date(), p2 = (n) => String(n).padStart(2, '0')
+  const carimbo = `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`
+  const backup = `${destino}.bak-${carimbo}`
+  fs.copyFileSync(destino, backup)
+  fs.chmodSync(backup, 0o600)
+  console.log(`AVISO: o .env.local existente era diferente e foi sobrescrito; cópia guardada em ${path.basename(backup)} (ignorada pelo git, pode conter segredos).`)
+}
+fs.writeFileSync(destino, envLocal, { mode: 0o600 })
 console.log('env ok: .local-data/env e .env.local')

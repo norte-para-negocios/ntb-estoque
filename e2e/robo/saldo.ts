@@ -6,7 +6,8 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import pg from 'pg'
 import { chromium, type Page } from 'playwright'
-import { validarUrlBase, validarAmbienteLocal, PORTA_ERP_LOCAL } from './trava-url.ts'
+import { verificarTravaLocal } from './trava.ts'
+import { PORTA_PG_LOCAL, ORIGEM_API_LOCAL } from './base.ts'
 import { formatarListaFalhas, ordenarFalhas, type Falha } from './relatorio.ts'
 import { saldoPorLedger, saldoPorKardex, somarLocais, compararSaldos, lerNumeroBR, fmtDec, parseDec, type Dec, type MovKardex } from './saldo-gabarito.ts'
 
@@ -16,7 +17,6 @@ const LOJAS = [
   { id: 15, nome: 'ODARA', modo: 'proprio' as const },
   { id: 19, nome: 'Loja 19', modo: 'proprio' as const },
 ]
-const PORTA_PG_LOCAL = 54420
 const POR_PAGINA = 50
 
 function sair(msg: string): never {
@@ -25,13 +25,11 @@ function sair(msg: string): never {
 }
 
 // ---- Trava: só a cópia local ----
-const v = validarUrlBase(process.env.ROBO_URL_BASE ?? `http://127.0.0.1:${PORTA_ERP_LOCAL}`)
-if (!v.ok) sair(v.motivo)
-const ORIGEM = v.origem
+const trava = await verificarTravaLocal(RAIZ)
+if (!trava.ok) sair(trava.motivo)
+const ORIGEM = trava.origem
 const envLocal = path.join(RAIZ, '.env.local')
-if (!fs.existsSync(envLocal)) sair('.env.local da cópia local não existe')
-const va = validarAmbienteLocal(fs.readFileSync(envLocal, 'utf8'))
-if (!va.ok) sair(va.motivo)
+const envTexto = trava.envTexto
 const senhaPg = fs.readFileSync(path.join(RAIZ, '.local-data', 'env'), 'utf8').match(/^POSTGRES_PASSWORD=(.*)$/m)?.[1]?.trim()
 if (!senhaPg) sair('POSTGRES_PASSWORD ausente em .local-data/env')
 
@@ -138,7 +136,7 @@ for (const loja of LOJAS) {
   const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 }, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', reducedMotion: 'reduce' })
   await ctx.route('**/*', (rota) => {
     const u = new URL(rota.request().url())
-    return u.protocol === 'data:' || u.protocol === 'blob:' || u.origin === ORIGEM || u.origin === 'http://127.0.0.1:54421' ? rota.continue() : rota.abort('blockedbyclient')
+    return u.protocol === 'data:' || u.protocol === 'blob:' || u.origin === ORIGEM || u.origin === ORIGEM_API_LOCAL ? rota.continue() : rota.abort('blockedbyclient')
   })
   const page = await ctx.newPage()
   page.setDefaultTimeout(30000)

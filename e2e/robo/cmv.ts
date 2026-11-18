@@ -8,7 +8,8 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import pg from 'pg'
 import { chromium, type Page } from 'playwright'
-import { validarUrlBase, validarAmbienteLocal, PORTA_ERP_LOCAL } from './trava-url.ts'
+import { verificarTravaLocal } from './trava.ts'
+import { PORTA_PG_LOCAL, ORIGEM_API_LOCAL, valorEnv, lerLoginsTeste } from './base.ts'
 import { formatarListaFalhas, ordenarFalhas, valoresInvalidos, ehPaginaNaoEncontrada, type Falha } from './relatorio.ts'
 import { lerNumeroBR, type Dec } from './saldo-gabarito.ts'
 import {
@@ -22,7 +23,6 @@ const LOJAS = [
   { id: 15, nome: 'ODARA', modo: 'proprio' as const, meses: ['2026-10', '2026-11'], diario: [['2026-10-01', 'HOJE']] },
   { id: 19, nome: 'Loja 19', modo: 'proprio' as const, meses: ['2026-10', '2026-11'], diario: [['2026-10-01', 'HOJE']] },
 ]
-const PORTA_PG_LOCAL = 54420
 const TOL_FAT = dec('0.01')
 const TOL_CMV_TOTAL = dec('0.10')
 const TOL_CMV_LINHA = dec('0.05')
@@ -34,21 +34,16 @@ function sair(msg: string): never {
 }
 
 // ---- Trava: só a cópia local ----
-const v = validarUrlBase(process.env.ROBO_URL_BASE ?? `http://127.0.0.1:${PORTA_ERP_LOCAL}`)
-if (!v.ok) sair(v.motivo)
-const ORIGEM = v.origem
+const trava = await verificarTravaLocal(RAIZ)
+if (!trava.ok) sair(trava.motivo)
+const ORIGEM = trava.origem
 const envLocal = path.join(RAIZ, '.env.local')
-if (!fs.existsSync(envLocal)) sair('.env.local da cópia local não existe')
-const va = validarAmbienteLocal(fs.readFileSync(envLocal, 'utf8'))
-if (!va.ok) sair(va.motivo)
+const envTexto = trava.envTexto
 const senhaPg = fs.readFileSync(path.join(RAIZ, '.local-data', 'env'), 'utf8').match(/^POSTGRES_PASSWORD=(.*)$/m)?.[1]?.trim()
 if (!senhaPg) sair('POSTGRES_PASSWORD ausente em .local-data/env')
 
 const logins = new Map<number, { email: string; senha: string }>()
-for (const l of fs.readFileSync(path.join(RAIZ, '.local-data', 'logins.txt'), 'utf8').split('\n')) {
-  const m = l.match(/^(\S+@ntb-teste\.local)\s+(\S+)\s+loja=(\d+)\s+cargo=dono/)
-  if (m) logins.set(Number(m[3]), { email: m[1], senha: m[2] })
-}
+for (const l of lerLoginsTeste(RAIZ)) if (l.cargo === 'dono') logins.set(Number(l.loja), { email: l.email, senha: l.senha })
 
 const ID_RODADA = process.env.ROBO_RODADA ?? new Date().toISOString().replace(/[:.]/g, '-')
 const SAIDA = path.join(RAIZ, '.local-data', 'robo-cmv', ID_RODADA)
@@ -248,7 +243,7 @@ for (const loja of LOJAS) {
   const ctx = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', reducedMotion: 'reduce' })
   await ctx.route('**/*', (rota) => {
     const u = new URL(rota.request().url())
-    return u.protocol === 'data:' || u.protocol === 'blob:' || u.origin === ORIGEM || u.origin === 'http://127.0.0.1:54421' ? rota.continue() : rota.abort('blockedbyclient')
+    return u.protocol === 'data:' || u.protocol === 'blob:' || u.origin === ORIGEM || u.origin === ORIGEM_API_LOCAL ? rota.continue() : rota.abort('blockedbyclient')
   })
   const page = await ctx.newPage()
   page.setDefaultTimeout(30000)
@@ -328,8 +323,8 @@ for (const loja of LOJAS) {
     if (!d.temTabela && gTotal !== 0n) f({ tipo: 'tela-vazia', gravidade: 2, loja: loja.nome, tela: '/relatorio-faturamento?ver=diario', passo: `abrir Por dia ${ini} a ${fim}`, esperado: 'tabela dia a dia', mostrado: 'sem tabela', print: `prints/${pr}` })
   }
   if (omie) {
-    const env = fs.readFileSync(envLocal, 'utf8')
-    const val = (k: string) => env.match(new RegExp(`^${k}=(.*)$`, 'm'))?.[1]?.trim().replace(/^["']|["']$/g, '') ?? ''
+    const env = envTexto
+    const val = (k: string) => valorEnv(env, k) ?? ''
     const url = val('NTB_FRIO_API_URL'), key = val('NTB_FRIO_API_KEY')
     if (/^http:\/\/(127\.0\.0\.1|localhost):54422/.test(url) && key) {
       for (const [ini0, fim0] of loja.diario) {

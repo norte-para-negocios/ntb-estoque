@@ -17,12 +17,12 @@ export type Etapa = {
 export const ETAPAS: Etapa[] = [
   { id: 'passeio', script: 'robo', ticket: '02', descricao: 'passeio por todas as telas, 9 logins', saida: 'robo', duracao: '~10 min', escreve: false, filtros: ['ROBO_SO', 'ROBO_PARALELO'] },
   { id: 'saldo', script: 'robo:saldo', ticket: '03', descricao: 'saldo de estoque contra o gabarito', saida: 'robo-saldo', duracao: 'poucos min', escreve: false, filtros: [] },
-  { id: 'financeiro', script: 'robo:financeiro', ticket: '09', descricao: 'contas a pagar/receber e contas correntes', saida: 'robo-financeiro', duracao: 'poucos min', escreve: false, filtros: ['ROBO_SEM_CORTE'] },
   { id: 'permissoes', script: 'robo:permissoes', ticket: '10', descricao: 'matriz cargo x tela/ação/API', saida: 'robo-permissoes', duracao: '~5 min', escreve: false, filtros: ['ROBO_SO', 'ROBO_PARALELO'] },
   { id: 'entrada', script: 'robo:entrada', ticket: '04', descricao: 'nota de entrada e custo médio', saida: 'robo-entrada', duracao: '~5 min + reset', escreve: true, filtros: ['ROBO_CENARIOS', 'ROBO_SEM_RESET'] },
   { id: 'venda', script: 'robo:venda', ticket: '05', descricao: 'venda do Vendas, baixa e OP', saida: 'robo-venda', duracao: '~7 min + reset', escreve: true, filtros: ['ROBO_CENARIOS', 'ROBO_SEM_RESET'] },
   { id: 'inventario', script: 'robo:inventario', ticket: '06', descricao: 'inventário e ajuste', saida: 'robo-inventario', duracao: '~15 min + resets', escreve: true, filtros: ['ROBO_CENARIOS', 'ROBO_SEM_RESET'] },
   { id: 'compras', script: 'robo:compras', ticket: '07', descricao: 'pedido de compra ao recebimento', saida: 'robo-compras', duracao: '~6 min + reset', escreve: true, filtros: ['ROBO_CENARIOS', 'ROBO_SEM_RESET'] },
+  { id: 'financeiro', script: 'robo:financeiro', ticket: '09', descricao: 'contas a pagar/receber e contas correntes', saida: 'robo-financeiro', duracao: 'poucos min', escreve: false, filtros: ['ROBO_SEM_CORTE'] },
   { id: 'cozinha', script: 'robo:cozinha', ticket: '11', descricao: 'área /cozinha do ERP', saida: 'robo-cozinha', duracao: '~16 min', escreve: false, filtros: ['ROBO_LOJAS', 'ROBO_INSUMOS_DETALHE'] },
   { id: 'cmv', script: 'robo:cmv', ticket: '08', descricao: 'faturamento e CMV contra o gabarito', saida: 'robo-cmv', duracao: '~1 min', escreve: false, filtros: [] },
 ]
