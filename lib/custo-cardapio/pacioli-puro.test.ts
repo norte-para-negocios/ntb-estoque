@@ -144,3 +144,17 @@ test('prompt da loja leva meta e taxas', () => {
   assert.match(s, /10\/11\/2026/)
   assert.match(s, /120 pratos/)
 })
+
+test('F-12: Pacioli usa a mesma regra das telas (acima = mais de 5 pontos) e diz quantos estão perto do limite', () => {
+  const r = textoAcima({ meta: 0.3, limite: 0.35, margem: 0.05, perto: 10, total: 8, pratos: [{ ...prato, sugeridoSalao: 99.9 }], naoConfiaveis: 0 })
+  assert.match(r.texto, /\*\*8 pratos acima da meta\*\*/)
+  assert.match(r.texto, /mais de 5 pontos sobre a meta de 30%/)
+  assert.match(r.texto, /Mais 10 perto do limite \(entre 30% e 35% de CMV\)/)
+  assert.doesNotMatch(r.texto, /18/)
+  const um = textoAcima({ meta: 0.3, limite: 0.35, margem: 0.05, perto: 0, total: 1, pratos: [{ ...prato, sugeridoSalao: 99.9 }], naoConfiaveis: 0 })
+  assert.match(um.texto, /\*\*1 prato acima da meta\*\*/)
+  const zero = textoAcima({ meta: 0.3, limite: 0.35, margem: 0.05, perto: 3, total: 0, pratos: [], naoConfiaveis: 0 })
+  assert.ok(zero.tudoCerto)
+  assert.match(zero.texto, /Nenhum prato acima da meta/)
+  assert.match(zero.texto, /Mais 3 perto do limite/)
+})

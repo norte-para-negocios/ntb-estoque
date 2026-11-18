@@ -2,7 +2,7 @@ import 'server-only'
 import type Anthropic from '@anthropic-ai/sdk'
 import { arvoreCustoFicha, type ArvoreCusto, type NoArvore } from '@/lib/estoque/arvore-custo-puro'
 import { arvoreDoPrato, linhasDoCardapio, type BaseCusto, type LinhaPrato } from './carregar'
-import { arredondarPreco, cmv as calcCmv, precoReal, precoSugeridoDelivery, precoSugeridoSalao, resumir, sobraPorVenda } from './preco-puro'
+import { arredondarPreco, cmv as calcCmv, cmvAcimaDaMeta, MARGEM_PERTO_DO_LIMITE, precoReal, precoSugeridoDelivery, precoSugeridoSalao, resumir, sobraPorVenda } from './preco-puro'
 import { saldosDaLoja } from './saldos'
 import {
   buscar, textoAcima, textoDetalhe, textoOnde, textoPesam, textoResumo, textoSaldo, textoSimular, textoSugerir,
@@ -95,14 +95,20 @@ function detalhePrato(c: Contexto, codigo: number): RDetalhe | { erro: string } 
 
 function pratosAcima(c: Contexto, limite: number | null): RAcima {
   const meta = c.base.taxas.metaCmv
-  const lim = limite ?? meta
   const pratos = c.linhas.filter((l) => l.tipo === 'prato' && precoReal(l.preco))
-  const acima = pratos.filter((l) => confiavel(l) && (l.cmv ?? 0) > lim + 1e-9).sort((a, b) => (b.cmv ?? 0) - (a.cmv ?? 0))
-  return {
-    meta, limite: lim, total: acima.length,
-    pratos: acima.slice(0, 12).map((l) => ({ ...pratoCurto(l), sugeridoSalao: arredondarPreco(l.sugeridoSalao) })),
-    naoConfiaveis: pratos.filter((l) => !confiavel(l) && l.situacao !== 'sem_preco').length,
+  const naoConfiaveis = pratos.filter((l) => !confiavel(l) && l.situacao !== 'sem_preco').length
+  const ordenar = (a: LinhaPrato, b: LinhaPrato) => (b.cmv ?? 0) - (a.cmv ?? 0)
+  const curto = (l: LinhaPrato) => ({ ...pratoCurto(l), sugeridoSalao: arredondarPreco(l.sugeridoSalao) })
+  if (limite == null) {
+    // Regra única das telas (F-12): "acima da meta" = situação `acima` (mais de 5 pontos sobre a meta), igual ao Início e à lista de Pratos.
+    const acima = pratos.filter((l) => l.situacao === 'acima').sort(ordenar)
+    return {
+      meta, limite: cmvAcimaDaMeta(meta), margem: MARGEM_PERTO_DO_LIMITE, perto: pratos.filter((l) => l.situacao === 'atencao').length,
+      total: acima.length, pratos: acima.slice(0, 12).map(curto), naoConfiaveis,
+    }
   }
+  const acima = pratos.filter((l) => confiavel(l) && (l.cmv ?? 0) > limite + 1e-9).sort(ordenar)
+  return { meta, limite, total: acima.length, pratos: acima.slice(0, 12).map(curto), naoConfiaveis }
 }
 
 function sugerirPreco(c: Contexto, codigo: number, canal: 'salao' | 'delivery'): RSugerir | { erro: string } {
@@ -300,7 +306,7 @@ export const FERRAMENTAS: Anthropic.Beta.BetaTool[] = [
   { name: 'buscar_prato', description: 'Procura pratos e preparações com ficha técnica pelo nome (aceita erro de digitação e falta de acento). Devolve código, link, preço, custo e CMV dos mais parecidos.', input_schema: obj({ texto: { type: 'string', description: 'Nome ou parte do nome do prato.' } }, ['texto']) },
   { name: 'buscar_insumo', description: 'Procura insumos que aparecem em alguma ficha pelo nome. Devolve código, unidade e custo atual por unidade.', input_schema: obj({ texto: { type: 'string', description: 'Nome ou parte do nome do insumo.' } }, ['texto']) },
   { name: 'detalhe_prato', description: 'Ficha do prato com o custo de cada item (maiores primeiro), preço, CMV, situação contra a meta e preços sugeridos para salão e delivery.', input_schema: obj({ codigo: { type: 'integer', description: 'Código do prato (de buscar_prato).' } }, ['codigo']) },
-  { name: 'pratos_acima_da_meta', description: 'Pratos com preço cujo CMV passa do limite (padrão: a meta da loja), do pior para o melhor, com o preço de salão que bate a meta. Pratos com custo não confiável ficam de fora e são contados.', input_schema: obj({ limite: { type: 'number', description: 'CMV limite em fração (0.35 = 35%). Opcional.' } }) },
+  { name: 'pratos_acima_da_meta', description: 'Pratos com preço acima da meta, do pior para o melhor. Sem limite, vale a regra única das telas: acima da meta = CMV mais de 5 pontos sobre a meta da loja (e informa quantos estão perto do limite, entre a meta e isso). Com limite, lista os pratos com CMV acima dele, com o preço de salão que bate a meta. Pratos com custo não confiável ficam de fora e são contados.', input_schema: obj({ limite: { type: 'number', description: 'CMV limite em fração (0.35 = 35%). Opcional.' } }) },
   { name: 'sugerir_preco', description: 'Preço que bate a meta de CMV para um prato, no salão ou no delivery (delivery considera app, cartão, imposto e embalagem). Devolve o valor exato e arredondado para ,90, o CMV e a sobra por venda.', input_schema: obj({ codigo: { type: 'integer' }, canal: { type: 'string', enum: ['salao', 'delivery'] } }, ['codigo', 'canal']) },
   { name: 'simular_preco_insumo', description: 'Simula o custo de um insumo mudando (sem gravar nada) e mostra o impacto no custo e no CMV dos pratos que o usam e quantos passam da meta.', input_schema: obj({ codigo_insumo: { type: 'integer' }, novo_preco: { type: 'number', description: 'Novo custo em R$ por unidade do insumo.' }, variacao_pct: { type: 'number', description: 'Alternativa ao novo_preco: variação em fração (0.2 = +20%, -0.1 = -10%).' } }, ['codigo_insumo']) },
   { name: 'insumos_que_mais_pesam', description: 'Insumos que mais pesam no custo somado de uma porção de cada prato com preço (não considera quanto cada prato vende).', input_schema: obj({ limite: { type: 'integer', description: 'Quantos (padrão 10, até 15).' } }) },
