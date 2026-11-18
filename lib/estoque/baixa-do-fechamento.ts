@@ -13,6 +13,7 @@ import { itensDaBaixaDoFechamento, localMaisUsado, emLotes, inicioDaJanela, JANE
 export type ResumoBaixasPerdidas = { vendasSemBaixa: number; completadas: number; falhas: number; itensSemCodigo: number; detalhes: string[]; janelaDias: number; examinadas: number }
 
 const IDADE_MIN_MS = 10 * 60 * 1000
+const PAGINA = 300
 // A janela (JANELA_DIAS, 30) e o lote de consulta (LOTE_MAX_REFS, 50) vêm do módulo puro. Venda sem registro e sem saída é baixada UMA vez
 // (o registro em venda_integracao_pedidos é inserido antes e barra a segunda); `examinadas` e `vendasSemBaixa` vão para o cron, para
 // ver na resposta se a janela maior pegou muita venda de uma vez.
@@ -25,14 +26,22 @@ export async function completarBaixasPerdidas(supabase: SupabaseClient, lojaId: 
     .eq('id', lojaId).maybeSingle<{ id: number; modo_estoque: string | null } & LojaLocais>()
   if (!loja || loja.modo_estoque !== 'proprio') return r
 
-  const vendas = exigirLeitura(
-    await supabase.from('vendas_proprio').select('id, pedido_ref').eq('loja_id', lojaId).eq('cancelado', false).eq('devolvido', false)
-      .lte('created_at', new Date(agora.getTime() - IDADE_MIN_MS).toISOString()).gte('created_at', inicioDaJanela(agora).toISOString())
-      .order('id', { ascending: false }).limit(opts.limite ?? 300),
-    'vendas fechadas') as { id: number; pedido_ref: string }[]
+  // Lê a janela inteira em páginas de 300 (mais novas primeiro), até o teto `limite`. Antes lia só as 300 mais novas e as
+  // mais antigas da janela nunca eram examinadas (o aviso dizia "próximo disparo", mas o próximo pegava as mesmas 300).
+  const teto = opts.limite ?? 3000
+  const vendas: { id: number; pedido_ref: string }[] = []
+  for (let de = 0; de < teto; de += PAGINA) {
+    const pagina = exigirLeitura(
+      await supabase.from('vendas_proprio').select('id, pedido_ref').eq('loja_id', lojaId).eq('cancelado', false).eq('devolvido', false)
+        .lte('created_at', new Date(agora.getTime() - IDADE_MIN_MS).toISOString()).gte('created_at', inicioDaJanela(agora).toISOString())
+        .order('id', { ascending: false }).range(de, Math.min(de + PAGINA, teto) - 1),
+      'vendas fechadas') as { id: number; pedido_ref: string }[]
+    vendas.push(...pagina)
+    if (pagina.length < PAGINA) break
+  }
   if (!vendas.length) return r
   r.examinadas = vendas.length
-  if (vendas.length >= (opts.limite ?? 300)) r.detalhes.push(`atenção: ${vendas.length} vendas na janela de ${JANELA_DIAS} dias bateram o limite; as mais antigas ficam para o próximo disparo`)
+  if (vendas.length >= teto) r.detalhes.push(`atenção: ${vendas.length} vendas na janela de ${JANELA_DIAS} dias bateram o teto; as mais antigas não foram examinadas`)
   const refs = vendas.map((v) => v.pedido_ref)
 
   const comRegistro = new Set<string>()
