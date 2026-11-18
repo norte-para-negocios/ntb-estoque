@@ -322,6 +322,8 @@ async function odara(browser: Awaited<ReturnType<typeof chromium.launch>>) {
   await conferirCustos(nome, 'A', cfg, rA)
   await telaAposEstorno(nome, 'A', cfg, rA, ledA)
   const estA2 = await estornarVenda(15, refA)
+  // F-16 corrigido de propósito: o 2º estorno agora responde 0 (nada a desfazer); conferido como falha real, não só achado.
+  conferir(nome, 'API estorno', 'A: 2º estorno da mesma venda responde 0 saídas desfeitas', '0', String(estA2.json?.ajustesExcluidos))
   if (Number(estA2.json?.ajustesExcluidos) !== 0) achados.push(`ODARA: o 2º estorno da mesma venda respondeu "ajustesExcluidos: ${estA2.json?.ajustesExcluidos}" (contou de novo as saídas já estornadas). O estoque NÃO foi devolvido duas vezes (saldos conferidos logo abaixo), então é só o contador da resposta que engana.`)
   await conferirSaldos(nome, 'A depois do 2º estorno', cfg, rA, new Map([...dA].map(([k]) => [k, '0'])))
 
@@ -459,6 +461,15 @@ async function sertao(browser: Awaited<ReturnType<typeof chromium.launch>>) {
   achados.push(`Sertão: a baixa da venda ficou como saída pendente (status Erro, sem id de ajuste) e a tela Movimentações mostrou ${nTela} movimento(s) para o pedido (${pr}). A tela só lista movimento Concluído; a venda do Vendas fica invisível para o dono até o Omie confirmar. Resposta da API ao Vendas: ok=true, op=na_fila, baixa=Erro.`)
   const op = await lerOps(page, ref)
   achados.push(`Sertão: Ordens de Produção da tela achou ${op.total} OP(s) para o pedido (a OP só nasce no Omie; ficou na fila) (${op.print}).`)
+  // F-09 corrigido de propósito: as duas telas passaram a trazer o aviso "N baixas de venda e N ordens de produção aguardando o Omie".
+  // Antes o robô só registrava que a venda estava invisível; agora confere que o dono VÊ a venda esperando (aviso com pelo menos os itens deste pedido).
+  for (const rota of [`/movimentacoes?produto=${encodeURIComponent(ref)}`, `/ordem-producao?q=${encodeURIComponent(ref)}`]) {
+    await abrir(page, rota)
+    const aviso = await page.evaluate(() => (document.querySelector('section[aria-label="Vendas aguardando o Omie"]') as HTMLElement | null)?.innerText ?? '')
+    const nb = Number(aviso.match(/(\d+)\s+baixas? de venda/)?.[1] ?? '0')
+    const no = Number(aviso.match(/(\d+)\s+ordens? de produção/)?.[1] ?? '0')
+    conferir(nome, rota.split('?')[0], `F-09: aviso "aguardando o Omie" mostra baixas e OPs na fila (pelo menos ${itens.length} de cada)`, `baixas>=${itens.length}|ops>=${itens.length}`, `baixas${nb >= itens.length ? '>=' : '='}${nb >= itens.length ? itens.length : nb}|ops${no >= itens.length ? '>=' : '='}${no >= itens.length ? itens.length : no}`)
+  }
 
   // estorno sem chave Omie na loja (como a cópia local vem): o ERP pula
   const e0 = await estornarVenda(4, ref)
@@ -478,6 +489,9 @@ async function sertao(browser: Awaited<ReturnType<typeof chromium.launch>>) {
     conferir(nome, 'trava do Omie', 'E: o erro da nova tentativa é o da trava', String(itens.length), String(f2.filter((f) => /NTB_OMIE_BLOQUEADO=1/.test(f.ultimo_erro ?? '')).length))
     const cr2 = await cron('/api/cron/retry-ajustes-movimentos')
     provas.push(`Sertão E: cron retry-ajustes-movimentos HTTP ${cr2.status}: ${JSON.stringify(cr2.json).slice(0, 300)}`)
+    // F-10 corrigido de propósito: a retentativa repassa o motivo real (a trava do Omie) em vez de "falhou sem mensagem".
+    const motivos: string[] = (cr2.json?.manuais ?? []).flatMap((m: any) => m.motivos ?? [])
+    conferir(nome, 'cron retry-ajustes-movimentos', 'F-10: a resposta traz o motivo real (trava do Omie), não "falhou sem mensagem"', 'motivo real', motivos.some((m) => /NTB_OMIE_BLOQUEADO=1/.test(m)) && !motivos.some((m) => /falhou sem mensagem/.test(m)) ? 'motivo real' : `motivos: ${JSON.stringify(cr2.json).slice(0, 200)}`)
     const vinc = Number((await q<any>('select count(*)::text c from venda_op_vinculo where loja_id=4 and pedido_ref=$1', [ref]))[0].c)
     conferir(nome, 'banco (vínculo venda e OP)', 'E: um vínculo por item depois da nova tentativa', String(itens.length), String(vinc))
     // o Vendas reenvia o mesmo pedido
@@ -488,6 +502,8 @@ async function sertao(browser: Awaited<ReturnType<typeof chromium.launch>>) {
     conferir(nome, 'banco (vínculo venda e OP)', 'E: reenvio não cria outro vínculo', String(itens.length), String((await q<any>('select count(*)::text c from venda_op_vinculo where loja_id=4 and pedido_ref=$1', [ref]))[0].c))
     const filaDepois = Number((await q<any>('select count(*)::text c from vendas_integracao_fila where loja_id=4 and ref=$1', [ref]))[0].c)
     provas.push(`Sertão E: reenvio do mesmo pedido: HTTP ${rr.status}, linhas na fila ${filaAntes} -> ${filaDepois}`)
+    // F-15 corrigido de propósito: a expectativa antiga aceitava a fila crescer de 3 para 6; agora a fila PERMANECE igual e isso é conferido de verdade.
+    conferir(nome, 'banco (fila do Vendas)', 'E: reenvio do mesmo pedido não cria outra linha na fila (permanece ' + filaAntes + ')', String(filaAntes), String(filaDepois))
     if (filaDepois !== filaAntes) achados.push(`Sertão: reenviar o mesmo pedido enquanto a OP ainda está na fila criou ${filaDepois - filaAntes} linha(s) a mais na fila (de ${filaAntes} para ${filaDepois}). A baixa de estoque NÃO duplicou (saídas e vínculos iguais); o Omie recusa o 2º cCodIntOP igual, e o cron trata "já existe" como feito.`)
     // estorno com chave Omie (a trava barra o que seria chamada ao Omie)
     const e1 = await estornarVenda(4, ref)

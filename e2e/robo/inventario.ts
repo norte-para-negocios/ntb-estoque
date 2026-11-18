@@ -455,6 +455,10 @@ async function executarOmie(browser: Awaited<ReturnType<typeof chromium.launch>>
   const invFim = (await q('select status from inventarios where id=$1', [inv.id]))[0]
   const itensFim = await q('select p.codigo, i.status, i.descricao_status, i.id_ajuste::text aj, i.tentativas::text t from inventario_items i join produtos p on p.loja_id=i.loja_id and p.codigo_produto=i.produto_codigo_produto where i.inventario_id=$1 order by i.id', [inv.id])
   provas.push(`${c.id}: depois de "Concluir inventário": status do inventário = ${invFim?.status}; aviso = "${await textoToasts(page)}"; itens = ${JSON.stringify(itensFim)}`)
+  // F-17 corrigido de propósito: com itens em erro o aviso deixa de ser o verde "Inventário enviado ao Omie" e vira alerta "Finalizado, mas N itens não foram ao Omie".
+  const avisoFim = await textoToasts(page)
+  conferir(nome, '/inventario (concluir)', 'F-17: aviso ao concluir com itens em erro diz que nem tudo foi ao Omie (alerta, não "enviado")', 'Finalizado, mas N itens não foram ao Omie',
+    /Finalizado, mas \d+ (itens )?não (foi|foram) ao Omie/.test(avisoFim) && !/Inventário enviado ao Omie/.test(avisoFim) ? 'Finalizado, mas N itens não foram ao Omie' : `aviso: ${avisoFim}`, pFim)
   achados.push(`Sertão: ao concluir o inventário #${inv.id} com os 4 itens barrados pela trava do Omie, o inventário ficou "${invFim?.status}" e os itens ficaram ${[...new Set(itensFim.map((i) => i.status))].join('/')} (${pFim}).`)
   await ctx.close()
 

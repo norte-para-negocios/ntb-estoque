@@ -83,9 +83,9 @@ async function gabarito(loja: number, modo: 'omie' | 'proprio'): Promise<Gabarit
 
 // ---- Leitura da tela, como pessoa: entra, abre Estoque, percorre as páginas ----
 type Linha = { id: number; saldoTexto: string; pagina: number }
-async function lerTela(page: Page, loja: (typeof LOJAS)[number]): Promise<{ linhas: Linha[]; total: number; paginas: number; erro: string | null }> {
+async function lerTela(page: Page, loja: (typeof LOJAS)[number]): Promise<{ linhas: Linha[]; total: number; paginas: number; erro: string | null; avisoInativos: number | null }> {
   const lg = logins.get(loja.id)
-  if (!lg) return { linhas: [], total: 0, paginas: 0, erro: `sem login dono para a loja ${loja.id}` }
+  if (!lg) return { linhas: [], total: 0, paginas: 0, erro: `sem login dono para a loja ${loja.id}`, avisoInativos: null }
   await page.goto(`${ORIGEM}/login`, { waitUntil: 'domcontentloaded', timeout: 90000 })
   await page.fill('#email', lg.email)
   await page.fill('#password', lg.senha)
@@ -94,6 +94,7 @@ async function lerTela(page: Page, loja: (typeof LOJAS)[number]): Promise<{ linh
   const linhas: Linha[] = []
   let total = 0
   let pagina = 1
+  let avisoInativos: number | null = null
   for (; ; pagina++) {
     await page.goto(`${ORIGEM}/estoque?ord=descricao&dir=asc&page=${pagina}`, { waitUntil: 'domcontentloaded', timeout: 90000 })
     await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
@@ -115,12 +116,18 @@ async function lerTela(page: Page, loja: (typeof LOJAS)[number]): Promise<{ linh
       return { linhas: out, total: m ? Number(m[1].replace(/\./g, '')) : null, texto: '' }
     })
     if (pagina === 1) total = lido.total ?? lido.linhas.length
+    // F-07: a tela passou a avisar quantos produtos inativos com saldo ficam fora da lista (role=note).
+    if (pagina === 1) {
+      const aviso = await page.evaluate(() => [...document.querySelectorAll('main [role="note"]')].map((n) => (n as HTMLElement).innerText).find((t) => /inativ/i.test(t)) ?? null)
+      const mm = aviso?.match(/(\d[\d.]*)\s+produtos?\s+inativos?/i)
+      avisoInativos = mm ? Number(mm[1].replace(/\./g, '')) : null
+    }
     await page.screenshot({ path: path.join(SAIDA, 'prints', `${loja.id}-estoque-p${pagina}.png`) }).catch(() => {})
-    if (!lido.linhas.length && pagina === 1) return { linhas, total, paginas: 0, erro: `tela Estoque sem tabela (${lido.texto.replace(/\s+/g, ' ')})` }
+    if (!lido.linhas.length && pagina === 1) return { linhas, total, paginas: 0, erro: `tela Estoque sem tabela (${lido.texto.replace(/\s+/g, ' ')})`, avisoInativos }
     for (const l of lido.linhas) linhas.push({ ...l, pagina })
     if (pagina * POR_PAGINA >= total || !lido.linhas.length) break
   }
-  return { linhas, total, paginas: pagina, erro: null }
+  return { linhas, total, paginas: pagina, erro: null, avisoInativos }
 }
 
 // ---- Execução ----
@@ -159,8 +166,14 @@ for (const loja of LOJAS) {
   const rot = (p: number) => { const x = prods.get(p); return x ? `${x.codigo} ${x.descricao}` : `produto ${p}` }
   const printDe = (p: number) => `prints/${loja.id}-estoque-p${paginaDe.get(p) ?? 1}.png`
 
+  // F-07 corrigido de propósito: produto inativo com saldo continua fora da lista (decisão de desenho), mas a tela agora AVISA o total.
+  // Por isso o item inativo ausente só vira falha se o aviso não existir ou trouxer número menor que os itens escondidos.
+  const escondidos = cmp.divergencias.filter((d) => d.mostrado === null && prods.get(d.produto)?.inativo && d.origem === 'ERP')
+  const avisoCobre = tela.avisoInativos !== null && tela.avisoInativos >= escondidos.length
+  if (escondidos.length) console.log(`F-07 ${loja.nome}: ${escondidos.length} inativo(s) com saldo fora da lista; aviso da tela: ${tela.avisoInativos ?? 'AUSENTE'} -> ${avisoCobre ? 'cobre' : 'NÃO cobre'}`)
   for (const d of cmp.divergencias) {
     const inativo = prods.get(d.produto)?.inativo
+    if (avisoCobre && d.mostrado === null && inativo && d.origem === 'ERP') continue
     falhas.push({
       tipo: 'saldo-divergente', gravidade: 1, loja: loja.nome, cargo: 'dono', tela: '/estoque',
       passo: `conferir saldo do item ${rot(d.produto)} (id ${d.produto})${d.origem ? ` | origem da diferença: ${d.origem}${d.omie !== null ? ` (Omie informa ${fmtDec(d.omie)})` : ''}` : ''}`,

@@ -10,42 +10,12 @@ const extra = (ticket: string, causa: string, gravidade: 1 | 2 | 3, o: Partial<F
   print: SEM_PRINT(ticket), robo: `notas-${ticket}`, ticket, rodada: `notas-ticket${ticket}-erp.md`, pastaSaida: '', causa, ...o,
 })
 
+// Etapa de verificação: os achados de F-09, F-10, F-11, F-12, F-15, F-16, F-17 e F-18 saíram daqui porque foram corrigidos e agora os próprios
+// robôs (venda, inventário, compras, cozinha, passeio) conferem o comportamento novo. Ficou só F-19 (decisão do dono, nada a corrigir em código).
 export const ACHADOS_DAS_NOTAS: FalhaRastreada[] = [
-  extra('05', 'sertao-baixa-invisivel', 2, {
-    tela: 'Movimentações e Ordens de Produção', passo: 'enviar uma venda ao ERP em loja Omie (Omie bloqueado) e olhar as duas telas',
-    esperado: 'o dono ver que a venda espera na fila (baixa pendente e OP)', mostrado: 'nada nas duas telas: a saída pendente (Erro) não é listada e a OP não existe em Ordens de Produção',
-  }),
-  extra('05', 'sertao-fila-duplicada', 3, {
-    tela: 'POST /api/integracao/ordem-producao', passo: 'reenviar o mesmo pedido enquanto a OP ainda está na fila',
-    esperado: 'fila continua com 3 linhas', mostrado: 'fila vai a 6 linhas (a baixa e os vínculos não duplicam)',
-  }),
-  extra('05', 'estorno-contador', 3, {
-    loja: 'ODARA', tela: 'POST /api/integracao/venda/estornar', passo: 'estornar duas vezes a mesma venda',
-    esperado: 'segundo estorno sem nada a desfazer', mostrado: 'responde ajustesExcluidos: 4 sem devolver nada ao estoque',
-  }),
-  extra('05', 'retry-sem-mensagem', 2, {
-    tela: 'cron retry-ajustes-movimentos', passo: 'rodar a retentativa com a saída pendente barrada pela trava do Omie',
-    esperado: 'erro com a mensagem do motivo', mostrado: 'HTTP 502 com erros: "falhou sem mensagem"',
-  }),
-  extra('06', 'inventario-aviso-verde', 3, {
-    tela: '/inventario (concluir)', passo: 'concluir o inventário com os 4 itens em Erro',
-    esperado: 'aviso de que nada foi ao Omie', mostrado: 'aviso verde "Inventário enviado ao Omie"; inventário Finalizado; lista mostra 0/4 em vermelho',
-  }),
-  extra('07', 'texto-nome-produto-nota', 3, {
-    loja: 'Loja 19', tela: 'tela da nota de compra', passo: 'comparar o nome do produto na nota e no cadastro',
-    esperado: 'ALHO TRITURADO (MP), como no cadastro', mostrado: 'Alho Triturado (MP), e acento tirado em parte dos lugares',
-  }),
   extra('10', 'permissoes-sem-cargo', 3, {
     loja: 'todas', cargo: 'gerente, estoquista', tela: 'cargo_permissao', passo: 'listar permissões sem nenhum cargo',
     esperado: 'decisão do dono sobre as 4 do Financeiro criadas depois da auditoria', mostrado: '34 de 90 permissões só com Admin (30 de propósito, 4 do Financeiro)',
-  }),
-  extra('11', 'meta-dois-numeros', 2, {
-    loja: 'ODARA', tela: '/cozinha (Início e Pratos) x Pacioli', passo: 'perguntar quantos pratos passam da meta',
-    esperado: 'o mesmo número nas três telas', mostrado: 'Início e Pratos dizem 8; o Pacioli diz 18 (inclui os 10 "perto do limite")',
-  }),
-  extra('02', 'pacioli-producao-no-dev', 2, {
-    loja: 'todas', tela: 'telas do dono', passo: 'abrir as telas do dono com o ERP em desenvolvimento',
-    esperado: 'nenhuma chamada a serviço de produção', mostrado: 'o navegador tenta chamar https://pacioli.norteparanegocios.com.br (o robô bloqueou; registrado em externos-bloqueados.txt)',
   }),
 ]
 

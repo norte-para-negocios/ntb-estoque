@@ -533,6 +533,8 @@ async function executarPedido(browser: Awaited<ReturnType<typeof chromium.launch
       const desc = produtos.get(it.codigo)!.descricao
       const semAc = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
       const lc = linhasConf.find((r) => semAc(r[0]) === semAc(desc)) ?? linhasConf.find((r) => semAc(r[0]).startsWith(semAc(desc).split(' ')[0]))
+      // F-18 corrigido de propósito: a tela da nota mostra o nome EXATO do cadastro (caixa alta e acento), sem a normalização que a busca acima usa.
+      if (lc) conferir(nome, `/nota-fiscal/${compra.nota}`, `F-18: nome do item ${it.codigo} igual ao cadastro (caixa e acento)`, desc.replace(/\s+/g, ' ').trim(), lc[0].replace(/\s+/g, ' ').trim(), pNota)
       conferir(nome, `/nota-fiscal/${compra.nota}`, `conferência pedido x nota do item ${it.codigo}: pedido esperava, nota trouxe, situação`, `${fmtDec(esperadoRestante)}|${baseN ?? '—'}|${txtSit}`,
         lc ? `${numTela(lc[1])}|${lc[2] === '—' ? '—' : numTela(lc[2])}|${lc[6].replace(/ · .*$/, '')}` : 'linha ausente', pNota)
       if (ni) {
