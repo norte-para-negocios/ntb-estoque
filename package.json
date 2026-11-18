@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "node --test 'lib/**/*.test.ts' 'components/**/*.test.ts' 'scripts/**/*.test.ts' 'e2e/**/*.test.ts'",
     "robo": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/robo/robo.ts",
+    "robo:permissoes": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/robo/permissoes.ts",
     "local:subir": "scripts/local/local.sh subir",
     "local:baixar": "scripts/local/local.sh baixar",
     "local:restaurar": "scripts/local/local.sh restaurar",
