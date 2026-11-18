@@ -32,6 +32,10 @@ case "$cmd" in
     ULTIMO="$(ssh -i "$CHAVE" -o BatchMode=yes "$SERVIDOR" 'ls -t /root/backups-ntb-estoque/ntb-estoque-*.sql.gz | head -1')"
     echo "Copiando $ULTIMO"
     scp -i "$CHAVE" -o BatchMode=yes "$SERVIDOR:$ULTIMO" "$DADOS/dump/"
+    # Histórico de faturamento do frio-api (banco ntb_frio): backup diário já pronto, só ls + scp (leitura).
+    FRIO="$(ssh -i "$CHAVE" -o BatchMode=yes "$SERVIDOR" 'ls -t /root/backups-diarios/frio-2*.dump | head -1')"
+    echo "Copiando $FRIO"
+    scp -i "$CHAVE" -o BatchMode=yes "$SERVIDOR:$FRIO" "$DADOS/dump/"
     ;;
   restaurar)
     docker_ok; node "$RAIZ/scripts/local/gerar-env.mjs"
@@ -52,7 +56,15 @@ case "$cmd" in
     node "$RAIZ/scripts/local/gerar-usuarios.mjs" | "${PSQL[@]}"
     echo "Banco frio (faturamento)..."
     sql_admin "drop database if exists frio" template1; sql_admin "create database frio" template1
-    docker exec -i -e PGOPTIONS="-c client_min_messages=warning" -e PGPASSWORD="${POSTGRES_PASSWORD:-}" ntb-erp-local-db psql -h 127.0.0.1 -U supabase_admin -d frio -q < "$RAIZ/desktop/schema/frio.sql" >> "$DADOS/restaura.log" 2>&1 || echo "  (aviso: frio.sql com erros, ver restaura.log)"
+    DUMP_FRIO="$(ls -t "$DADOS"/dump/frio-2*.dump 2>/dev/null | head -1 || true)"
+    if [ -n "$DUMP_FRIO" ]; then
+      # Histórico real do frio-api (cupons, itens, pagamentos, notas, movimentos), sem donos nem permissões de produção.
+      echo "  restaurando $DUMP_FRIO"
+      docker exec -i -e PGOPTIONS="-c client_min_messages=warning" -e PGPASSWORD="${POSTGRES_PASSWORD:-}" ntb-erp-local-db pg_restore -h 127.0.0.1 -U supabase_admin -d frio --no-owner --no-acl --exit-on-error < "$DUMP_FRIO" >> "$DADOS/restaura.log" 2>&1 || echo "  (aviso: restore do frio com erros, ver restaura.log)"
+    else
+      echo "  (sem dump do frio em .local-data/dump: só a estrutura vazia; rode 'baixar')"
+      docker exec -i -e PGOPTIONS="-c client_min_messages=warning" -e PGPASSWORD="${POSTGRES_PASSWORD:-}" ntb-erp-local-db psql -h 127.0.0.1 -U supabase_admin -d frio -q < "$RAIZ/desktop/schema/frio.sql" >> "$DADOS/restaura.log" 2>&1 || echo "  (aviso: frio.sql com erros, ver restaura.log)"
+    fi
     "${DC[@]}" up -d
     echo "Pronto. Logins de teste: .local-data/logins.txt"
     ;;

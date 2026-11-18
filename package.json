@@ -16,6 +16,7 @@
     "robo:inventario": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/robo/inventario.ts",
     "robo:venda": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/robo/venda.ts",
     "robo:cozinha": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/robo/cozinha.ts",
+    "robo:cmv": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/robo/cmv.ts",
     "robo:permissoes": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/robo/permissoes.ts",
     "local:subir": "scripts/local/local.sh subir",
     "local:baixar": "scripts/local/local.sh baixar",
