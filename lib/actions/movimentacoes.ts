@@ -214,11 +214,11 @@ type MovimentoManualElegivel = {
 export async function retryMovimentosManuaisPendentes(
   lojas: LojaOmie[],
   opts: { limitePorLoja?: number } = {}
-): Promise<{ loja_id: number; tentadas: number; sucesso: number; falhas: number; encerradas?: number; erro?: string }[]> {
+): Promise<{ loja_id: number; tentadas: number; sucesso: number; falhas: number; encerradas?: number; erro?: string; motivos?: string[] }[]> {
   const __d = viaDesktop('movimentacoes#retryMovimentosManuaisPendentes', retryMovimentosManuaisPendentes, [lojas, opts]); if (__d) return __d as never
   const limitePorLoja = opts.limitePorLoja ?? 30
   const supabase = createServiceClient()
-  const resultados: { loja_id: number; tentadas: number; sucesso: number; falhas: number; encerradas?: number; erro?: string }[] = []
+  const resultados: { loja_id: number; tentadas: number; sucesso: number; falhas: number; encerradas?: number; erro?: string; motivos?: string[] }[] = []
 
   for (const loja of lojas) {
     // Fase F (revisão I1): ajuste com data num mês fechado fica fora da CONSULTA (senão ocupa o limite para sempre).
@@ -325,6 +325,8 @@ export async function retryMovimentosManuaisPendentes(
     let falhas = 0
     let encerradas = 0
     const errosEstorno: string[] = []
+    // F-10: motivo real das linhas que seguem pendentes (não é erro da rotina; vai em `motivos`).
+    const motivosFalha: string[] = []
 
     const { data: itensElegiveis, error: erroItens } = await supabase
       .from('movimentos')
@@ -430,7 +432,8 @@ export async function retryMovimentosManuaisPendentes(
       if (passo.resultado === 'encerrada') encerradas++
       else if (passo.resultado === 'sucesso') sucesso++
       else {
-        if (passo.erro) errosEstorno.push(passo.erro)
+        // falha ao gravar o encerramento é erro da rotina (derruba a loja); recusa do envio é só o motivo da linha pendente.
+        if (passo.erro) (passo.erro.startsWith('encerrar movimento') ? errosEstorno : motivosFalha).push(passo.erro)
         falhas++
       }
     }
@@ -442,6 +445,7 @@ export async function retryMovimentosManuaisPendentes(
       falhas,
       ...(encerradas > 0 ? { encerradas } : {}),
       ...(errosEstorno.length > 0 ? { erro: errosEstorno.join(' | ') } : {}),
+      ...(motivosFalha.length > 0 ? { motivos: motivosFalha.slice(0, 5) } : {}),
     })
   }
 

@@ -68,7 +68,7 @@ export async function encerrarOuEnviarAjusteManual<M extends { id: number; tipo:
       id: number,
       patch: { status: 'Erro'; tentativas: number; descricao_status: string }
     ) => Promise<{ error: { message: string } | null }>
-    enviar: (mov: M) => Promise<{ status: string }>
+    enviar: (mov: M) => Promise<{ status: string; erro?: string }>
   }
 ): Promise<{ resultado: 'encerrada' | 'sucesso' | 'falha'; erro?: string }> {
   const decisao = decidirReenvioAjusteManual(mov, tetoTentativas)
@@ -82,7 +82,9 @@ export async function encerrarOuEnviarAjusteManual<M extends { id: number; tipo:
     return { resultado: 'encerrada' }
   }
   const r = await deps.enviar(mov)
-  return { resultado: r.status === 'Concluido' ? 'sucesso' : 'falha' }
+  if (r.status === 'Concluido') return { resultado: 'sucesso' }
+  // F-10: o motivo real da falha (trava do Omie, recusa, "Sem CMC") sobe até a resposta do cron em vez de sumir.
+  return { resultado: 'falha', erro: `movimento ${mov.id}: ${r.erro || (r.status === 'Sem CMC' ? 'Sem CMC (custo médio indisponível)' : `status ${r.status}`)}` }
 }
 
 /**
