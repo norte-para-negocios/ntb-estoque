@@ -19,7 +19,10 @@ export async function baixarVendaProprio(
   loja: { id: number } & LojaLocais,
   itens: Partial<ItemVendaProprio>[],
   pedidoRef: string | null,
-  obs: string
+  obs: string,
+  // Baixa tardia (F-04): data da venda (YYYY-MM-DD, Bahia). Sem ela vale hoje, como sempre foi. Com ela o movimento e a OP ficam
+  // na data da venda, e quem chama refaz a cadeia de custo (reprocessar_custo) para a saída sair pelo custo daquele dia.
+  dataDaVenda?: string | null
 ): Promise<ResultadoItemProprio[]> {
   // Sem referência do pedido não há idempotência: um retry baixaria de novo. O Norte Vendas sempre manda pedidoRef
   // (lib/baixaEstoqueServidor.ts, pedidoRef = id do pedido); sem ele, nada é gravado e a venda volta retentável.
@@ -81,12 +84,12 @@ export async function baixarVendaProprio(
       if (comReceita.has(p.produto!)) {
         // Como no Omie: a venda gera uma ORDEM DE PRODUÇÃO marcada com o pedido do Norte Vendas, que é concluída na hora
         // (consome os insumos da ficha e produz o item no local da venda); depois o item vendido sai do estoque.
-        const op = await opDaVenda(supabase, loja.id, p.produto!, p.quantidade, p.local!, `${ref}|${p.produto}|${p.linha}`, obs)
-        const r = await saida({ lojaId: loja.id, local: p.local!, produto: p.produto!, quantidade: p.quantidade, origem: 'VENDA', ref, linha: p.linha, obs: `${obs} · OP ${op.numero}` })
+        const op = await opDaVenda(supabase, loja.id, p.produto!, p.quantidade, p.local!, `${ref}|${p.produto}|${p.linha}`, obs, dataDaVenda)
+        const r = await saida({ lojaId: loja.id, local: p.local!, produto: p.produto!, quantidade: p.quantidade, origem: 'VENDA', ref, linha: p.linha, obs: `${obs} · OP ${op.numero}`, data: dataDaVenda })
         resultados[p.indice] = { codigo: p.codigo, ok: true, op: 'criada', baixa: 'Concluido', nCodOP: op.nCodOP, saldo: r.saldo, negativo: r.saldo < 0, duplicado: r.duplicado && op.existente }
         continue
       }
-      const r = await saida({ lojaId: loja.id, local: p.local!, produto: p.produto!, quantidade: p.quantidade, origem: 'VENDA', ref, linha: p.linha, obs })
+      const r = await saida({ lojaId: loja.id, local: p.local!, produto: p.produto!, quantidade: p.quantidade, origem: 'VENDA', ref, linha: p.linha, obs, data: dataDaVenda })
       resultados[p.indice] = { codigo: p.codigo, ok: true, op: 'sem_estrutura', baixa: 'Concluido', saldo: r.saldo, negativo: r.saldo < 0, duplicado: r.duplicado }
     } catch (e) {
       const erro = e instanceof Error ? e.message : 'Falha ao baixar o estoque'
@@ -103,9 +106,9 @@ export async function baixarVendaProprio(
 
 /** OP automática da venda, idempotente pela referência (pedido|produto|linha): reenviar a venda nunca cria outra OP. */
 async function opDaVenda(
-  supabase: SupabaseClient, lojaId: number, produto: number, quantidade: number, local: number, vendaRef: string, obs: string
+  supabase: SupabaseClient, lojaId: number, produto: number, quantidade: number, local: number, vendaRef: string, obs: string, dataDaVenda?: string | null
 ): Promise<{ nCodOP: number; numero: string; existente: boolean }> {
-  const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+  const hoje = dataDaVenda ?? new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
   const { data: existente, error: erroExistente } = await supabase.from('ordens_producao')
     .select('id, identificacao_n_cod_op, identificacao_c_num_op, concluida').eq('loja_id', lojaId).eq('venda_ref', vendaRef).maybeSingle()
   // Sem saber se a OP já existe, criar outra seria arriscar OP dupla: falha alto (o item volta retentável).

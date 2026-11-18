@@ -29,13 +29,13 @@ export async function completarBaixasPerdidas(supabase: SupabaseClient, lojaId: 
   // Lê a janela inteira em páginas de 300 (mais novas primeiro), até o teto `limite`. Antes lia só as 300 mais novas e as
   // mais antigas da janela nunca eram examinadas (o aviso dizia "próximo disparo", mas o próximo pegava as mesmas 300).
   const teto = opts.limite ?? 3000
-  const vendas: { id: number; pedido_ref: string }[] = []
+  const vendas: { id: number; pedido_ref: string; created_at: string }[] = []
   for (let de = 0; de < teto; de += PAGINA) {
     const pagina = exigirLeitura(
-      await supabase.from('vendas_proprio').select('id, pedido_ref').eq('loja_id', lojaId).eq('cancelado', false).eq('devolvido', false)
+      await supabase.from('vendas_proprio').select('id, pedido_ref, created_at').eq('loja_id', lojaId).eq('cancelado', false).eq('devolvido', false)
         .lte('created_at', new Date(agora.getTime() - IDADE_MIN_MS).toISOString()).gte('created_at', inicioDaJanela(agora).toISOString())
         .order('id', { ascending: false }).range(de, Math.min(de + PAGINA, teto) - 1),
-      'vendas fechadas') as { id: number; pedido_ref: string }[]
+      'vendas fechadas') as { id: number; pedido_ref: string; created_at: string }[]
     vendas.push(...pagina)
     if (pagina.length < PAGINA) break
   }
@@ -57,6 +57,9 @@ export async function completarBaixasPerdidas(supabase: SupabaseClient, lojaId: 
   const faltando = vendas.filter((v) => !comRegistro.has(v.pedido_ref.toLowerCase()) && !comMovimento.has(v.pedido_ref))
   if (!faltando.length) return r
 
+  // Custo certo da baixa tardia: a saída fica na data da venda e a cadeia de custo é refeita a partir da venda mais antiga baixada aqui.
+  const produtosBaixados = new Set<number>()
+  let desde: string | null = null
   for (const v of faltando) {
     try {
       const itens = exigirLeitura(
@@ -83,7 +86,9 @@ export async function completarBaixasPerdidas(supabase: SupabaseClient, lojaId: 
       const { data: regRow, error: regErr } = await supabase.from('venda_integracao_pedidos')
         .insert({ loja_id: lojaId, pedido_ref: v.pedido_ref.toLowerCase(), itens: plano.itens.map((i) => i.codigo), modo: 'proprio' }).select('id').single<{ id: number }>()
       if (regErr || !regRow) { r.falhas++; r.detalhes.push(`venda ${v.id}: não registrou o pedido (${regErr?.message ?? 'sem retorno'})`); continue }
-      const resultados = await baixarVendaProprio(supabase, loja, plano.itens, v.pedido_ref, `Venda ntb-vendas #${v.pedido_ref} (baixa completada pelo fechamento)`)
+      const dataDaVenda = new Date(v.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+      const resultados = await baixarVendaProprio(supabase, loja, plano.itens, v.pedido_ref, `Venda ntb-vendas #${v.pedido_ref} (baixa completada pelo fechamento)`, dataDaVenda)
+      if (resultados.some((x) => x.ok)) { prodIds.forEach((id) => produtosBaixados.add(id)); if (!desde || dataDaVenda < desde) desde = dataDaVenda }
       await supabase.from('venda_integracao_pedidos').update({ concluido_em: new Date().toISOString(), resultados }).eq('id', regRow.id)
       const ruins = resultados.filter((x) => !x.ok).length
       if (ruins) { r.falhas++; r.detalhes.push(`venda ${v.id}: ${ruins} item(ns) não baixaram (${resultados.find((x) => !x.ok)?.erro ?? ''})`) } else r.completadas++
@@ -91,6 +96,12 @@ export async function completarBaixasPerdidas(supabase: SupabaseClient, lojaId: 
       r.falhas++
       r.detalhes.push(`venda ${v.id}: ${e instanceof Error ? e.message : 'falha'}`)
     }
+  }
+  if (desde && produtosBaixados.size) {
+    // Falha aqui não desfaz as baixas (já gravadas e idempotentes): o custo fica o de hoje até a próxima revisão e o cron avisa.
+    const { error } = await supabase.rpc('reprocessar_custo', { p_loja: lojaId, p_produtos: Array.from(produtosBaixados), p_desde: desde, p_motivo: 'baixa tardia da venda (fechamento)' })
+    if (error) r.detalhes.push(`custo não refeito desde ${desde}: ${error.message}`)
+    else r.detalhes.push(`custo refeito desde ${desde} para ${produtosBaixados.size} produto(s)`)
   }
   return r
 }
