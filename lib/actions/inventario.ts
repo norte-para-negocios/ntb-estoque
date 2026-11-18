@@ -535,8 +535,16 @@ export async function finishInventario(inventarioId: number) {
     .update({ status: 'Finalizado', finalizado: new Date().toISOString() })
     .eq('id', inventarioId)
 
+  // F-17: quantos itens contados ainda não foram ao Omie (a tela troca o aviso verde por alerta). Falha de leitura = não sabe, segue como antes.
+  const { count: comErro } = await supabase
+    .from('inventario_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('inventario_id', inventarioId)
+    .not('quan', 'is', null)
+    .or('status.is.null,status.not.in.(Concluido,Vazio)')
+
   revalidatePath('/inventario')
-  return { ok: true }
+  return { ok: true, comErro: comErro ?? 0 }
 }
 
 /**

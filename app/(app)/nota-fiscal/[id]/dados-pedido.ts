@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { nomeDoCadastro } from '@/lib/compras/nome-do-cadastro-puro'
 import { conferirPedidoNota, ordenarPedidosParaNota, type ItemNotaConf, type LinhaConf } from '@/lib/compras/pedido-puro'
 
 // Fase C: pedido de compra ligado à nota do estoque próprio e a conferência pedido × nota × recebido (só leitura).
@@ -17,11 +18,20 @@ export async function carregarPedidoDaNota(lojaId: number, compraId: number): Pr
     sb.from('pedidos_compra_vinculos').select('pedido_id, pedido_item_id, compra_item_id').eq('loja_id', lojaId).eq('compra_id', compraId),
   ])
   if (error) return { vinculados: [], sugestoes: [], erro: null } // migration 200 ainda não aplicada: a seção some
+  // F-18: nome do produto como está no cadastro (o pedido guarda uma cópia em formato de título).
+  const cadastro = new Map<number, string | null>()
+  const lerCadastro = async (codigos: number[]) => {
+    const novos = [...new Set(codigos)].filter((c) => c && !cadastro.has(c))
+    if (!novos.length) return
+    const { data } = await sb.from('produtos').select('codigo_produto, descricao').eq('loja_id', lojaId).in('codigo_produto', novos)
+    for (const p of data ?? []) cadastro.set(n(p.codigo_produto), p.descricao as string | null)
+  }
+  await lerCadastro((itensRaw ?? []).map((i) => n(i.codigo_produto)))
   const vincPorItem = new Map((vincs ?? []).map((v) => [n(v.compra_item_id), n(v.pedido_item_id)]))
   const notaItens: ItemNotaConf[] = (itensRaw ?? []).map((i) => {
     const base = n(i.quantidade) * (n(i.fator) || 1)
     return {
-      id: n(i.id), codigoProduto: i.codigo_produto == null ? null : n(i.codigo_produto), descricao: i.descricao ?? '',
+      id: n(i.id), codigoProduto: i.codigo_produto == null ? null : n(i.codigo_produto), descricao: nomeDoCadastro(cadastro, i.codigo_produto == null ? null : n(i.codigo_produto), i.descricao),
       quantidadeBase: base, precoBase: base > 0 ? (n(i.valor_total) - n(i.desconto)) / base : 0,
       recebido: i.quantidade_recebida == null ? base : n(i.quantidade_recebida), lancado: !!i.lancado, pedidoItemId: vincPorItem.get(n(i.id)) ?? null,
     }
@@ -33,6 +43,7 @@ export async function carregarPedidoDaNota(lojaId: number, compraId: number): Pr
       sb.from('pedidos_compra').select('id, numero, fornecedor_nome, etapa').eq('loja_id', lojaId).in('id', pedidoIds),
       sb.from('pedidos_compra_itens_situacao').select('id, pedido_id, codigo_produto, descricao, quantidade_base, preco_base, vinculado').eq('loja_id', lojaId).in('pedido_id', pedidoIds).order('linha'),
     ])
+    await lerCadastro((its ?? []).map((i) => n(i.codigo_produto)))
     for (const c of cabs ?? []) {
       const doPedido = (its ?? []).filter((i) => n(i.pedido_id) === n(c.id))
       const idsItens = new Set(doPedido.map((i) => n(i.id)))
@@ -40,7 +51,7 @@ export async function carregarPedidoDaNota(lojaId: number, compraId: number): Pr
       // saldo que o pedido esperava nesta nota = pedido − o que já está em outras notas
       const pedidoConf = doPedido.map((i) => {
         const nesta = notaItens.filter((x) => x.pedidoItemId === n(i.id) && x.codigoProduto === n(i.codigo_produto)).reduce((a, x) => a + x.recebido, 0)
-        return { id: n(i.id), codigoProduto: n(i.codigo_produto), descricao: i.descricao, quantidadeBase: Math.max(0, n(i.quantidade_base) - (n(i.vinculado) - nesta)), precoBase: n(i.preco_base) }
+        return { id: n(i.id), codigoProduto: n(i.codigo_produto), descricao: nomeDoCadastro(cadastro, n(i.codigo_produto), i.descricao), quantidadeBase: Math.max(0, n(i.quantidade_base) - (n(i.vinculado) - nesta)), precoBase: n(i.preco_base) }
       })
       vinculados.push({ pedidoId: n(c.id), numero: n(c.numero), fornecedor: c.fornecedor_nome, etapa: c.etapa, linhas: conferirPedidoNota(pedidoConf, daNota) })
     }

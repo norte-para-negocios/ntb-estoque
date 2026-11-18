@@ -9,3 +9,13 @@ export function pacioliLiberado(lojaId: number | null | undefined, isAdmin: bool
   if (isAdmin || isSuperAdmin) return true
   return lojaId != null && lojaId in LOJAS_PACIOLI
 }
+
+/**
+ * Trava de ambiente (F-11): o Pacioli é um serviço de PRODUÇÃO (robô que corrige estoque no Omie). Cópia local de teste
+ * (NTB_OMIE_BLOQUEADO=1), `next dev` ou NTB_PACIOLI_BLOQUEADO=1 não podem fazer o navegador falar com ele.
+ * NTB_PACIOLI_LIBERADO=1 reabre de propósito (quem testa o Pacioli de verdade).
+ */
+export function pacioliBloqueadoNoAmbiente(env: Record<string, string | undefined>): boolean {
+  if (env.NTB_PACIOLI_LIBERADO === '1') return false
+  return env.NTB_OMIE_BLOQUEADO === '1' || env.NTB_PACIOLI_BLOQUEADO === '1' || env.NODE_ENV === 'development'
+}

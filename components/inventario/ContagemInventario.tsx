@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
-import { precisaEnviar } from '@/lib/inventario/contagem-regras'
+import { precisaEnviar, avisoConclusaoInventario } from '@/lib/inventario/contagem-regras'
 import {
   ENVIO_EM_ANDAMENTO,
   STATUS_NAO_SALVO,
@@ -491,7 +491,9 @@ export function ContagemInventario({
       }
       if (res?.error) toast.error('Erro', { description: res.error })
       else {
-        toast.success(proprio ? 'Inventário concluído' : 'Inventário enviado ao Omie')
+        const aviso = avisoConclusaoInventario({ proprio, comErro: res && 'comErro' in res ? res.comErro : 0 })
+        if (aviso.tipo === 'warning') toast.warning(aviso.titulo, { description: aviso.descricao })
+        else toast.success(aviso.titulo)
         router.refresh()
       }
     })

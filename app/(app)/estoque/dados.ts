@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { versoesFichaDosMovimentos } from '@/lib/estoque/ficha-versao'
+import { resumirInativosComSaldo, type ResumoInativos } from '@/lib/estoque/inativos-com-saldo'
 
 import type { Movimento, Situacao } from './tipos'
 export type { Movimento, Situacao }
@@ -32,6 +33,8 @@ export type VisaoEstoque = {
   linhas: LinhaEstoque[]
   locais: LocalInfo[]
   familias: { codigo: number; nome: string }[]
+  /** F-07: produtos inativos que ainda têm saldo (ficam fora da lista; a tela avisa). */
+  inativosComSaldo?: ResumoInativos | null
 }
 
 type ProdutoRow = {
@@ -50,11 +53,15 @@ export function situacaoDe(saldo: number, minimo: number | null): Situacao {
 export async function carregarEstoque(lojaId: number): Promise<VisaoEstoque> {
   const supabase = await createClient()
 
-  const [produtos, saldos, custos, locaisRes, famRes] = await Promise.all([
+  const [produtos, inativos, saldos, custos, locaisRes, famRes] = await Promise.all([
     buscarTodasLinhas<ProdutoRow>((from, to) =>
       supabase.from('produtos')
         .select('codigo_produto, codigo, descricao, unidade, tipo_item, codigo_familia, estoque_minimo')
         .eq('loja_id', lojaId).neq('inativo', true).order('id').range(from, to)),
+    buscarTodasLinhas<ProdutoRow>((from, to) =>
+      supabase.from('produtos')
+        .select('codigo_produto, codigo, descricao, unidade, tipo_item, codigo_familia, estoque_minimo')
+        .eq('loja_id', lojaId).eq('inativo', true).order('id').range(from, to)),
     buscarTodasLinhas<{ codigo_local_estoque: number; codigo_produto: number; saldo: number; minimo: number | null }>((from, to) =>
       supabase.from('estoque_saldos').select('codigo_local_estoque, codigo_produto, saldo, minimo')
         .eq('loja_id', lojaId).order('codigo_produto').order('codigo_local_estoque').range(from, to)),
@@ -97,7 +104,11 @@ export async function carregarEstoque(lojaId: number): Promise<VisaoEstoque> {
       saldo, cmc, valor: saldo * cmc, minimo, situacao: situacaoDe(saldo, minimo), locais: locs,
     }
   })
-  return { linhas, locais, familias }
+  const inativosComSaldo = resumirInativosComSaldo(inativos.map((p) => {
+    const saldo = (saldosPorProduto.get(Number(p.codigo_produto)) ?? []).reduce((a, l) => a + l.saldo, 0)
+    return { codigo: p.codigo ?? String(p.codigo_produto), descricao: p.descricao ?? '(sem descrição)', unidade: p.unidade ?? 'UN', saldo, valor: saldo * (cmcDe.get(Number(p.codigo_produto)) ?? 0) }
+  }))
+  return { linhas, locais, familias, inativosComSaldo }
 }
 
 type MovRow = {

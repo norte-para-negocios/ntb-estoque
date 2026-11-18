@@ -52,3 +52,6 @@ scripts/.ajustes-checkpoint-*.json
 
 .worktrees/
 /.next-desktop/
+
+# cópia local de teste (dump, dados, senhas)
+/.local-data/

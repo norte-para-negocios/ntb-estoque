@@ -206,3 +206,14 @@ test('estadoTelaCmv: erro de leitura nunca vira "Sem vendas no período"', () =>
   assert.equal(estadoTelaCmv({ erro: null, linhas: [] }), 'vazio')
   assert.equal(estadoTelaCmv({ erro: null, linhas: [linhaVazia('a', 'A')] }), 'dados')
 })
+
+test('F-04: "sem baixa" é separado de "sem custo" no resumo e no agrupamento', () => {
+  const a = { ...linhaVazia('1', 'Cerveja Petra 600ml'), faturamento: 60, semBaixa: 3 }
+  const b = { ...linhaVazia('2', 'Moqueca'), faturamento: 100, semCusto: 2 }
+  const r = resumoCmv([a, b])
+  assert.equal(r.semBaixa, 3)
+  assert.equal(r.semCusto, 2)
+  const g = agruparCmv([{ ...a, familia: 'Bebidas' }, { ...a, chave: '3', familia: 'Bebidas' }], 'familia')
+  assert.equal(g[0].semBaixa, 6)
+  assert.equal(linhaVazia('x', 'x').semBaixa, 0)
+})

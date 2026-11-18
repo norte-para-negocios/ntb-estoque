@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { arredondarPreco, cmcDaFoto, custoSuspeito, precoReal, cmv, lerTaxas, precoSugeridoDelivery, precoSugeridoSalao, resumir, situacao, sobraPorVenda, validarTaxas, TAXAS_PADRAO, type Taxas } from './preco-puro.ts'
+import { cmvAcimaDaMeta, MARGEM_PERTO_DO_LIMITE, arredondarPreco, cmcDaFoto, custoSuspeito, precoReal, cmv, lerTaxas, precoSugeridoDelivery, precoSugeridoSalao, resumir, situacao, sobraPorVenda, validarTaxas, TAXAS_PADRAO, type Taxas } from './preco-puro.ts'
 
 const t: Taxas = { metaCmv: 0.3, impostoPct: 0.06, taxaCartaoPct: 0.03, taxaDeliveryPct: 0.27, embalagem: 1.5 }
 const perto = (a: number, b: number) => assert.ok(Math.abs(a - b) < 1e-6, `${a} ≠ ${b}`)
@@ -104,4 +104,11 @@ test('mediana resiste a um custo errado', () => {
     { custo: 3, preco: 10, situacao: 'ok' }, { custo: 3.5, preco: 10, situacao: 'atencao' }, { custo: 2618, preco: 16.9, situacao: 'acima' },
   ])
   perto(r.cmvMedio as number, 0.35)
+})
+
+test('F-12: regra única de "acima da meta" = meta + 5 pontos; entre a meta e isso é "perto do limite"', () => {
+  assert.equal(MARGEM_PERTO_DO_LIMITE, 0.05)
+  assert.ok(Math.abs(cmvAcimaDaMeta(0.3) - 0.35) < 1e-12)
+  assert.equal(situacao(10.4, 30, 0, t), 'atencao') // 34,7%: ainda perto do limite
+  assert.equal(situacao(10.6, 30, 0, t), 'acima') // 35,3%: acima da meta
 })

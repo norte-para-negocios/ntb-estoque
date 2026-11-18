@@ -176,3 +176,21 @@ test('validarCustoInformado', () => {
   assert.equal(validarCustoInformado(undefined), null); assert.equal(validarCustoInformado(41.53), null)
   assert.ok(validarCustoInformado(0)); assert.ok(validarCustoInformado(1e7))
 })
+
+test('retry: envio que falhou repassa a mensagem real do motivo (F-10), sem "falhou sem mensagem"', async () => {
+  const f = fakesRetry()
+  const r = await encerrarOuEnviarAjusteManual({ id: 11, tipo: 'SAI', motivo: 'INV', tentativas: 0 }, 30, {
+    ...f.deps,
+    enviar: async () => ({ status: 'Erro', erro: 'Omie bloqueado neste ambiente' }),
+  })
+  assert.equal(r.resultado, 'falha')
+  assert.match(r.erro ?? '', /Omie bloqueado neste ambiente/)
+  assert.match(r.erro ?? '', /11/, 'a mensagem diz de qual movimento')
+  // Sem CMC não traz erro do envio: ainda assim deve haver um motivo legível.
+  const r2 = await encerrarOuEnviarAjusteManual({ id: 12, tipo: 'SAI', motivo: 'INV', tentativas: 0 }, 30, {
+    ...f.deps,
+    enviar: async () => ({ status: 'Sem CMC' }),
+  })
+  assert.equal(r2.resultado, 'falha')
+  assert.match(r2.erro ?? '', /Sem CMC/)
+})

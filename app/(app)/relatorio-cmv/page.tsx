@@ -72,7 +72,8 @@ export default async function CmvPage({ searchParams }: { searchParams: Promise<
       {d.avisos.map((a) => <p key={a} className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">{a}</p>)}
       {foraDoNormal && <AvisoCustoForaDoNormal dados={foraDoNormal} />}
       {resumo.custoSuspeito > 0 && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">{resumo.custoSuspeito.toLocaleString('pt-BR')} produto(s) com custo médio de hoje acima do preço de venda (custo fora do normal no Omie) ficaram com custo zero: <Money value={resumo.faturamentoSuspeito} /> de faturamento sem custo. O CMV estimado fica abaixo do real.</p>}
-      {resumo.semCusto > 0 && <p className="text-[13px] text-text-muted">{resumo.semCusto.toLocaleString('pt-BR')} item(ns) vendido(s) sem custo ({d.fonte === 'kardex' ? 'sem saída no kardex, ex.: taxa de serviço' : d.fonte === 'proprio' ? 'sem baixa ou com baixa sem custo' : 'sem custo médio na foto, ex.: taxa de serviço'}): entram com custo zero.</p>}
+      {resumo.semBaixa > 0 && <p role="note" className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]"><strong>{resumo.semBaixa.toLocaleString('pt-BR')}</strong> {resumo.semBaixa === 1 ? 'item vendido não baixou' : 'itens vendidos não baixaram'} o estoque (venda ainda sem baixa, ou produto sem código): o custo {resumo.semBaixa === 1 ? 'dele aparece zerado' : 'deles aparece zerado'}, o CMV fica menor e o lucro maior do que o real.</p>}
+      {resumo.semCusto > 0 && <p className="text-[13px] text-text-muted">{resumo.semCusto.toLocaleString('pt-BR')} item(ns) vendido(s) sem custo ({d.fonte === 'kardex' ? 'sem saída no kardex, ex.: taxa de serviço' : d.fonte === 'proprio' ? 'a baixa saiu, mas o produto ainda não tem custo' : 'sem custo médio na foto, ex.: taxa de serviço'}): entram com custo zero.</p>}
 
       {estado === 'erro' ? (
         <p role="alert" className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-err shadow-[var(--shadow-sm)]">{d.erro}</p>
@@ -86,7 +87,7 @@ export default async function CmvPage({ searchParams }: { searchParams: Promise<
             <CartaoResumo titulo="Margem bruta" valor={<Money value={resumo.margem} />} sub={fmtPct(resumo.margemPct)} />
             {kardex
               ? <CartaoResumo titulo="CPV (consumo da produção)" valor={<Money value={resumo.consumo} />} sub="Insumos consumidos nas OPs" />
-              : <CartaoResumo titulo="Itens sem custo" valor={resumo.semCusto.toLocaleString('pt-BR')} />}
+              : <CartaoResumo titulo="Itens sem custo" valor={resumo.semCusto.toLocaleString('pt-BR')} sub={d.fonte === 'proprio' ? `${resumo.semBaixa.toLocaleString('pt-BR')} sem baixa no estoque` : undefined} />}
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">

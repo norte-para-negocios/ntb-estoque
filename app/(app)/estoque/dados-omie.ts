@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { lerEmOndas } from '@/lib/supabase/ler-em-ondas'
+import { resumirInativosComSaldo } from '@/lib/estoque/inativos-com-saldo'
 import { montarVisaoOmie, type PosicaoRow, type ProdutoRow, type VisaoEspelho } from '@/lib/estoque/espelho-omie'
 
 export type { VisaoEspelho }
@@ -13,11 +14,16 @@ export async function carregarEstoqueOmie(lojaId: number): Promise<VisaoEspelho>
 /** Igual a carregarEstoqueOmie, devolvendo também as linhas cruas da posição (custo por local na Saúde do estoque). */
 export async function carregarEstoqueOmieComPosicoes(lojaId: number): Promise<{ visao: VisaoEspelho; posicoes: PosicaoRow[] }> {
   const supabase = await createClient()
-  const [produtos, posicoes, locaisRes, famRes] = await Promise.all([
+  const [produtos, inativos, posicoes, locaisRes, famRes] = await Promise.all([
     lerEmOndas<ProdutoRow>((from, to) =>
       supabase.from('produtos')
         .select('codigo_produto, codigo, descricao, unidade, tipo_item, codigo_familia, estoque_minimo')
         .eq('loja_id', lojaId).neq('inativo', true).order('id').range(from, to)),
+    // F-07: produto inativo com saldo não entra na lista, mas a tela avisa o total escondido.
+    lerEmOndas<ProdutoRow>((from, to) =>
+      supabase.from('produtos')
+        .select('codigo_produto, codigo, descricao, unidade, tipo_item, codigo_familia, estoque_minimo')
+        .eq('loja_id', lojaId).eq('inativo', true).order('id').range(from, to)),
     lerEmOndas<PosicaoRow>((from, to) =>
       supabase.from('posicao_estoques')
         .select('data_posicao, codigo_local_estoque, n_cod_prod, n_saldo, n_cmc, estoque_minimo, updated_at')
@@ -26,6 +32,10 @@ export async function carregarEstoqueOmieComPosicoes(lojaId: number): Promise<{ 
     supabase.from('familias').select('codigo_familia, nome').eq('loja_id', lojaId).order('nome'),
   ])
   const visao = montarVisaoOmie({ produtos, posicoes, locais: locaisRes.data ?? [], familias: famRes.data ?? [] })
+  if (inativos.length) {
+    const esc = montarVisaoOmie({ produtos: inativos, posicoes, locais: locaisRes.data ?? [], familias: famRes.data ?? [] })
+    visao.inativosComSaldo = resumirInativosComSaldo(esc.linhas)
+  }
   return { visao, posicoes }
 }
 

@@ -43,6 +43,7 @@
     "scripts/valida-agg-claude.mts",
     "**/*.test.ts",
     "desktop",
+    "e2e",
     ".next-desktop"
   ]
 }

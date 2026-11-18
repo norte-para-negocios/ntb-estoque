@@ -327,6 +327,10 @@ export type PratoCurto = { codigo: number; nome: string; link: string; preco: nu
 
 export type RAcima = {
   meta: number; limite: number; total: number
+  /** Regra única das telas (F-12): preenchidos quando a pergunta não traz limite próprio. `margem` = pontos sobre a meta. */
+  margem?: number
+  /** Pratos entre a meta e o limite ("perto do limite"), só na regra única. */
+  perto?: number
   pratos: (PratoCurto & { sugeridoSalao: number })[]
   /** Pratos que ficaram fora porque o custo não é confiável (insumo sem custo ou custo a conferir). */
   naoConfiaveis: number
@@ -367,10 +371,19 @@ const lk = (p: { nome: string; link: string }) => `[${p.nome.replace(/[[\]]/g, '
 
 export function textoAcima(r: RAcima): { texto: string; tudoCerto: boolean } {
   const nao = r.naoConfiaveis ? `\n\n${r.naoConfiaveis} prato${r.naoConfiaveis > 1 ? 's ficaram' : ' ficou'} de fora porque o custo ainda não é confiável (insumo sem custo ou custo a conferir).` : ''
-  if (!r.total) return { texto: `Nenhum prato passa de ${pct(r.limite)} de CMV. Tudo dentro da meta.${nao}`, tudoCerto: true }
+  // Regra única (F-12): sem limite próprio, "acima da meta" é o mesmo conceito e o mesmo número do Início e da lista de Pratos.
+  const regraUnica = r.margem != null
+  const perto = regraUnica && r.perto ? `\n\nMais ${r.perto} perto do limite (entre ${pct(r.meta, 0)} e ${pct(r.limite, 0)} de CMV).` : ''
+  if (!r.total) {
+    const base = regraUnica ? `Nenhum prato acima da meta (CMV acima de ${pct(r.limite, 0)}).` : `Nenhum prato passa de ${pct(r.limite)} de CMV. Tudo dentro da meta.`
+    return { texto: `${base}${perto}${nao}`, tudoCerto: true }
+  }
   const linhas = r.pratos.map((p) => `- ${lk(p)}: CMV **${pct(p.cmv)}** (custo ${brl(p.custo)}, preço ${brl(p.preco)}). Para bater a meta: ${brl(p.sugeridoSalao)}`)
   const mais = r.total > r.pratos.length ? `\n\nE mais ${r.total - r.pratos.length}. Veja todos em [Pratos acima da meta](/cozinha/pratos?filtro=acima).` : ''
-  return { texto: `**${r.total} prato${r.total > 1 ? 's passam' : ' passa'} de ${pct(r.limite)} de CMV** (meta ${pct(r.meta, 0)}):\n\n${linhas.join('\n')}${mais}${nao}`, tudoCerto: false }
+  const titulo = regraUnica
+    ? `**${r.total} prato${r.total > 1 ? 's' : ''} acima da meta** (CMV acima de ${pct(r.limite, 0)}, mais de ${Math.round((r.margem ?? 0) * 100)} pontos sobre a meta de ${pct(r.meta, 0)}):`
+    : `**${r.total} prato${r.total > 1 ? 's passam' : ' passa'} de ${pct(r.limite)} de CMV** (meta ${pct(r.meta, 0)}):`
+  return { texto: `${titulo}\n\n${linhas.join('\n')}${mais}${perto}${nao}`, tudoCerto: false }
 }
 
 export function textoSugerir(r: RSugerir): string {

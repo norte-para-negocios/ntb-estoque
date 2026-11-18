@@ -11,7 +11,7 @@ export type DimCmv = 'produto' | 'familia' | 'tipo'
 export type LinhaCmv = {
   chave: string; rotulo: string; familia: string; tipoCod: string; tipo: string
   quant: number; faturamento: number; cmv: number; consumo: number
-  ei: number; compras: number; producao: number; ef: number; outrasEntradas: number; outrasSaidas: number; semCusto: number; custoSuspeito: number
+  ei: number; compras: number; producao: number; ef: number; outrasEntradas: number; outrasSaidas: number; semCusto: number; semBaixa: number; custoSuspeito: number
   quebra: number // quantidade que o saldo do kardex 'pulou' sem movimento no espelho (0 = cadeia íntegra)
   // custo fora do normal no Omie (migration 290): valores crus do Omie e quantos movimentos tiveram o custo trocado pelo
   // custo normal do produto (semReferencia = trocados por zero, sem custo confiável). Sem a 290: cru = usado, 0 trocados.
@@ -73,7 +73,7 @@ export function custoMedioAtual(foto: { n_cod_prod: number; codigo_local_estoque
 export function linhaVazia(chave: string, rotulo: string, m?: Partial<MetaCmv>): LinhaCmv {
   return {
     chave, rotulo, familia: m?.familia ?? 'Sem família', tipoCod: m?.tipoCod ?? '', tipo: m?.tipo ?? 'Não classificado',
-    quant: 0, faturamento: 0, cmv: 0, consumo: 0, ei: 0, compras: 0, producao: 0, ef: 0, outrasEntradas: 0, outrasSaidas: 0, semCusto: 0, custoSuspeito: 0, quebra: 0,
+    quant: 0, faturamento: 0, cmv: 0, consumo: 0, ei: 0, compras: 0, producao: 0, ef: 0, outrasEntradas: 0, outrasSaidas: 0, semCusto: 0, semBaixa: 0, custoSuspeito: 0, quebra: 0,
     cmvOmie: 0, consumoOmie: 0, eiOmie: 0, efOmie: 0, ajustados: 0, ajustadosEstoque: 0, semReferencia: 0, custoReferencia: null,
   }
 }
@@ -164,8 +164,8 @@ export function totaisFormula(linhas: LinhaCmv[], incluiTipo: (tipoCod: string) 
   return { semQuebra: r2(semQuebra), foraDoTotal: r2(foraDoTotal), quebrados }
 }
 
-const CAMPOS = ['quant', 'faturamento', 'cmv', 'consumo', 'ei', 'compras', 'producao', 'ef', 'outrasEntradas', 'outrasSaidas', 'semCusto', 'custoSuspeito', 'quebra', 'cmvOmie', 'consumoOmie', 'eiOmie', 'efOmie', 'ajustados', 'ajustadosEstoque', 'semReferencia'] as const
-const CONTAGENS = new Set<string>(['semCusto', 'custoSuspeito', 'ajustados', 'ajustadosEstoque', 'semReferencia'])
+const CAMPOS = ['quant', 'faturamento', 'cmv', 'consumo', 'ei', 'compras', 'producao', 'ef', 'outrasEntradas', 'outrasSaidas', 'semCusto', 'semBaixa', 'custoSuspeito', 'quebra', 'cmvOmie', 'consumoOmie', 'eiOmie', 'efOmie', 'ajustados', 'ajustadosEstoque', 'semReferencia'] as const
+const CONTAGENS = new Set<string>(['semCusto', 'semBaixa', 'custoSuspeito', 'ajustados', 'ajustadosEstoque', 'semReferencia'])
 
 export function agruparCmv(linhas: LinhaCmv[], por: DimCmv): LinhaCmv[] {
   let out: LinhaCmv[]
@@ -196,14 +196,14 @@ export function estadoTelaCmv(d: { erro: string | null; linhas: unknown[] }): 'e
   return d.linhas.length ? 'dados' : 'vazio'
 }
 
-export function resumoCmv(linhas: LinhaCmv[]): { faturamento: number; cmv: number; margem: number; margemPct: number | null; consumo: number; semCusto: number; custoSuspeito: number; faturamentoSuspeito: number } {
-  let faturamento = 0, cmv = 0, consumo = 0, semCusto = 0, custoSuspeito = 0, faturamentoSuspeito = 0
+export function resumoCmv(linhas: LinhaCmv[]): { faturamento: number; cmv: number; margem: number; margemPct: number | null; consumo: number; semCusto: number; semBaixa: number; custoSuspeito: number; faturamentoSuspeito: number } {
+  let faturamento = 0, cmv = 0, consumo = 0, semCusto = 0, semBaixa = 0, custoSuspeito = 0, faturamentoSuspeito = 0
   for (const l of linhas) {
-    faturamento += l.faturamento; cmv += l.cmv; consumo += l.consumo; semCusto += l.semCusto; custoSuspeito += l.custoSuspeito
+    faturamento += l.faturamento; cmv += l.cmv; consumo += l.consumo; semCusto += l.semCusto; semBaixa += l.semBaixa; custoSuspeito += l.custoSuspeito
     if (l.custoSuspeito) faturamentoSuspeito += l.faturamento
   }
   return {
-    faturamento: r2(faturamento), cmv: r2(cmv), margem: r2(faturamento - cmv), consumo: r2(consumo), semCusto, custoSuspeito, faturamentoSuspeito: r2(faturamentoSuspeito),
+    faturamento: r2(faturamento), cmv: r2(cmv), margem: r2(faturamento - cmv), consumo: r2(consumo), semCusto, semBaixa, custoSuspeito, faturamentoSuspeito: r2(faturamentoSuspeito),
     margemPct: pctDoFaturamento(faturamento - cmv, faturamento),
   }
 }

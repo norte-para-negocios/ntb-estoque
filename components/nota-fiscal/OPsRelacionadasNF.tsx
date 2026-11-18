@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatarNomeProduto } from '@/lib/formatar-nome'
 
 // Seção "Ordens de produção relacionadas" da tela de detalhe de NF. Mesmo
 // cruzamento aproximado da Task 17/18
@@ -120,7 +119,7 @@ export async function OPsRelacionadasNF({
   if (produtosErro) {
     console.error('OPsRelacionadasNF: falha ao consultar produtos (nomes)', produtosErro.message)
   }
-  const nomeProduto = new Map((produtos ?? []).map((p) => [p.codigo_produto, formatarNomeProduto(p.descricao)]))
+  const nomeProduto = new Map((produtos ?? []).map((p) => [p.codigo_produto, p.descricao ?? '']))
 
   // Já vem ordenado pelo `.order('data_ref', ...)` explícito da query acima --
   // este sort é só defesa extra (idempotente se já estiver ordenado).

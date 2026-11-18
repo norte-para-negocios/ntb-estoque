@@ -18,6 +18,7 @@ import { assinaturaConfere } from '@/lib/estoque/nfe-assinatura'
 import type { AlertaItem, ConfigInicialItem } from '@/lib/estoque/nf-item-regras'
 import { casarItem, montarContexto, type Depara, type ProdutoCad } from '@/lib/estoque/nf-conferencia'
 import { espelharNotaNoFrio } from '@/lib/estoque/nf-frio'
+import { gerarTitulosDaCompraManual } from '@/lib/estoque/compra-manual-titulos'
 import { avisoReprocessarLocal } from '@/lib/offline/limpar-esquema-puro'
 import { lerNumeroBR, MSG_NUMERO_BR } from '@/lib/num-br'
 
@@ -241,6 +242,9 @@ async function criarNotaDaCompraManual(
     if (error) throw new Error(error.message)
     const notaId = Number((g as { nota_id: number }).nota_id)
     await sb.from('compras_proprio').update({ nota_fiscal_id: notaId }).eq('id', compraId).eq('loja_id', lojaId)
+    // F-01: o gatilho da conta a pagar já passou (status mudou antes do vínculo): gera agora, com o vínculo gravado.
+    const titulos = await gerarTitulosDaCompraManual(sb, lojaId, notaId)
+    if (!titulos.ok) console.error('compra manual: a nota foi criada, mas a conta a pagar não foi gerada (use "Gerar agora" na tela da nota)', titulos.erro)
     await sb.rpc('sincronizar_situacao_nota', { p_loja: lojaId, p_nota: notaId })
     void espelharNotaNoFrio(lojaId, notaId)
     return notaId

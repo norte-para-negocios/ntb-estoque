@@ -108,3 +108,20 @@ export function linhaOPLocalSemConsulta(
     updated_at: estado.agoraISO,
   }
 }
+
+type LinhaFilaChave = { tipo: 'op' | 'nfce'; ref: string | null; payload: unknown }
+
+/** F-15: identifica a linha da fila de integração. OP = pedido + item (cCodIntOP, que já sai de pedido+produto+ocorrência);
+ *  NFC-e = chave da nota. Sem pedido/chave não há como reconhecer o reenvio (null = sempre enfileira, como antes). */
+export function chaveDaFila(tipo: 'op' | 'nfce', ref: string | null, payload: unknown): string | null {
+  if (!ref) return null
+  if (tipo === 'nfce') return `nfce|${ref}`
+  const cod = (payload as { cCodIntOP?: string } | null)?.cCodIntOP
+  return cod ? `op|${ref}|${cod}` : null
+}
+
+/** F-15: já existe linha pendente para o mesmo pedido e item? (`pendentes` = linhas Pendente da loja com esse ref.) */
+export function jaEstaNaFila(pendentes: LinhaFilaChave[], tipo: 'op' | 'nfce', ref: string | null, payload: unknown): boolean {
+  const chave = chaveDaFila(tipo, ref, payload)
+  return chave !== null && pendentes.some((l) => chaveDaFila(l.tipo, l.ref, l.payload) === chave)
+}
