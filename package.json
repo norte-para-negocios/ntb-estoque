@@ -11,6 +11,7 @@
     "robo:saldo": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/robo/saldo.ts",
     "robo": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/robo/robo.ts",
     "robo:financeiro": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/robo/financeiro.ts",
+    "robo:compras": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/robo/compras.ts",
     "robo:entrada": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/robo/entrada.ts",
     "robo:inventario": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/robo/inventario.ts",
     "robo:venda": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/robo/venda.ts",
