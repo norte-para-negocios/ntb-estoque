@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { PRAZO_ROTA_VENDA_MS, ESPERA_CMC_APOS_OP_MS, prazoDaRota, passouDoPrazo, cabeNoPrazo, esperasCmcDaSaida } from './prazo-venda.ts'
+import { PRAZO_ROTA_VENDA_MS, ESPERA_CMC_APOS_OP_MS, prazoDaRota, passouDoPrazo, cabeNoPrazo, esperasCmcDaSaida, chaveDaFila, jaEstaNaFila } from './prazo-venda.ts'
 
 test('prazo da rota: padrão bem abaixo dos 150 s do Vendas', () => {
   assert.equal(prazoDaRota(1_000, undefined), 1_000 + PRAZO_ROTA_VENDA_MS)
@@ -94,4 +94,24 @@ test('OP local sem consulta ao Omie: linha mínima para o retry-op-conclusao ach
   assert.equal(ok.concluida, true)
   assert.equal(ok.conclusao_status, undefined)
   assert.equal(ok.identificacao_codigo_local_estoque, undefined)
+})
+
+test('F-15: chave da fila = pedido + item (cCodIntOP); sem pedido não há como reconhecer reenvio', () => {
+  assert.equal(chaveDaFila('op', 'ped-1', { cCodIntOP: 'A1' }), 'op|ped-1|A1')
+  assert.equal(chaveDaFila('op', null, { cCodIntOP: 'A1' }), null)
+  assert.equal(chaveDaFila('op', 'ped-1', {}), null)
+  assert.equal(chaveDaFila('nfce', 'chave44', {}), 'nfce|chave44')
+  assert.equal(chaveDaFila('nfce', null, {}), null)
+})
+
+test('F-15: reenvio do mesmo pedido e item não cria linha; outro item do mesmo pedido cria', () => {
+  const fila = [
+    { tipo: 'op' as const, ref: 'ped-1', payload: { cCodIntOP: 'A1' } },
+    { tipo: 'op' as const, ref: 'ped-1', payload: { cCodIntOP: 'A2' } },
+  ]
+  assert.equal(jaEstaNaFila(fila, 'op', 'ped-1', { cCodIntOP: 'A1' }), true)
+  assert.equal(jaEstaNaFila(fila, 'op', 'ped-1', { cCodIntOP: 'A3' }), false)
+  assert.equal(jaEstaNaFila(fila, 'op', 'ped-2', { cCodIntOP: 'A1' }), false)
+  assert.equal(jaEstaNaFila(fila, 'nfce', 'ped-1', { cCodIntOP: 'A1' }), false)
+  assert.equal(jaEstaNaFila(fila, 'op', null, { cCodIntOP: 'A1' }), false)
 })
