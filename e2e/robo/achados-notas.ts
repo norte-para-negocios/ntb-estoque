@@ -113,6 +113,7 @@ export const RESSALVAS: Ressalva[] = [
     ressalvas: [
       'A tela CMV mostra no máximo 500 linhas de produto (os cartões somam todas); no Sertão nenhum mês passou disso.',
       'Rótulos com espaço duplo ("1/2   Calabresa G") vêm assim do cadastro; o robô normaliza.',
+      'F-04 (corrigido na cópia): o cron sync-fechamentos-frio completou as baixas das vendas 399 e 412 da ODARA (lotes de 50 referências, janela de 30 dias); o buraco de R$ 58,91 fechou. Sobra +R$ 1,13 no CMV de nov/2026 (tela R$ 14.214,66 contra R$ 14.213,53): a baixa tardia é custeada pelo custo médio de hoje, não o da hora da venda (Moqueca de camarão +R$ 1,08).',
       'Para a ODARA a conta ficha x custo médio vigente reproduziu o CMV do ERP em out/2026 (R$ 7.395,92 contra R$ 7.395,91). Foi essencial usar a última revisão de cada movimento (estoque_mov_revisao).',
     ],
   },

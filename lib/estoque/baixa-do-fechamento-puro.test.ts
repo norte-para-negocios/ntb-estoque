@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { itensDaBaixaDoFechamento, localMaisUsado } from './baixa-do-fechamento-puro.ts'
+import { itensDaBaixaDoFechamento, localMaisUsado, emLotes, LOTE_MAX_REFS, JANELA_DIAS, inicioDaJanela } from './baixa-do-fechamento-puro.ts'
 
 const cod = new Map<number, string>([[8000000000133, '90058'], [8000000000439, '90101'], [8000000000401, '90301']])
 const loc = new Map<number, number>([[8000000000133, 4], [8000000000439, 4]])
@@ -34,4 +34,25 @@ test('F-04: local mais usado por produto; empate fica com o mais recente (lista 
   ])
   assert.equal(m.get(1), 4)
   assert.equal(m.get(2), 3)
+})
+
+test('F-04: emLotes fatia em pedaços de no máximo 50, sem perder nem repetir ninguém', () => {
+  const refs = Array.from({ length: 300 }, (_, i) => `r${i}`)
+  const lotes = emLotes(refs)
+  assert.equal(LOTE_MAX_REFS, 50)
+  assert.equal(lotes.length, 6)
+  assert.ok(lotes.every((l) => l.length <= 50))
+  assert.deepEqual(lotes.flat(), refs)
+  assert.deepEqual(emLotes(['a', 'b', 'c'], 2), [['a', 'b'], ['c']])
+  assert.deepEqual(emLotes([]), [])
+  assert.deepEqual(emLotes(Array.from({ length: 51 }, (_, i) => i)).map((l) => l.length), [50, 1])
+})
+
+test('F-04: a janela é de 30 dias (vendas de 06/11 e 07/11 entram em 18/11; de 30+ dias atrás não)', () => {
+  assert.equal(JANELA_DIAS, 30)
+  const agora = new Date('2026-11-18T12:00:00Z')
+  const ini = inicioDaJanela(agora)
+  assert.equal(ini.toISOString(), '2026-10-19T12:00:00.000Z')
+  assert.ok(new Date('2026-11-06T15:00:00Z') >= ini)
+  assert.ok(new Date('2026-10-01T15:00:00Z') < ini)
 })

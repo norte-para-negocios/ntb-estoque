@@ -59,3 +59,25 @@ export function localMaisUsado(movs: { codigo_produto: number | string; codigo_l
   }
   return res
 }
+
+/**
+ * Máximo de referências por consulta `in.(...)` ao PostgREST. Medido na cópia local: 60 refs funciona, 100 dão 502 e 300 dão 414
+ * (URL grande demais no Kong/PostgREST). 50 fica abaixo do limite com folga.
+ */
+export const LOTE_MAX_REFS = 50
+
+/** Até quantos dias atrás a rotina procura venda sem baixa. 30 dias cobre vendas de semanas atrás (a de 7 dias deixou 399 e 412 de fora). */
+export const JANELA_DIAS = 30
+
+/** Fatia a lista em lotes de no máximo `tamanho` itens (ordem preservada, nada perdido nem repetido). */
+export function emLotes<T>(lista: readonly T[], tamanho: number = LOTE_MAX_REFS): T[][] {
+  const n = Math.max(1, Math.floor(tamanho))
+  const out: T[][] = []
+  for (let i = 0; i < lista.length; i += n) out.push(lista.slice(i, i + n))
+  return out
+}
+
+/** Início da janela de procura: `agora` menos JANELA_DIAS. */
+export function inicioDaJanela(agora: Date): Date {
+  return new Date(agora.getTime() - JANELA_DIAS * 24 * 60 * 60 * 1000)
+}
