@@ -70,3 +70,20 @@ test('resultadosDoEspelho: pulado não é falha', () => {
   const r = resultadosDoEspelho([{ loja: 1 }, { loja: 2, erro: 'boom' }])
   assert.deepEqual(r.map((x) => x.ok), [true, false])
 })
+
+test('F-10: retry que falhou traz o motivo real em erros (e não "falhou sem mensagem")', () => {
+  const r = resultadoDeRetry({ loja_id: 6, tentadas: 3, sucesso: 0, falhas: 3, motivos: ['movimento 1: Omie bloqueado neste ambiente'] })
+  assert.equal(statusDoCron([r]), 500)
+  assert.deepEqual(corpoDoCron([r]).erros, [{ loja: 6, erro: 'movimento 1: Omie bloqueado neste ambiente' }])
+})
+
+test('F-10: motivos de linhas pendentes não derrubam o ciclo quando outras passaram', () => {
+  const r = resultadoDeRetry({ loja_id: 1, tentadas: 4, sucesso: 1, falhas: 3, motivos: ['x'] })
+  assert.equal(statusDoCron([r]), 200)
+  assert.equal(corpoDoCron([r]).erros.length, 0)
+})
+
+test('F-10: erro de consulta continua com prioridade sobre os motivos', () => {
+  const r = resultadoDeRetry({ loja_id: 1, tentadas: 0, sucesso: 0, erro: 'query', motivos: ['y'] })
+  assert.equal(corpoDoCron([r]).erros[0].erro, 'query')
+})

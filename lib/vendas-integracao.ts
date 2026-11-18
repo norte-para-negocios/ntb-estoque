@@ -13,7 +13,7 @@
 // Falha TRANSITORIA na OP (ou na nota, ver app/api/integracao/nota-fiscal) vai
 // pra vendas_integracao_fila e o cron retry-integracao-vendas reenvia.
 import { comEsperaDeCmc, repetirSeCalculoPendente } from '@/lib/vendas/saida-com-espera'
-import { cabeNoPrazo, decidirFilaJaExiste, ehRecusaPorConcorrencia, ESPERA_CONCORRENCIA_MS, esperasCmcDaSaida, linhaOPLocalSemConsulta, passouDoPrazo } from '@/lib/vendas/prazo-venda'
+import { cabeNoPrazo, decidirFilaJaExiste, ehRecusaPorConcorrencia, ESPERA_CONCORRENCIA_MS, esperasCmcDaSaida, jaEstaNaFila, linhaOPLocalSemConsulta, passouDoPrazo } from '@/lib/vendas/prazo-venda'
 import { comPrazoOmie, prazoOmieAtual } from '@/lib/omie/contexto-prazo'
 import { ehProdutoServico, resultadoServico } from '@/lib/vendas/servico-venda'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -203,6 +203,18 @@ async function enfileirar(
   payload: unknown,
   erro: string
 ) {
+  // F-15: reenvio do mesmo pedido/item com a linha ainda Pendente não cria outra (o retry já cuida dela).
+  if (ref) {
+    const { data: pendentes, error: erroLeitura } = await supabase
+      .from('vendas_integracao_fila')
+      .select('tipo, ref, payload')
+      .eq('loja_id', lojaId)
+      .eq('tipo', tipo)
+      .eq('ref', ref)
+      .eq('status', 'Pendente')
+    // Erro de leitura não impede enfileirar (melhor linha repetida que venda perdida).
+    if (!erroLeitura && jaEstaNaFila((pendentes ?? []) as { tipo: 'op' | 'nfce'; ref: string | null; payload: unknown }[], tipo, ref, payload)) return true
+  }
   const { error } = await supabase.from('vendas_integracao_fila').insert({
     loja_id: lojaId,
     tipo,

@@ -11,7 +11,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { localDaVenda, type LojaLocais } from '@/lib/vendas/local-venda'
 import { planejarBaixa, type ItemVendaProprio, type ResultadoItemProprio } from './plano-baixa'
 import { estornar, saida } from './ledger'
-import { exigirLeitura, todosPulados, ehConflitoIdempotencia } from './venda-proprio-leituras'
+import { exigirLeitura, todosPulados, ehConflitoIdempotencia, devolveuAoEstoque } from './venda-proprio-leituras'
 
 /** Executa o plano: saidas em ORDEM de codigo_produto (evita deadlock entre vendas simultaneas) e devolve na ordem original dos itens. */
 export async function baixarVendaProprio(
@@ -143,8 +143,8 @@ export async function estornarVendaProprio(supabase: SupabaseClient, lojaId: num
   if (error) throw new Error(error.message)
   for (const m of (data ?? []) as { id: number }[]) {
     try {
-      await estornar(m.id, null, `Estorno da venda ${pedidoRef}`)
-      r.ajustesExcluidos++
+      const res = await estornar(m.id, null, `Estorno da venda ${pedidoRef}`)
+      if (devolveuAoEstoque(res)) r.ajustesExcluidos++
     } catch (e) {
       r.falhas++
       r.detalhes.push(`movimento ${m.id}: ${e instanceof Error ? e.message : 'falha ao estornar'}`)

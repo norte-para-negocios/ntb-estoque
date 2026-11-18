@@ -57,6 +57,16 @@ export function arredondarPreco(v: number): number {
 export type Situacao = 'ok' | 'atencao' | 'acima' | 'sem_preco' | 'sem_custo' | 'incompleto' | 'suspeito'
 
 /**
+ * REGRA ÚNICA de "acima da meta" (F-12): "Acima da meta" = CMV mais de 5 pontos percentuais sobre a meta da loja
+ * (situação `acima`). "Perto do limite" = entre a meta e esses 5 pontos (situação `atencao`). Início, lista de Pratos e
+ * Pacioli usam esta mesma regra e este mesmo rótulo; quem quiser "tudo que passa da meta" soma os dois e diz isso.
+ */
+export const MARGEM_PERTO_DO_LIMITE = 0.05
+
+/** CMV a partir do qual o prato conta como "acima da meta" (meta + 5 pontos). */
+export const cmvAcimaDaMeta = (metaCmv: number): number => metaCmv + MARGEM_PERTO_DO_LIMITE
+
+/**
  * Situação do prato contra a meta: até a meta = ok; até 5 pontos acima = atenção; mais = acima.
  * Insumo sem custo: nada de custo = sem_custo; parte = incompleto (o CMV real é MAIOR), salvo se já passa da meta.
  */
@@ -65,9 +75,9 @@ export function situacao(custo: number, preco: number | null, semCusto: number, 
   if (suspeitos > 0) return 'suspeito'
   if (semCusto > 0 && custo <= 0) return 'sem_custo'
   const c = custo / preco
-  if (semCusto > 0 && c <= t.metaCmv + 0.05 + 1e-9) return 'incompleto'
+  if (semCusto > 0 && c <= cmvAcimaDaMeta(t.metaCmv) + 1e-9) return 'incompleto'
   if (c <= t.metaCmv + 1e-9) return 'ok'
-  if (c <= t.metaCmv + 0.05) return 'atencao'
+  if (c <= cmvAcimaDaMeta(t.metaCmv)) return 'atencao'
   return 'acima'
 }
 

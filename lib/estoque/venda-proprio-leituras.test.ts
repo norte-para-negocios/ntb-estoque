@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { exigirLeitura, todosPulados, ehConflitoIdempotencia } from './venda-proprio-leituras.ts'
+import { exigirLeitura, todosPulados, ehConflitoIdempotencia, devolveuAoEstoque } from './venda-proprio-leituras.ts'
 
 test('exigirLeitura: erro da consulta vira exceção com o que se tentou ler', () => {
   assert.throws(() => exigirLeitura({ data: null, error: { message: 'timeout' } }, 'fichas'), /Falha ao ler fichas: timeout/)
@@ -35,4 +35,10 @@ test('todosPulados: todos os itens voltam retentáveis, na ordem, com o erro', (
 test('conflito de idempotência é reconhecido (não retentável)', () => {
   assert.equal(ehConflitoIdempotencia('conflito de idempotência: VENDA|x já gravado com outra quantidade'), true)
   assert.equal(ehConflitoIdempotencia('statement timeout'), false)
+})
+
+test('F-16: estorno repetido (duplicado) não conta como ajuste desfeito', () => {
+  assert.equal(devolveuAoEstoque({ ok: true, duplicado: false }), true)
+  assert.equal(devolveuAoEstoque({ ok: true, duplicado: true }), false)
+  assert.equal(devolveuAoEstoque(null), true, 'sem resposta legível não esconde o estorno que ocorreu')
 })

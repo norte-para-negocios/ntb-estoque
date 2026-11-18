@@ -509,12 +509,11 @@ async function rodarLoja(browser: Awaited<ReturnType<typeof chromium.launch>>, l
       if (valoresInvalidos(resposta).length) falha('valor-invalido', '/cozinha/pacioli', 'perguntar ao Pacioli', 'resposta sem NaN/undefined', valoresInvalidos(resposta).join(', '), pac.png)
       const ultima = (await page.evaluate(() => ((document.querySelector('main') as HTMLElement | null)?.innerText ?? ''))).replace(/\s+/g, ' ')
       if (pratos.length) {
-        // O Pacioli chama de "passam da meta" tudo acima de 30% (as telas separam "perto do limite" e "acima da meta" a 5 pontos).
-        const mPassam = /Nenhum prato passa/i.test(ultima) ? '0' : (ultima.match(/(\d+)\s+pratos?\s+passam/i) ?? [])[1]
-        conferir('/cozinha/pacioli', 'Pacioli: pratos que passam da meta (acima + perto do limite)', String(nAcima + nAtencao), String(mPassam ?? 'resposta sem número'), pac.png)
+        // Regra única (F-12): o Pacioli diz "N pratos acima da meta" com o mesmo N do Início e da lista de Pratos (acima = mais de 5 pontos sobre a meta).
+        const mAcima = /Nenhum prato acima da meta/i.test(ultima) ? '0' : (ultima.match(/(\d+)\s+pratos?\s+acima da meta/i) ?? [])[1]
+        conferir('/cozinha/pacioli', 'Pacioli: pratos acima da meta (mesma regra do Início e de Pratos)', String(nAcima), String(mAcima ?? 'resposta sem número'), pac.png)
         const mFora = (ultima.match(/(\d+)\s+pratos?\s+ficaram de fora/i) ?? [])[1] ?? '0'
         conferir('/cozinha/pacioli', 'Pacioli: pratos de fora por custo não confiável', String(soPratos.filter((x) => x.semCusto > 0 || x.suspeitos > 0).length), String(mFora), pac.png)
-        if (nAcima + nAtencao > 0 && nAcima !== nAcima + nAtencao) achados.push(`${lojaAtual}: o Início e a lista de Pratos dizem "${nAcima} pratos acima da meta" (acima = mais de 5 pontos sobre a meta), e o Pacioli diz "${nAcima + nAtencao} pratos passam de 30%" (conta os "perto do limite"). Os dois batem com o gabarito pela definição de cada tela, mas o dono vê dois números diferentes para a mesma pergunta.`)
       }
     }
   }

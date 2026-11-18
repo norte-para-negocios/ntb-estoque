@@ -20,3 +20,9 @@ export function todosPulados(itens: { codigo?: string | null }[], erro: string):
 export function ehConflitoIdempotencia(mensagem: string): boolean {
   return /conflito de idempot[eê]ncia/i.test(mensagem)
 }
+
+/** F-16: o estorno é idempotente (ref `mov:<id>`); a segunda chamada volta `duplicado: true` e não devolve nada ao estoque.
+ *  Só o estorno que de fato gravou conta em `ajustesExcluidos`. */
+export function devolveuAoEstoque(res: { duplicado?: boolean } | null | undefined): boolean {
+  return !(res && res.duplicado === true)
+}

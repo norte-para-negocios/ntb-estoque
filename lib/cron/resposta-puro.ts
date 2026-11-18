@@ -9,6 +9,8 @@ export type ResultadoCronLoja = {
   /** false = a loja não tinha nada a fazer neste ciclo (saudável, nunca conta como falha). */
   trabalho?: boolean
   erro?: string | null
+  /** Motivo das linhas que continuam pendentes. Não faz a loja falhar sozinho; só preenche a mensagem quando ela falha. */
+  detalhe?: string | null
 }
 
 function falhou(r: ResultadoCronLoja): boolean {
@@ -26,7 +28,7 @@ export function corpoDoCron(resultados: ResultadoCronLoja[]) {
     total: resultados.length,
     ok: resultados.length - ruins.length,
     falhas: ruins.length,
-    erros: ruins.map((r) => ({ loja: r.loja, erro: r.erro || 'falhou sem mensagem' })),
+    erros: ruins.map((r) => ({ loja: r.loja, erro: r.erro || r.detalhe || 'falhou sem mensagem' })),
   }
 }
 
@@ -46,10 +48,10 @@ export function resultadosDeSettled<V>(
 
 /** Resultado de um cron de retry (fila de reenvio): falha de LOJA = erro de consulta, ou tentou e nada deu certo.
  *  Linha que continua pendente numa loja onde outras passaram não derruba o ciclo (a pendência aparece na tela/sininho). */
-export function resultadoDeRetry(r: { loja_id: number; tentadas: number; sucesso: number; falhas?: number; encerradas?: number; erro?: string }): ResultadoCronLoja {
+export function resultadoDeRetry(r: { loja_id: number; tentadas: number; sucesso: number; falhas?: number; encerradas?: number; erro?: string; motivos?: string[] }): ResultadoCronLoja {
   const trabalho = r.tentadas > 0 || Boolean(r.erro)
   const resolveu = r.sucesso > 0 || (r.encerradas ?? 0) > 0
-  return { loja: r.loja_id, trabalho, ok: !r.erro && (!trabalho || resolveu), erro: r.erro ?? null }
+  return { loja: r.loja_id, trabalho, ok: !r.erro && (!trabalho || resolveu), erro: r.erro ?? null, detalhe: r.motivos?.length ? r.motivos.join(' | ') : null }
 }
 
 /** Mantém a regra antiga das rotas que já respondiam 502 quando TODAS as lojas falham; falha parcial vira 500. */

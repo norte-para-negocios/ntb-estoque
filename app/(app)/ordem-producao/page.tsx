@@ -7,6 +7,7 @@ import { OrdemProducaoLista } from '@/components/ordem-producao/OrdemProducaoLis
 import { CriarOrdemProducao } from '@/components/ordem-producao/CriarOrdemProducao'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { AguardandoOmie } from '@/components/movimentacoes/AguardandoOmie'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
@@ -608,6 +609,7 @@ export default async function OrdemProducaoPage({
 
   return (
     <div className="space-y-4">
+      {!proprio && <AguardandoOmie lojaId={lojaId} />}
       <ListaHeader>
         {/* Título numa linha própria; ações na linha de baixo (mesma ordem). No celular
             a barra rola na horizontal (com fade nas pontas) em vez de quebrar/estourar. */}
