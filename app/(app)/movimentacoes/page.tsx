@@ -13,6 +13,7 @@ import { ArrowLeftRight } from 'lucide-react'
 import { HistoricoTab } from '@/components/movimentacoes/HistoricoTab'
 import { MovimentosOmie } from '@/components/movimentacoes/MovimentosOmie'
 import { MovimentosProprio } from '@/components/movimentacoes/MovimentosProprio'
+import { AguardandoOmie } from '@/components/movimentacoes/AguardandoOmie'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 
 export default async function MovimentacoesPage({
@@ -109,6 +110,8 @@ export default async function MovimentacoesPage({
           { value: 'historico', label: 'Histórico por dia' },
         ]}
       />
+
+      {!proprio && aba !== 'historico' && <AguardandoOmie lojaId={lojaId} />}
 
       {aba === 'historico'
         ? <HistoricoTab sp={sp} lojaId={lojaId} proprio={proprio} />
