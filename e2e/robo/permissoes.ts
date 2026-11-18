@@ -278,12 +278,19 @@ async function rodarLogin(browser: Awaited<ReturnType<typeof chromium.launch>>, 
       const caminho = `/api/offline/snapshot?tabela=${t.tabela}&limite=1`
       const r = await api(caminho, { Authorization: `Bearer ${token}`, 'x-ntb-versao': '99.0.0' })
       let linhas = 0
-      try { linhas = (JSON.parse(r.corpo) as { linhas?: unknown[] }).linhas?.length ?? 0 } catch { /* corpo não-JSON */ }
-      const ver = avaliarApi({ regra: t.regra, usuario, status: r.status === 200 ? 200 : r.status === 401 || r.status === 403 ? r.status : r.status })
-      out.linhas.push({ loja: lg.lojaNome, cargo: lg.cargo, rota: `GET ${caminho}`, resultado: `HTTP ${r.status} (${linhas} linha lida)`, esperado: decidir(t.regra, usuario).permitido ? 'permitido' : 'proibido', veredito: ver.tipo, detalhe: ver.detalhe })
-      if (ver.tipo === 'furo' && r.status === 200)
+      let bloqueado = false
+      try {
+        const j = JSON.parse(r.corpo) as { linhas?: unknown[]; bloqueado?: boolean }
+        linhas = j.linhas?.length ?? 0
+        bloqueado = j.bloqueado === true
+      } catch { /* corpo não-JSON */ }
+      // Desde a correção da F-05 o canal bloqueia com 200 + { bloqueado: true } e página vazia (o app desktop não pode receber erro, senão aborta a carga inicial).
+      const statusEfetivo = r.status === 200 && bloqueado ? 403 : r.status
+      const ver = avaliarApi({ regra: t.regra, usuario, status: statusEfetivo })
+      out.linhas.push({ loja: lg.lojaNome, cargo: lg.cargo, rota: `GET ${caminho}`, resultado: `HTTP ${r.status}${bloqueado ? ' bloqueado' : ''} (${linhas} linha lida)`, esperado: decidir(t.regra, usuario).permitido ? 'permitido' : 'proibido', veredito: ver.tipo, detalhe: ver.detalhe })
+      if (ver.tipo === 'furo' && statusEfetivo === 200)
         falha('furo-api', `GET /api/offline/snapshot?tabela=${t.tabela}`, `ler a tabela ${t.tabela} pelo canal offline (token do próprio login)`, `bloqueado (${decidir(t.regra, usuario).motivo})`, `HTTP 200, ${linhas} linha(s) devolvida(s)`, '(sem tela: resposta HTTP)')
-      if (ver.tipo === 'furo' && r.status !== 200) out.divergencias.push(`${lg.lojaNome}/${lg.cargo} snapshot ${t.tabela}: HTTP ${r.status} inesperado (não é bloqueio claro)`)
+      if (ver.tipo === 'furo' && statusEfetivo !== 200) out.divergencias.push(`${lg.lojaNome}/${lg.cargo} snapshot ${t.tabela}: HTTP ${r.status} inesperado (não é bloqueio claro)`)
     }
   } else {
     out.divergencias.push(`${lg.lojaNome}/${lg.cargo}: token da sessão não achado nos cookies; canal offline não conferido`)

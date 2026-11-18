@@ -4,11 +4,12 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { ESQUEMA_HASH } from '@/lib/offline/esquema-atual'
 import { decidirEsquema } from '@/lib/offline/esquema-puro'
 import { criarLimitador, ipDoCliente } from '@/lib/seguranca/regras'
+import type { ContextoPermissao } from '@/lib/offline/permissao-tabela'
 
 // Subir (env OFFLINE_VERSAO_MINIMA) só depois de publicar o instalador novo: app abaixo disso recebe 426.
 export const OFFLINE_VERSAO_MINIMA = process.env.OFFLINE_VERSAO_MINIMA || '1.0.0'
 
-export type UsuarioCanal = { userId: string; email: string | null; lojas: number[]; permitidas: number[]; admin: boolean; lojaAtual: number | null }
+export type UsuarioCanal = { userId: string; email: string | null; lojas: number[]; permitidas: number[]; admin: boolean; lojaAtual: number | null; perm: ContextoPermissao }
 
 function compararVersao(a: string, b: string): number {
   const pa = a.split('.').map((x) => Number(x) || 0)
@@ -75,7 +76,56 @@ export async function autenticarCanal(req: Request): Promise<UsuarioCanal | Resp
     if (lojaAtual && permitidas.has(lojaAtual)) padrao.add(lojaAtual)
     lojas = [...padrao]
   }
-  return { userId, email: data.user.email ?? null, lojas: lojas.sort((a, b) => a - b), permitidas: [...permitidas].sort((a, b) => a - b), admin, lojaAtual }
+  const perm = await carregarPermissoes(svc, userId, perfil.perfil as string | null, perfil.is_super_admin === true, [...permitidas])
+  return { userId, email: data.user.email ?? null, lojas: lojas.sort((a, b) => a - b), permitidas: [...permitidas].sort((a, b) => a - b), admin, lojaAtual, perm }
+}
+
+/**
+ * Permissões do usuário em cada loja (mesma regra de getPermissoesNomes): Admin = '*' em todas;
+ * AdminLoja vinculado = '*' nas lojas dele; demais = permissões diretas da loja + as do cargo do vínculo.
+ */
+async function carregarPermissoes(
+  svc: ReturnType<typeof createServiceClient>,
+  userId: string,
+  perfil: string | null,
+  superAdmin: boolean,
+  lojas: number[],
+): Promise<ContextoPermissao> {
+  const permissoes = new Map<number, Set<string>>()
+  if (perfil === 'Admin') {
+    for (const l of lojas) permissoes.set(l, new Set(['*']))
+    return { perfil, superAdmin, permissoes }
+  }
+  const [{ data: vincs }, { data: diretas }] = await Promise.all([
+    svc.from('loja_user').select('loja_id, cargo_id').eq('user_id', userId),
+    svc.from('permissao_user').select('loja_id, permissoes(nome)').eq('user_id', userId),
+  ])
+  type Nome = { permissoes: { nome: string } | { nome: string }[] | null }
+  const nomesDe = (r: Nome): string[] => (Array.isArray(r.permissoes) ? r.permissoes : r.permissoes ? [r.permissoes] : []).map((p) => p.nome).filter(Boolean)
+  const doCargo = new Map<number, Set<string>>()
+  const cargoIds = [...new Set((vincs ?? []).map((v) => v.cargo_id as number | null).filter((c): c is number => c != null))]
+  if (cargoIds.length) {
+    const { data } = await svc.from('cargo_permissao').select('cargo_id, permissoes(nome)').in('cargo_id', cargoIds)
+    for (const r of (data ?? []) as unknown as (Nome & { cargo_id: number })[]) {
+      const s = doCargo.get(r.cargo_id) ?? new Set<string>()
+      for (const n of nomesDe(r)) s.add(n)
+      doCargo.set(r.cargo_id, s)
+    }
+  }
+  for (const v of vincs ?? []) {
+    const loja = Number(v.loja_id)
+    const s = permissoes.get(loja) ?? new Set<string>()
+    if (perfil === 'AdminLoja') s.add('*')
+    if (v.cargo_id != null) for (const n of doCargo.get(v.cargo_id as number) ?? []) s.add(n)
+    permissoes.set(loja, s)
+  }
+  for (const r of (diretas ?? []) as unknown as (Nome & { loja_id: number })[]) {
+    const loja = Number(r.loja_id)
+    const s = permissoes.get(loja) ?? new Set<string>()
+    for (const n of nomesDe(r)) s.add(n)
+    permissoes.set(loja, s)
+  }
+  return { perfil, superAdmin, permissoes }
 }
 
 /** Resposta JSON compactada (snapshot e pull podem ter milhares de linhas). */
