@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, isAdmin } from '@/lib/auth'
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 import { LogDetalhe, LogCard } from '@/components/log/LogDetalhe'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
@@ -26,14 +27,15 @@ export default async function LogPage({
     page?: string
   }>
 }) {
-  const lojaId = await getCurrentLojaId()
+  // F-06: o menu só mostra "Logs de Integração" para Admin; a página agora tem a mesma regra (404 para os demais).
   const admin = await isAdmin()
+  if (!admin) notFound()
+  const lojaId = await getCurrentLojaId()
   const params = await searchParams
   const page = Math.max(1, Number(params.page) || 1)
   const supabase = await createClient()
 
-  // Loja base: usuario fica restrito a sua loja atual.
-  // Admin pode filtrar por qualquer loja via select loja_id.
+  // Loja base: a atual. Admin pode filtrar por qualquer loja via select loja_id.
   const lojaFiltro = admin && params.loja_id ? Number(params.loja_id) : lojaId
 
   let query = supabase

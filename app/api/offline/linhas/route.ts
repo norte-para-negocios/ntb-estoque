@@ -2,6 +2,7 @@
 // POST {itens: [{tabela, pks: [{...}]}]} -> {linhas: [{tabela, pk, dado|null}]}
 import { createServiceClient } from '@/lib/supabase/server'
 import { autenticarCanal, erro, jsonGzip } from '@/lib/offline/canal'
+import { lojasQuePodemLer } from '@/lib/offline/permissao-tabela'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +23,7 @@ export async function POST(req: Request) {
   const saida: { tabela: string; pk: unknown; dado: unknown }[] = []
   for (const it of itens) {
     if (!/^[a-z_][a-z0-9_]*$/.test(it.tabela) || !Array.isArray(it.pks) || it.pks.length > 1000) return erro(400, 'Pedido inválido.')
-    const { data, error } = await svc.rpc('offline_buscar_linhas', { p_tabela: it.tabela, p_pks: it.pks, p_lojas: u.lojas, p_user: u.userId })
+    const { data, error } = await svc.rpc('offline_buscar_linhas', { p_tabela: it.tabela, p_pks: it.pks, p_lojas: lojasQuePodemLer(it.tabela, u.lojas, u.perm), p_user: u.userId })
     if (error) return erro(400, `Tabela ${it.tabela} não sincronizável.`)
     const achadas = new Map(((data ?? []) as { pk: unknown; dado: unknown }[]).map((r) => [chave(r.pk), r.dado]))
     for (const pk of it.pks) saida.push({ tabela: it.tabela, pk, dado: achadas.get(chave(pk)) ?? null })

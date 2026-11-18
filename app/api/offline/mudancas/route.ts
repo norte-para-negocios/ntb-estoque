@@ -2,6 +2,7 @@
 // POST {cursor}
 import { createServiceClient } from '@/lib/supabase/server'
 import { autenticarCanal, erro, jsonGzip } from '@/lib/offline/canal'
+import { filtrarMudancas } from '@/lib/offline/permissao-tabela'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +24,7 @@ export async function POST(req: Request) {
     return erro(500, 'Falha ao ler mudanças.')
   }
   const mudancas = (data ?? []) as { versao: number; tabela: string; pk: unknown; apagado: boolean; dado: unknown }[]
+  // O cursor avança pelo lote inteiro; o que o cargo não pode ler (tabelas restritas) simplesmente não é entregue.
   const novo = mudancas.length ? Number(mudancas[mudancas.length - 1].versao) : cursor
-  return jsonGzip({ ok: true, refazer: false, mudancas, cursor: novo, mais: mudancas.length >= 1000, lojaAtual: u.lojaAtual, lojas: u.lojas })
+  return jsonGzip({ ok: true, refazer: false, mudancas: filtrarMudancas(mudancas, u.lojas, u.perm), cursor: novo, mais: mudancas.length >= 1000, lojaAtual: u.lojaAtual, lojas: u.lojas })
 }

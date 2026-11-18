@@ -123,6 +123,7 @@ async function gerarDocumento() {
   for (const c of db.cargos) L.push(`| ${c.nome} | ${db.porCargo.get(c.nome)?.size ?? 0} | ${logins.some((l) => l.cargo === c.nome.toLowerCase()) ? 'sim (lojas 4, 15, 19)' : 'NÃO (não coberto)'} |`)
   L.push('', `Permissões sem nenhum cargo: ${db.orfas.length} de ${db.totalPermissoes}. Migration 310: ${db.migration310.linhas - db.migration310.faltam.length} de ${db.migration310.linhas} linhas já estão em \`cargo_permissao\`${db.migration310.faltam.length ? ` (faltam: ${db.migration310.faltam.map((f) => f.join(' / ')).join('; ')})` : ' (aplicada)'}.`, '')
   L.push('Sem cargo (só Admin/AdminLoja alcançam):', '', db.orfas.map((o) => `\`${o}\``).join(', '), '')
+  L.push('Por que ficam só com Admin/AdminLoja (F-19, decisão de segurança, NADA foi concedido): 30 foram deixadas assim de propósito na auditoria de novembro (cadastros de Produtos/Famílias/Fornecedores/Locais, regra da migration 046; Notas - Excluir, Estoque - Corrigir custo, Fechamento - Reabrir mes, Contas a pagar - Pagar, Categorias): apagam, reescrevem custo, reabrem mês ou movem dinheiro. As 4 do Financeiro criadas depois (migrations 370/371: Aprovar pagamento alto valor, Configurar aprovacao, Lancamentos e transferencias, Contas a receber - Receber) também ficam só com Admin até o dono decidir: quem as recebe aprova valor alto, muda a regra de aprovação ou mexe em caixa. Para conceder, o dono diz a quem; aí entra uma migration em cargo_permissao (arquivo no repo, aplicada com backup), nunca por script do robô.', '')
   L.push('## Telas (acesso direto ao endereço)', '', '| Rota | Regra | dono | gerente | estoquista |', '|---|---|---|---|---|')
   for (const r of ROTAS) {
     const regra = regraDe(r)
@@ -278,12 +279,19 @@ async function rodarLogin(browser: Awaited<ReturnType<typeof chromium.launch>>, 
       const caminho = `/api/offline/snapshot?tabela=${t.tabela}&limite=1`
       const r = await api(caminho, { Authorization: `Bearer ${token}`, 'x-ntb-versao': '99.0.0' })
       let linhas = 0
-      try { linhas = (JSON.parse(r.corpo) as { linhas?: unknown[] }).linhas?.length ?? 0 } catch { /* corpo não-JSON */ }
-      const ver = avaliarApi({ regra: t.regra, usuario, status: r.status === 200 ? 200 : r.status === 401 || r.status === 403 ? r.status : r.status })
-      out.linhas.push({ loja: lg.lojaNome, cargo: lg.cargo, rota: `GET ${caminho}`, resultado: `HTTP ${r.status} (${linhas} linha lida)`, esperado: decidir(t.regra, usuario).permitido ? 'permitido' : 'proibido', veredito: ver.tipo, detalhe: ver.detalhe })
-      if (ver.tipo === 'furo' && r.status === 200)
+      let bloqueado = false
+      try {
+        const j = JSON.parse(r.corpo) as { linhas?: unknown[]; bloqueado?: boolean }
+        linhas = j.linhas?.length ?? 0
+        bloqueado = j.bloqueado === true
+      } catch { /* corpo não-JSON */ }
+      // Desde a correção da F-05 o canal bloqueia com 200 + { bloqueado: true } e página vazia (o app desktop não pode receber erro, senão aborta a carga inicial).
+      const statusEfetivo = r.status === 200 && bloqueado ? 403 : r.status
+      const ver = avaliarApi({ regra: t.regra, usuario, status: statusEfetivo })
+      out.linhas.push({ loja: lg.lojaNome, cargo: lg.cargo, rota: `GET ${caminho}`, resultado: `HTTP ${r.status}${bloqueado ? ' bloqueado' : ''} (${linhas} linha lida)`, esperado: decidir(t.regra, usuario).permitido ? 'permitido' : 'proibido', veredito: ver.tipo, detalhe: ver.detalhe })
+      if (ver.tipo === 'furo' && statusEfetivo === 200)
         falha('furo-api', `GET /api/offline/snapshot?tabela=${t.tabela}`, `ler a tabela ${t.tabela} pelo canal offline (token do próprio login)`, `bloqueado (${decidir(t.regra, usuario).motivo})`, `HTTP 200, ${linhas} linha(s) devolvida(s)`, '(sem tela: resposta HTTP)')
-      if (ver.tipo === 'furo' && r.status !== 200) out.divergencias.push(`${lg.lojaNome}/${lg.cargo} snapshot ${t.tabela}: HTTP ${r.status} inesperado (não é bloqueio claro)`)
+      if (ver.tipo === 'furo' && statusEfetivo !== 200) out.divergencias.push(`${lg.lojaNome}/${lg.cargo} snapshot ${t.tabela}: HTTP ${r.status} inesperado (não é bloqueio claro)`)
     }
   } else {
     out.divergencias.push(`${lg.lojaNome}/${lg.cargo}: token da sessão não achado nos cookies; canal offline não conferido`)

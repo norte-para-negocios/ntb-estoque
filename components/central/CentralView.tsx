@@ -3,7 +3,8 @@
 import * as React from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { AnimatePresence, motion, useReducedMotion, type Variants } from 'motion/react'
+import { AnimatePresence, motion, type Variants } from 'motion/react'
+import { useMovimentoReduzido } from './movimento-reduzido'
 import { ArrowRight, ChevronDown, ChevronRight, Lock, Plus, Search, Star } from 'lucide-react'
 import { NAV_ITEMS } from '@/components/shell/NavItems'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
@@ -80,8 +81,8 @@ function Valor({ n, claro = false, grande = false }: { n: Numero; claro?: boolea
 }
 
 function useVariantes() {
-  const reduzir = useReducedMotion()
-  return { lista: reduzir ? semMovimento : lista, entra: reduzir ? semMovimento : entra, reduzir: !!reduzir }
+  const reduzir = useMovimentoReduzido()
+  return { lista: reduzir ? semMovimento : lista, entra: reduzir ? semMovimento : entra, reduzir }
 }
 
 // ---------- peças ----------

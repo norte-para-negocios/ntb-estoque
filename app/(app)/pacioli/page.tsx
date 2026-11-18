@@ -1,7 +1,7 @@
 import { ExternalLink } from 'lucide-react'
 import { getProfile } from '@/lib/auth'
 import { exigirModulo } from '@/lib/plataforma/assinaturas'
-import { PACIOLI_URL, LOJAS_PACIOLI } from '@/lib/pacioli'
+import { PACIOLI_URL, LOJAS_PACIOLI, pacioliBloqueadoNoAmbiente } from '@/lib/pacioli'
 
 export const metadata = { title: 'Pacioli' }
 
@@ -10,6 +10,14 @@ export const metadata = { title: 'Pacioli' }
 // de lib/pacioli.ts, como antes); fora dele vai para /modulos/pacioli. O login do Pacioli é dele mesmo.
 export default async function PacioliPage() {
   await exigirModulo('pacioli')
+  // F-11: em desenvolvimento/cópia de teste o navegador NÃO chega ao Pacioli de produção (nem iframe, nem link).
+  if (pacioliBloqueadoNoAmbiente(process.env)) {
+    return (
+      <div className="rounded-2xl border border-border bg-muted/40 p-6 text-sm text-muted-foreground" data-pacioli-bloqueado>
+        O Pacioli fica desligado neste ambiente de teste, para não falar com o serviço de produção.
+      </div>
+    )
+  }
   const profile = await getProfile()
   const loja = profile.current_loja_id != null ? LOJAS_PACIOLI[profile.current_loja_id] : undefined
   const src = `${PACIOLI_URL}/${loja ? `?loja=${loja}` : ''}`
