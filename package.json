@@ -11,6 +11,7 @@
     "robo:saldo": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/robo/saldo.ts",
     "robo": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/robo/robo.ts",
     "robo:financeiro": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/robo/financeiro.ts",
+    "robo:entrada": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/robo/entrada.ts",
     "robo:permissoes": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/robo/permissoes.ts",
     "local:subir": "scripts/local/local.sh subir",
     "local:baixar": "scripts/local/local.sh baixar",
