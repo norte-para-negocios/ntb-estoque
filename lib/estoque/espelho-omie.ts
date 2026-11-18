@@ -40,6 +40,8 @@ export type VisaoEspelho = {
   /** Locais ativos sem nenhuma linha nas fotos guardadas: sem saldo no Omie ou nunca lidos. */
   locaisSemSaldo: string[]
   custoSuspeito: number
+  /** F-07: produtos inativos que ainda têm saldo (ficam fora da lista; a tela avisa). */
+  inativosComSaldo?: import('./inativos-com-saldo').ResumoInativos | null
 }
 
 export function situacaoDe(saldo: number, minimo: number | null): Situacao {

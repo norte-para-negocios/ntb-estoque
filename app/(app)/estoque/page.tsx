@@ -206,6 +206,17 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
         <div className="rounded-[var(--r-lg)] bg-surface u-card"><EmptyState icon={Boxes} title="Sem leitura do Omie ainda" hint="Clique em Atualizar do Omie para trazer o saldo." /></div>
       ) : (<>
 
+      {visao.inativosComSaldo && !localSel && (
+        <div role="note" className="flex items-start gap-3 rounded-[var(--r-md)] bg-warn/10 px-4 py-3 text-[13px] text-text">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warn" />
+          <p>
+            <strong>{visao.inativosComSaldo.quantidade.toLocaleString('pt-BR')}</strong> {visao.inativosComSaldo.quantidade === 1 ? 'produto inativo ainda tem' : 'produtos inativos ainda têm'} saldo e {visao.inativosComSaldo.quantidade === 1 ? 'não aparece' : 'não aparecem'} nesta lista nem nos indicadores
+            (valor escondido: <b>{fmtBRL(visao.inativosComSaldo.valor)}</b>). Ex.: {visao.inativosComSaldo.exemplos.map((x) => `${x.descricao} (${x.saldo.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} ${x.unidade})`).join('; ')}.{' '}
+            <Link href="/relatorio-posicao-estoque" className="font-medium text-brand hover:underline">Ver na Posição de estoque</Link>
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Indicador icon={Boxes} rotulo="Produtos" valor={String(totalSkus)} dica={localSel ? 'neste local' : 'cadastrados'} />
         <Indicador icon={Wallet} rotulo="Valor em estoque" valor={fmtBRL(valorTotal)} dica="saldo × custo médio" />

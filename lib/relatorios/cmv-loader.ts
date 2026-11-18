@@ -70,7 +70,7 @@ export async function carregarCmv(lojaId: number, ini: string, fim: string, filt
     const linhas = rows.map((r) => ({
       ...linhaVazia(r.rotulo, r.rotulo, por === 'familia' ? { familia: r.rotulo } : por === 'tipo' ? { tipo: r.rotulo } : undefined),
       quant: Number(r.quantidade) || 0, faturamento: Number(r.faturamento) || 0, cmv: Number(r.cmv) || 0,
-      semCusto: (Number(r.itens_sem_baixa) || 0) + (Number(r.itens_sem_custo) || 0),
+      semBaixa: Number(r.itens_sem_baixa) || 0, semCusto: Number(r.itens_sem_custo) || 0,
     }))
     return { fonte, linhas, avisos, cobertura: null, dataFoto: null, opcoes: { tipos: [], familias: [] }, filtrosIgnorados: filtros.tipos.length + filtros.familias.length > 0, custoTrocado: false, erro: null }
   }
