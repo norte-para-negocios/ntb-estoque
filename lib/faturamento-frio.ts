@@ -5,6 +5,7 @@
 // leitura fria, sempre via buscarFrio.
 import { buscarFrio, buscarFrioTudo } from '@/lib/historico-contabo'
 import { TIPO_NOME } from '@/lib/omie/faturamento'
+import { mesPorCupomFaturavel } from '@/lib/faturamento-cupom-regra'
 
 export type LinhaFatAgregado = { rotulo: string; mes?: string; valor: number; qtde_itens: number }
 
@@ -177,7 +178,8 @@ export async function buscarFaturamentoFrioHistorico(opts: {
     buscarFatCupons({ lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal }),
     buscarFatCupomItens({ lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal }),
   ])
-  const mesPorCupom = new Map(cupons.map((c) => [c.n_id_cupom, c.data.slice(0, 7)]))
+  // F-03: cupom cancelado/devolvido não entra (mesma regra do pré-agregado do ano atual).
+  const mesPorCupom = mesPorCupomFaturavel(cupons)
   return agregarFaturamentoPorTipoFamilia(itens, mesPorCupom, opts.metaPorCodigo, opts.dim)
 }
 
