@@ -216,8 +216,9 @@ app.get('/movimentos_historico', checkAuth, async (req, res) => {
     // offset opcional (default 0, retrocompativel) -- achado real (audit
     // 2026-07-19): complementarMovimentosHistorico chamava isso sem paginar
     // nenhuma -- lojas tem 66mil a 110mil linhas aqui (loja 5: 109819).
+    // Tabela sem PK (loja, produto, data podem repetir): ctid desempata a pagina.
     const off = Number(offset) || 0;
-    const sql = `select * from movimentos_historico where ${clauses.join(' and ')} order by data desc, cod_prod desc limit 5000 offset ${off}`;
+    const sql = `select * from movimentos_historico where ${clauses.join(' and ')} order by data desc, cod_prod desc, ctid desc limit 5000 offset ${off}`;
     const r = await pool.query(sql, params);
     res.json({ rows: r.rows });
   } catch (e) {
@@ -285,7 +286,10 @@ app.get('/fat_cupons', checkAuth, async (req, res) => {
     if (data_inicio) { params.push(data_inicio); clauses.push(`data >= $${params.length}`); }
     if (data_final) { params.push(data_final); clauses.push(`data <= $${params.length}`); }
     const off = Number(offset) || 0;
-    const sql = `select * from fat_cupons where ${clauses.join(' and ')} order by data desc limit 5000 offset ${off}`;
+    // Desempate unico (n_id_cupom: PK e (loja_id, n_id_cupom), loja_id fixo no where).
+    // Sem ele, varios cupons do mesmo dia empatam em `data` e o Postgres repete
+    // uns e pula outros entre paginas de 5000 (F-02: 13735 distintos de 13753).
+    const sql = `select * from fat_cupons where ${clauses.join(' and ')} order by data desc, n_id_cupom desc limit 5000 offset ${off}`;
     const r = await pool.query(sql, params);
     res.json({ rows: r.rows });
   } catch (e) {
