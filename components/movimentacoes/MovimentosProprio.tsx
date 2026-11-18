@@ -8,6 +8,7 @@ import { FiltrosKardex } from '@/components/movimentacoes/FiltrosKardex'
 import { NovoAjusteManual } from '@/components/movimentacoes/NovoAjusteManual'
 import { ListaMovimentosProprio } from '@/components/movimentacoes/ListaMovimentosProprio'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
+import { nomesUnicos } from '@/lib/movimentacoes/nomes-unicos-puro'
 import { versoesFichaDosMovimentos } from '@/lib/estoque/ficha-versao'
 import { ehDesenvolvedor } from '@/lib/recursos-dev'
 import { buscarKardex, hojeBahia, periodoKardex, POR_PAGINA_KARDEX, type ParamsKardex } from '@/lib/estoque/kardex'
@@ -30,7 +31,7 @@ export async function MovimentosProprio({ sp, lojaId }: { sp: ParamsKardex; loja
     buscarKardex(lojaId, sp),
   ])
   const locais = (locaisRaw ?? []) as { codigo_local_estoque: number; descricao: string | null }[]
-  const familias = ((familiasRaw ?? []) as { nome: string }[]).map((f) => f.nome)
+  const familias = nomesUnicos(((familiasRaw ?? []) as { nome: string }[]).map((f) => f.nome))
   const temProxima = k.total > page * POR_PAGINA_KARDEX
   // 410: "ficha vN" nas baixas pela receita, só para desenvolvedor
   const fichas = (await ehDesenvolvedor()) ? Object.fromEntries(await versoesFichaDosMovimentos(lojaId, k.linhas.map((l) => l.id))) : undefined

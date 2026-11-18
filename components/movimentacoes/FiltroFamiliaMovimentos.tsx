@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
+import { nomesUnicos } from '@/lib/movimentacoes/nomes-unicos-puro'
 
 export function FiltroFamiliaMovimentos({ familias, valorAtual }: { familias: string[]; valorAtual: string }) {
   const router = useRouter()
@@ -20,7 +21,7 @@ export function FiltroFamiliaMovimentos({ familias, valorAtual }: { familias: st
       className="h-9 max-w-[220px] shrink-0 rounded-[var(--r-md)] border-0 bg-surface-2 px-2.5 text-[13px] max-sm:h-10 max-sm:text-base text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40"
     >
       <option value="">Todas as famílias</option>
-      {familias.map((f) => (
+      {nomesUnicos(familias).map((f) => (
         <option key={f} value={f}>
           {f}
         </option>
