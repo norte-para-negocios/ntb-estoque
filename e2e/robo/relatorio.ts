@@ -11,12 +11,17 @@ export type TipoFalha =
   | 'texto-cortado'
   | 'estouro-horizontal'
   | 'conta-divergente'
+  // Ticket 10 (permissões): cargo alcançou o que a matriz proíbe. Sempre gravidade 1 (a mais alta do robô).
+  | 'furo-menu'
+  | 'furo-endereco'
+  | 'furo-acao'
+  | 'furo-api'
 
 export type Gravidade = 1 | 2 | 3
 export const ROTULO_GRAVIDADE: Record<Gravidade, string> = { 1: 'conta errada', 2: 'trava/erro', 3: 'visual' }
 
 export function gravidadeDoTipo(t: TipoFalha): Gravidade {
-  if (t === 'valor-invalido' || t === 'saldo-divergente' || t === 'conta-divergente') return 1
+  if (t === 'valor-invalido' || t === 'saldo-divergente' || t === 'conta-divergente' || t === 'furo-menu' || t === 'furo-endereco' || t === 'furo-acao' || t === 'furo-api') return 1
   if (t === 'texto-cortado' || t === 'estouro-horizontal') return 3
   return 2
 }
