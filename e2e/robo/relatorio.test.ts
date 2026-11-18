@@ -8,6 +8,7 @@ const f = (o: Partial<Falha>): Falha => ({
 
 test('gravidade: conta errada > trava/erro > visual', () => {
   assert.equal(gravidadeDoTipo('valor-invalido'), 1)
+  assert.equal(gravidadeDoTipo('saldo-divergente'), 1)
   for (const t of ['erro-http-pagina', 'erro-http-requisicao', 'tela-quebrada', 'erro-console', 'tela-vazia', 'timeout'] as const) assert.equal(gravidadeDoTipo(t), 2, t)
   for (const t of ['texto-cortado', 'estouro-horizontal'] as const) assert.equal(gravidadeDoTipo(t), 3, t)
 })

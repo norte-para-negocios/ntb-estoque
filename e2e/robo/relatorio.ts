@@ -1,6 +1,7 @@
 // Lógica pura do robô: gravidade, formato da lista de falhas e do inventário. Sem rede, sem navegador.
 export type TipoFalha =
   | 'valor-invalido'
+  | 'saldo-divergente'
   | 'erro-http-pagina'
   | 'erro-http-requisicao'
   | 'tela-quebrada'
@@ -14,7 +15,7 @@ export type Gravidade = 1 | 2 | 3
 export const ROTULO_GRAVIDADE: Record<Gravidade, string> = { 1: 'conta errada', 2: 'trava/erro', 3: 'visual' }
 
 export function gravidadeDoTipo(t: TipoFalha): Gravidade {
-  if (t === 'valor-invalido') return 1
+  if (t === 'valor-invalido' || t === 'saldo-divergente') return 1
   if (t === 'texto-cortado' || t === 'estouro-horizontal') return 3
   return 2
 }
