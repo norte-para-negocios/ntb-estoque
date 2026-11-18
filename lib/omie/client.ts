@@ -1,5 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { bloqueioDaResposta, ehChamadaDeEscrita, msRestantesBloqueio, podeRepetirLimite, registrarBloqueio } from './erros-omie'
+import { mensagemBloqueioOmie } from './bloqueio-ambiente'
 import { prazoOmieAtual } from './contexto-prazo'
 import { MSG_ADIADA_PRAZO, podeChamarOmie, timeoutDaChamadaMs } from '@/lib/vendas/prazo-venda'
 
@@ -99,6 +100,9 @@ export async function omieRequest<T = unknown>({
   const semRepetir = semRepetirParam || prazo !== undefined
   // App desktop (banco local): não tem as chaves do Omie; ações que falam com o Omie vão ao
   // servidor (ou à fila sem internet) antes de chegar aqui -- isto é só a trava final.
+  // Cópia local de teste (NTB_OMIE_BLOQUEADO=1): nada sai para o Omie, nem leitura (bloqueio-ambiente.ts).
+  const bloqueio = mensagemBloqueioOmie(process.env, call)
+  if (bloqueio) throw new OmieError(bloqueio)
   if (process.env.NTB_MODO_LOCAL === '1') {
     throw new OmieError('Esta operação precisa de internet (Omie).')
   }

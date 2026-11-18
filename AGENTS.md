@@ -2208,3 +2208,15 @@ Plano `docs/superpowers/plans/2026-11-12-plataforma-norte-fase1-assinaturas.md` 
 - **Ações:** toda server action tem 2ª linha `const __g = await guardaModulo('<arquivo>#<acao>'); if (__g) return __g as never` (script `scripts/inserir-guarda-modulo.mjs`, idempotente; rodar depois de criar ação, junto com `inserir-via-desktop.mjs`). Arquivos livres e exceções em `lib/plataforma/acoes-modulo.ts` (`LIVRES`, `SEM_GUARDA` dos crons de retry, `LEITURAS_EXTRA`, `ESCRITAS_EXTRA`, `VERBOS_ESCRITA`). Em suspenso só barra escrita (política offline local/fila/depende ou verbo de escrita); `lib/plataforma/acoes-guardadas.test.ts` trava a lista do que passa em suspenso — ação nova que for leitura entra na lista do teste; se for escrita com verbo novo, entra em `VERBOS_ESCRITA`.
 - **Telas:** `/modulos/[id]` (vitrine, `?previa` para super admin) e `/plataforma/modulos` (só dev: matriz loja × módulo, planos e preços). Identidade: Vendas #484DB5, ERP #168E9A, Cozinha #B03A22, Pacioli #6E72E0.
 - **Pendente:** `desktop/scripts/gerar-schema.sh` + versão nova do desktop (sem isso o app local cai no padrão e loga erro); deploy do código.
+
+## Cópia local de teste (`scripts/local/`)
+
+Cópia do ERP no Mac para testar (robô, QA) sem tocar na produção: Postgres+GoTrue+PostgREST (docker/colima) + frio-api. Portas próprias: Postgres 54420, API 54421, frio-api 54422, ERP 3107.
+Tudo que é dado, dump, segredo e senha fica em `.local-data/` e `.env.local` (ambos fora do git).
+
+1. `colima start --cpu 4 --memory 8 --disk 60` (se o Docker estiver parado) e `scripts/local/local.sh subir` (gera segredos e `.env.local`, sobe o Postgres).
+2. `scripts/local/local.sh baixar`: só LÊ o servidor (ls + scp do último backup noturno `/root/backups-ntb-estoque/*.sql.gz`, ~175 MB). Nenhum outro comando remoto, nenhum pg_dump ao vivo.
+3. `scripts/local/local.sh restaurar`: restaura o dump (~1 a 2 min), zera chaves do Omie/integração/certificado e as senhas das contas reais, cria os 9 logins de teste e sobe o stack. `scripts/local/local.sh resetar` refaz o mesmo a partir do dump já baixado (volta ao estado inicial).
+4. `scripts/local/local.sh dev` roda o ERP em http://127.0.0.1:3107. Logins de teste (dono, gerente, estoquista nas lojas 4 Sertão, 15 ODARA e 19): `scripts/local/local.sh usuarios` (lê `.local-data/logins.txt`). Provas: `node scripts/local/testar-login.mjs` e `node scripts/local/provar-home.mjs`.
+5. Trava do Omie: `.env.local` traz `NTB_OMIE_BLOQUEADO=1` e `OMIE_FIN_DESLIGADO=1`; `omieRequest` lança erro claro em qualquer chamada (`lib/omie/bloqueio-ambiente.ts`). Os `scripts/*.mjs` avulsos que chamam o Omie por `fetch` direto NÃO passam pela trava: não execute na cópia.
+6. A frio-api local sobe com o banco `frio` só com a estrutura (sem o histórico da produção): telas de histórico/faturamento híbrido vêm vazias.

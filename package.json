@@ -7,7 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test 'lib/**/*.test.ts' 'components/**/*.test.ts' 'scripts/**/*.test.ts'"
+    "test": "node --test 'lib/**/*.test.ts' 'components/**/*.test.ts' 'scripts/**/*.test.ts'",
+    "local:subir": "scripts/local/local.sh subir",
+    "local:baixar": "scripts/local/local.sh baixar",
+    "local:restaurar": "scripts/local/local.sh restaurar",
+    "local:resetar": "scripts/local/local.sh resetar",
+    "local:dev": "scripts/local/local.sh dev"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
