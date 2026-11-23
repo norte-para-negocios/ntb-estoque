@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { rankear, ordenarRanking, filtrarPorNome, resumir, serieDiaria, posicaoNoRanking, valorItemCupom, valorItemProprio } from './faturamento-itens.ts'
+import { rankear, ordenarRanking, filtrarPorNome, resumir, serieDiaria, posicaoNoRanking, valorItemCupom, valorItemProprio, agruparCartoes, rotuloMaquininha } from './faturamento-itens.ts'
 
 const L = (o: Partial<Parameters<typeof rankear>[0][number]>) => ({
   dia: '2026-10-01', cupom: 1, idProduto: 1, produto: 'Moqueca', tipoCod: '04', tipo: 'Produto acabado',
@@ -126,4 +126,29 @@ test('valor do item: líquido (Faturamento) e bruto (Curva ABC como o Omie)', ()
   assert.equal(valorItemCupom({ v_item: 28, v_unit: 0, quant: 3, v_desc: 2 }, 'bruto'), 30)
   assert.equal(valorItemProprio({ valor: '18', quantidade: '2', valor_unitario: '10', desconto: '2' }), 18)
   assert.equal(valorItemProprio({ valor: '18', quantidade: '2', valor_unitario: '10', desconto: '2' }, 'bruto'), 20)
+})
+
+test('agruparCartoes: método + maquininha + bandeira, rótulos legíveis, só cartão', () => {
+  const r = agruparCartoes([
+    { cupom: 1, metodo: 'CREDIT', bandeira: 'visa', maquininha: 'getnet', valor: 100 },
+    { cupom: 2, metodo: 'CREDIT', bandeira: 'visa', maquininha: 'getnet', valor: 50.5 },
+    { cupom: 3, metodo: 'DEBIT', bandeira: 'elo', maquininha: 'mercadopago', valor: 30 },
+    { cupom: 4, metodo: 'CREDIT', bandeira: 'visa', maquininha: null, valor: 20 },
+    { cupom: 5, metodo: 'PIX', bandeira: null, maquininha: null, valor: 999 },
+    { cupom: 6, metodo: 'CASH', bandeira: null, maquininha: null, valor: 999 },
+  ])
+  assert.equal(r.length, 3)
+  assert.equal(r[0].rotulo, 'Crédito · Visa · GetNet')
+  assert.equal(r[0].qtd, 2)
+  assert.equal(r[0].valor, 150.5)
+  assert.equal(r[1].rotulo, 'Débito · Elo · Mercado Pago')
+  assert.equal(r[2].rotulo, 'Crédito · Visa') // sem maquininha = como antes
+  assert.equal(r[2].maquininha, '')
+})
+
+test('rotuloMaquininha: catálogo do Vendas e valor desconhecido', () => {
+  assert.equal(rotuloMaquininha('pagseguro'), 'PagSeguro')
+  assert.equal(rotuloMaquininha('sumup'), 'SumUp')
+  assert.equal(rotuloMaquininha('xpto'), 'xpto')
+  assert.equal(rotuloMaquininha(null), '')
 })

@@ -9,7 +9,7 @@ export type FechamentoBody = {
   cancelado?: boolean; devolvido?: boolean; valor?: number; desconto?: number; taxa?: number; operador?: string | null
   nota?: { chave?: string | null; numero?: string | number | null; serie?: string | number | null; status?: string | null } | null
   itens?: { linha?: number; codigo?: string; nome?: string; quantidade?: number; valorUnitario?: number; desconto?: number; valor?: number; ncm?: string | null; cfop?: string | null }[]
-  pagamentos?: { sequencia?: number; metodo?: string; valor?: number; bandeira?: string | null }[]
+  pagamentos?: { sequencia?: number; metodo?: string; valor?: number; bandeira?: string | null; maquininha?: string | null }[]
 }
 
 export type ResultadoFechamento = { ok: boolean; venda_id?: number; n_id_cupom?: number; duplicado?: boolean; frio: 'enviado' | 'pendente' | 'desligado'; erro?: string }

@@ -4,7 +4,7 @@ import { buscarFatCupons, buscarFatCupomPagamentosPeriodo, FORMA_PGTO_LABEL } fr
 import { calcularDescontoPorProduto, calcularDescontoPorFormaPgto, type DescontoRanking } from '@/lib/faturamento-descontos'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { bateSituacaoOmie, bateSituacaoProprio } from '@/lib/faturamento-itens-loader'
-import type { Pagamento } from '@/lib/faturamento-itens'
+import type { Pagamento, PagamentoCartao } from '@/lib/faturamento-itens'
 import type { Situacao } from '@/lib/faturamento-params'
 
 export type CupomLinha = { id: number; dia: string; hora: string | null; num: string | null; valor: number; situacao: 'Autorizada' | 'Devolvida' | 'Cancelada' }
@@ -53,6 +53,26 @@ export async function carregarPagamentos(lojaId: number, ini: string, fim: strin
   for (const p of pags) {
     if (!validos.has(p.n_id_cupom) || !(Number(p.valor) || 0)) continue
     linhas.push({ cupom: p.n_id_cupom, forma: FORMA_PGTO_LABEL[p.tipo_doc ?? ''] ?? (p.tipo_doc || 'Não identificado'), valor: Number(p.valor) || 0 })
+  }
+  return { linhas, aviso }
+}
+
+// Cartões do período com maquininha e bandeira (só lojas de estoque próprio: o Omie não traz a maquininha).
+export async function carregarCartoes(lojaId: number, ini: string, fim: string, situacao: Situacao): Promise<{ linhas: PagamentoCartao[]; aviso: string | null }> {
+  const linhas: PagamentoCartao[] = []
+  if ((await modoDaLoja(lojaId)) !== 'proprio') return { linhas, aviso: null }
+  let aviso: string | null = null
+  const vendas = await vendasProprio(lojaId, ini, fim, situacao, (m) => { aviso = m })
+  const ids = vendas.map((v) => v.id)
+  const supabase = createServiceClient()
+  for (let i = 0; i < ids.length; i += 150) {
+    const lote = ids.slice(i, i + 150)
+    const pags = await buscarTodasLinhas<{ venda_id: number; metodo: string | null; bandeira: string | null; maquininha: string | null; valor: number | string }>(
+      (from, to) => supabase.from('vendas_proprio_pagamentos').select('venda_id, metodo, bandeira, maquininha, valor').in('venda_id', lote).order('id').range(from, to),
+      undefined,
+      (e) => { aviso = `Falha ao ler os cartões (${e.message}). Os valores podem estar incompletos.` },
+    )
+    for (const p of pags) linhas.push({ cupom: p.venda_id, metodo: p.metodo ?? '', bandeira: p.bandeira, maquininha: p.maquininha, valor: Number(p.valor) || 0 })
   }
   return { linhas, aviso }
 }

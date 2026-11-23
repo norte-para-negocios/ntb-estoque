@@ -167,3 +167,34 @@ export function agruparPagamentos(pags: Pagamento[]): LinhaRanking[] {
     .map(([forma, g]) => ({ chave: forma, rotulo: forma, valor: round2(g.valor), quant: 0, cupons: g.cupons.size, pct: total > 0 ? round2((g.valor / total) * 100) : 0 }))
     .sort((a, b) => b.valor - a.valor || a.rotulo.localeCompare(b.rotulo, 'pt-BR'))
 }
+
+// Cartões por maquininha e bandeira (lojas de estoque próprio: o Norte Vendas manda a maquininha em cada pagamento).
+export const MAQUININHA_ROTULOS: Record<string, string> = {
+  getnet: 'GetNet', rede: 'Rede', cielo: 'Cielo', stone: 'Stone', pagseguro: 'PagSeguro', mercadopago: 'Mercado Pago', sumup: 'SumUp',
+}
+const BANDEIRA_ROTULOS: Record<string, string> = {
+  visa: 'Visa', mastercard: 'Mastercard', elo: 'Elo', amex: 'Amex', hipercard: 'Hipercard', alelo: 'Alelo', sodexo: 'Sodexo', ticket: 'Ticket', vr: 'VR', cabal: 'Cabal', outro: 'Outra',
+}
+export const rotuloMaquininha = (m: string | null | undefined): string => { const k = String(m ?? '').trim(); return k ? (MAQUININHA_ROTULOS[k.toLowerCase()] ?? k) : '' }
+export const rotuloBandeira = (b: string | null | undefined): string => { const k = String(b ?? '').trim(); return k ? (BANDEIRA_ROTULOS[k.toLowerCase()] ?? k) : '' }
+const rotuloMetodoCartao = (m: string): string => (m.toUpperCase() === 'DEBIT' ? 'Débito' : m.toUpperCase() === 'CREDIT' ? 'Crédito' : m)
+
+export type PagamentoCartao = { cupom: number; metodo: string; bandeira: string | null; maquininha: string | null; valor: number }
+export type LinhaCartao = { chave: string; metodo: string; maquininha: string; bandeira: string; qtd: number; valor: number; rotulo: string }
+
+/** Só cartão (crédito/débito) ou pagamento com maquininha informada; agrupa por método + maquininha + bandeira. Sem maquininha/bandeira fica em branco. */
+export function agruparCartoes(pags: PagamentoCartao[]): LinhaCartao[] {
+  const m = new Map<string, LinhaCartao>()
+  for (const p of pags) {
+    const metodo = String(p.metodo ?? '').toUpperCase()
+    const maq = rotuloMaquininha(p.maquininha)
+    if (metodo !== 'CREDIT' && metodo !== 'DEBIT' && !maq) continue
+    const band = rotuloBandeira(p.bandeira)
+    const chave = `${metodo}|${maq}|${band}`
+    const g = m.get(chave) ?? { chave, metodo: rotuloMetodoCartao(metodo), maquininha: maq, bandeira: band, qtd: 0, valor: 0, rotulo: [rotuloMetodoCartao(metodo), band, maq].filter(Boolean).join(' · ') }
+    g.qtd += 1
+    g.valor += p.valor
+    m.set(chave, g)
+  }
+  return [...m.values()].map((g) => ({ ...g, valor: round2(g.valor) })).sort((a, b) => b.valor - a.valor || a.rotulo.localeCompare(b.rotulo, 'pt-BR'))
+}

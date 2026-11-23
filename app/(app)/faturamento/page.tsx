@@ -9,10 +9,11 @@ import { Money } from '@/components/ui-kit/Money'
 import { btnClass } from '@/components/ui-kit/Button'
 import { lerParamsFaturamento, type SpFat } from '@/lib/faturamento-params'
 import { carregarItens } from '@/lib/faturamento-itens-loader'
-import { agruparPagamentos, filtrarPorNome, matrizMensal, ordenarRanking, posicaoNoRanking, rankear, resumir, serieDiaria, type Dimensao } from '@/lib/faturamento-itens'
-import { carregarCupons, carregarDescontos, carregarPagamentos } from '@/lib/faturamento-extras-loader'
+import { agruparCartoes, agruparPagamentos, filtrarPorNome, matrizMensal, ordenarRanking, posicaoNoRanking, rankear, resumir, serieDiaria, type Dimensao } from '@/lib/faturamento-itens'
+import { carregarCartoes, carregarCupons, carregarDescontos, carregarPagamentos } from '@/lib/faturamento-extras-loader'
 import { MatrizMensalTabela } from '@/components/faturamento/MatrizMensalTabela'
 import { TabelaCupons } from '@/components/faturamento/TabelaCupons'
+import { TabelaCartoes } from '@/components/faturamento/TabelaCartoes'
 import { PeriodoBar } from '@/components/faturamento/PeriodoBar'
 import { FiltrosFaturamento } from '@/components/faturamento/FiltrosFaturamento'
 import { RankingBarras } from '@/components/faturamento/RankingBarras'
@@ -63,12 +64,14 @@ export default async function FaturamentoPage({ searchParams }: { searchParams: 
   const serieSel = selecionado ? serieDiaria(linhas.filter((l) => (l.idProduto != null ? String(l.idProduto) : `nome:${l.produto}`) === p.produto), p.ini, p.fim) : []
   const serie = serieDiaria(linhas, p.ini, p.fim)
   const mensal = p.aba === 'mensal' ? matrizMensal(linhas, p.por, p.ini, p.fim) : null
-  const [pagamentos, cuponsAba, descontos] = await Promise.all([
+  const [pagamentos, cartoes, cuponsAba, descontos] = await Promise.all([
     p.aba === 'pagamentos' ? carregarPagamentos(lojaId, p.ini, p.fim, p.situacao) : null,
+    p.aba === 'pagamentos' ? carregarCartoes(lojaId, p.ini, p.fim, p.situacao) : null,
     p.aba === 'cupons' ? carregarCupons(lojaId, p.ini, p.fim, p.situacao) : null,
     p.aba === 'descontos' ? carregarDescontos(lojaId, p.ini, p.fim) : null,
   ])
   const rankingPgto = pagamentos ? agruparPagamentos(pagamentos.linhas) : []
+  const tabelaCartoes = cartoes ? agruparCartoes(cartoes.linhas) : []
   const semFiltroItem = (p.aba === 'pagamentos' || p.aba === 'cupons' || p.aba === 'descontos') && (p.tipos.length > 0 || p.familias.length > 0)
   const avisoExtra = pagamentos?.aviso ?? cuponsAba?.aviso ?? null
 
@@ -145,7 +148,10 @@ export default async function FaturamentoPage({ searchParams }: { searchParams: 
         rankingPgto.length === 0 ? (
           <EmptyState icon={DollarSign} title="Sem pagamentos no período" hint="Mude o período ou a situação." />
         ) : (
-          <RankingBarras linhas={rankingPgto} ordem="valor" mostrarQuant={false} />
+          <div className="space-y-5">
+            <RankingBarras linhas={rankingPgto} ordem="valor" mostrarQuant={false} />
+            {tabelaCartoes.length > 0 && <TabelaCartoes linhas={tabelaCartoes} />}
+          </div>
         )
       ) : linhas.length === 0 ? (
         <EmptyState icon={DollarSign} title="Sem vendas no período" hint="Mude o período ou limpe os filtros de tipo, família e situação." />
