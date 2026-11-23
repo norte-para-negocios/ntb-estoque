@@ -1,5 +1,6 @@
 import { createHash } from 'crypto'
 import { omieRequest, type LojaOmie } from './client'
+import { rotearTitulosDeCartao } from './roteamento-cartao'
 
 // Payload que o ntb-vendas manda (formato do antigo IncluirNfce; hoje so
 // chNFe e nfceXml vao pro Omie, via ImportarNFCe -- ver abaixo),
@@ -23,6 +24,11 @@ export interface IncluirNfcePagamento {
   // recalcular aqui, receber pronto de quem monta o payload.
   tPag: string
   vPag: number
+  // Opcionais (Norte Vendas): usados so no roteamento do titulo de cartao para
+  // a conta da maquininha (lib/omie/roteamento-cartao.ts). Nao vao pro Omie.
+  method?: string
+  brand?: string
+  acquirer?: string
 }
 
 export interface IncluirNfcePayload {
@@ -99,10 +105,12 @@ async function importarNfceUmaVez(loja: LojaOmie, payload: IncluirNfcePayload, g
 export async function incluirNfce(loja: LojaOmie, payload: IncluirNfcePayload) {
   try {
     const r = await importarNfceUmaVez(loja, payload, true)
+    await rotearTitulosDeCartao(loja, payload) // nunca lanca
     return { ...r, comTitulo: true as const }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     if (/j. (foi )?(importad|cadastrad|inclu.d)|j. existe|duplicad/i.test(msg)) {
+      await rotearTitulosDeCartao(loja, payload) // nunca lanca; so mexe se a conta ainda for a de caixa
       return { cCodStatus: '0', cDesStatus: msg, jaImportada: true as const, comTitulo: true as const }
     }
     if (!/t.tulo|conta corrente|categoria|forma de pagamento|financeir|lan.amento|parcela/i.test(msg)) throw e
