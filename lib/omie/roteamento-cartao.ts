@@ -1,7 +1,7 @@
 import { omieRequest, logIntegrationAttempt, type LojaOmie } from './client'
 import { createServiceClient } from '@/lib/supabase/server'
 import {
-  casarContaDoCartao, casarContaPix, contasDeCartaoAtivas, decidirAlteracaoDoTitulo, ehPix, escolherPrazoDias,
+  casarContaDoCartao, casarContaPix, contasDeCartaoAtivas, decidirAlteracaoDoTitulo, decidirTaxaDoTitulo, ehPix, escolherPrazoDias,
   tipoDoTPag, titulo,
   type ContaCorrenteOmie, type RegraConta, type ResultadoCasamento,
 } from './roteamento-cartao-puro'
@@ -124,26 +124,59 @@ export async function rotearTitulosDeCartao(loja: LojaOmie, payload: IncluirNfce
         call: 'ConsultarContaReceber',
         data: { codigo_lancamento_integracao: codigoIntegracao },
       })
+      const t = titulo(consulta)
       const d = decidirAlteracaoDoTitulo({
-        titulo: titulo(consulta),
+        titulo: t,
         chNFe: payload.chNFe,
         vPag: p.vPag,
         contaDestino: casou.conta,
         contasPorId,
         prazoDias: escolherPrazoDias(casou.conta, cfg.regras),
       })
-      if (!d.alterar) { await log(loja, payload.chNFe, i, `${codigoIntegracao}: ${d.motivo}`, true); continue }
+      const jaNaConta = !d.alterar && Number(t.id_conta_corrente) === casou.conta.nCodCC
+      if (!d.alterar && !jaNaConta) { await log(loja, payload.chNFe, i, `${codigoIntegracao}: ${d.motivo}`, true); continue }
+      if (d.alterar) {
+        await omieRequest({
+          loja_id: loja.id,
+          omie_app_key: loja.omie_app_key,
+          omie_app_secret: loja.omie_app_secret,
+          is_test: loja.is_test,
+          endpoint: 'v1/financas/contareceber',
+          call: 'AlterarContaReceber',
+          data: d.payload,
+        })
+        await log(loja, payload.chNFe, i, `${codigoIntegracao} movido para "${casou.conta.descricao}" (${casou.conta.nCodCC}), vencimento ${d.vencimentoNovo ?? 'mantido'}`, false)
+      }
 
-      await omieRequest({
-        loja_id: loja.id,
-        omie_app_key: loja.omie_app_key,
-        omie_app_secret: loja.omie_app_secret,
-        is_test: loja.is_test,
-        endpoint: 'v1/financas/contareceber',
-        call: 'AlterarContaReceber',
-        data: d.payload,
+      // Taxa da maquininha: baixa com valor 0 e desconto = taxa (como o PDV antigo). Idempotente pelo
+      // codigo_baixa_integracao e pela situacao do titulo (so lanca se ainda nao tem baixa).
+      const taxa = decidirTaxaDoTitulo({
+        codigoLancamento: t.codigo_lancamento_omie,
+        statusTitulo: t.status_titulo,
+        dataEmissao: t.data_emissao,
+        vPag: p.vPag,
+        taxaPercentual: cfg.regras.get(casou.conta.nCodCC)?.taxa_percentual,
+        contaDestino: casou.conta.nCodCC,
+        codigoBaixaIntegracao: `tx${payload.nNF}-${i + 1}`,
       })
-      await log(loja, payload.chNFe, i, `${codigoIntegracao} movido para "${casou.conta.descricao}" (${casou.conta.nCodCC}), vencimento ${d.vencimentoNovo ?? 'mantido'}`, false)
+      if (!taxa.lancar) {
+        if (taxa.motivo !== 'conta sem taxa cadastrada') await log(loja, payload.chNFe, i, `${codigoIntegracao}: ${taxa.motivo}`, true)
+        continue
+      }
+      try {
+        await omieRequest({
+          loja_id: loja.id,
+          omie_app_key: loja.omie_app_key,
+          omie_app_secret: loja.omie_app_secret,
+          is_test: loja.is_test,
+          endpoint: 'v1/financas/contareceber',
+          call: 'LancarRecebimento',
+          data: taxa.payload,
+        })
+        await log(loja, payload.chNFe, i, `${codigoIntegracao} taxa R$ ${taxa.valorTaxa.toFixed(2)} lancada`, false)
+      } catch (e) {
+        await log(loja, payload.chNFe, i, `${codigoIntegracao} taxa nao lancada: ${e instanceof Error ? e.message : String(e)}`, true)
+      }
     } catch (e) {
       await log(loja, payload.chNFe, i, e instanceof Error ? e.message : String(e), true)
     }

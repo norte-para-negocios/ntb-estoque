@@ -158,6 +158,7 @@ export type TituloConsultado = {
   data_previsao?: string
   data_emissao?: string
   codigo_categoria?: string
+  status_titulo?: string
 }
 
 /** O Omie as vezes aninha o titulo em `cabecalho`; aceita os dois formatos. */
@@ -208,7 +209,54 @@ export function decidirAlteracaoDoTitulo(p: {
     valor_documento: t.valor_documento,
     codigo_categoria: t.codigo_categoria,
   }
-  // Taxa da maquininha nao e gravada: conta_receber_cadastro do Omie nao tem campo de taxa.
+  // A taxa da maquininha nao cabe no cadastro do titulo: vai por decidirTaxaDoTitulo (LancarRecebimento).
   if (novoVenc) payload.data_previsao = novoVenc
   return { alterar: true, payload, vencimentoNovo: novoVenc }
+}
+
+export type DecisaoTaxa =
+  | { lancar: true; payload: Record<string, unknown>; valorTaxa: number }
+  | { lancar: false; motivo: string }
+
+/** Situacoes do titulo em que ainda nao houve baixa nenhuma. */
+const SEM_BAIXA = new Set(['A VENCER', 'VENCE HOJE', 'ATRASADO', 'ABERTO'])
+
+/**
+ * Taxa da maquininha como o PDV antigo (CaixaRapido) gravava ate 28/09:
+ * uma baixa no dia da venda com valor 0 e desconto = taxa, na conta da maquininha.
+ * No Omie o titulo fica "PAGTO PARCIAL" com o desconto = taxa e o resto em aberto,
+ * que e o que a adquirente deposita. Conferido ao vivo no Omie da loja 4 em 23/11/2026.
+ */
+export function decidirTaxaDoTitulo(p: {
+  codigoLancamento?: number
+  /** Situacao do titulo ANTES desta rodada; ausente = titulo recem-movido nesta rodada (sem baixa). */
+  statusTitulo?: string
+  dataEmissao?: string
+  vPag: number
+  taxaPercentual?: number | null
+  contaDestino: number
+  codigoBaixaIntegracao: string
+}): DecisaoTaxa {
+  const pct = Number(p.taxaPercentual)
+  if (!Number.isFinite(pct) || pct <= 0) return { lancar: false, motivo: 'conta sem taxa cadastrada' }
+  if (!p.codigoLancamento) return { lancar: false, motivo: 'titulo sem codigo_lancamento_omie' }
+  if (!p.dataEmissao || !/^\d{2}\/\d{2}\/\d{4}$/.test(p.dataEmissao)) return { lancar: false, motivo: 'titulo sem data de emissao' }
+  const status = String(p.statusTitulo ?? '').trim().toUpperCase()
+  if (status && !SEM_BAIXA.has(status)) return { lancar: false, motivo: `titulo ja tem baixa (${status}); taxa nao lancada` }
+  const valorTaxa = Math.round(p.vPag * pct) / 100
+  if (!(valorTaxa >= 0.01)) return { lancar: false, motivo: 'taxa abaixo de 1 centavo' }
+  if (valorTaxa >= p.vPag) return { lancar: false, motivo: 'taxa maior ou igual ao valor do pagamento' }
+  return {
+    lancar: true,
+    valorTaxa,
+    payload: {
+      codigo_lancamento: p.codigoLancamento,
+      codigo_conta_corrente: p.contaDestino,
+      codigo_baixa_integracao: p.codigoBaixaIntegracao.slice(0, 20),
+      valor: 0,
+      desconto: valorTaxa,
+      data: p.dataEmissao,
+      observacao: `Taxa da maquininha ${String(pct).replace('.', ',')}%`,
+    },
+  }
 }

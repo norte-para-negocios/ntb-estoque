@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  casarContaDoCartao, casarContaPix, decidirAlteracaoDoTitulo, ehPix, escolherPrazoDias, normalizarNome, somarDiasBR, tipoDoTPag,
+  casarContaDoCartao, casarContaPix, decidirAlteracaoDoTitulo, decidirTaxaDoTitulo, ehPix, escolherPrazoDias, normalizarNome, somarDiasBR, tipoDoTPag,
   type ContaCorrenteOmie, type RegraConta,
 } from './roteamento-cartao-puro.ts'
 
@@ -184,4 +184,31 @@ test('datas do titulo: vencimento e previsao = emissao + prazo; sem prazo ou sem
   const semEmissao = decidirAlteracaoDoTitulo({ ...base, titulo: tituloReal, prazoDias: 30 })
   assert.equal(semEmissao.alterar && semEmissao.payload.data_vencimento, '22/11/2026')
   assert.equal(semEmissao.alterar && 'data_previsao' in semEmissao.payload, false)
+})
+
+test('taxa: baixa com valor 0 e desconto = taxa, como o PDV antigo', () => {
+  const d = decidirTaxaDoTitulo({
+    codigoLancamento: 6959796425, dataEmissao: '28/09/2026', vPag: 239.25, taxaPercentual: 1.69,
+    contaDestino: 6719180709, codigoBaixaIntegracao: 'tx71288-1',
+  })
+  assert.equal(d.lancar, true)
+  if (d.lancar) {
+    assert.equal(d.valorTaxa, 4.04) // igual ao titulo de 28/09 no Omie
+    assert.deepEqual(d.payload, {
+      codigo_lancamento: 6959796425, codigo_conta_corrente: 6719180709, codigo_baixa_integracao: 'tx71288-1',
+      valor: 0, desconto: 4.04, data: '28/09/2026', observacao: 'Taxa da maquininha 1,69%',
+    })
+  }
+})
+
+test('taxa: nao lanca sem taxa, com baixa ou sem dados', () => {
+  const base = { codigoLancamento: 1, dataEmissao: '23/11/2026', vPag: 100, contaDestino: 9, codigoBaixaIntegracao: 'tx1-1' }
+  assert.equal(decidirTaxaDoTitulo({ ...base, taxaPercentual: 0 }).lancar, false)
+  assert.equal(decidirTaxaDoTitulo({ ...base, taxaPercentual: null }).lancar, false)
+  assert.equal(decidirTaxaDoTitulo({ ...base, taxaPercentual: 1.69, statusTitulo: 'PAGTO PARCIAL' }).lancar, false)
+  assert.equal(decidirTaxaDoTitulo({ ...base, taxaPercentual: 1.69, statusTitulo: 'RECEBIDO' }).lancar, false)
+  assert.equal(decidirTaxaDoTitulo({ ...base, taxaPercentual: 1.69, statusTitulo: 'A VENCER' }).lancar, true)
+  assert.equal(decidirTaxaDoTitulo({ ...base, taxaPercentual: 1.69, dataEmissao: undefined }).lancar, false)
+  assert.equal(decidirTaxaDoTitulo({ ...base, taxaPercentual: 1.69, codigoLancamento: undefined }).lancar, false)
+  assert.equal(decidirTaxaDoTitulo({ ...base, vPag: 0.5, taxaPercentual: 0.69 }).lancar, false) // < 1 centavo
 })
