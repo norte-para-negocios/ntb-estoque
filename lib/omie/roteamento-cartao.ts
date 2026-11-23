@@ -1,7 +1,9 @@
 import { omieRequest, logIntegrationAttempt, type LojaOmie } from './client'
+import { createServiceClient } from '@/lib/supabase/server'
 import {
-  casarContaDoCartao, contasDeCartaoAtivas, decidirAlteracaoDoTitulo, tipoDoTPag, titulo,
-  type ContaCorrenteOmie,
+  casarContaDoCartao, casarContaPix, contasDeCartaoAtivas, decidirAlteracaoDoTitulo, ehPix, escolherPrazoDias,
+  tipoDoTPag, titulo,
+  type ContaCorrenteOmie, type RegraConta, type ResultadoCasamento,
 } from './roteamento-cartao-puro'
 import type { IncluirNfcePayload } from './nota-fiscal-venda'
 
@@ -32,6 +34,41 @@ async function contasDaLoja(loja: LojaOmie): Promise<ContaCorrenteOmie[]> {
   return contas
 }
 
+type ConfigLoja = { contaPix: number | null; regras: Map<number, RegraConta> }
+const CACHE_CONFIG_MS = 10 * 60 * 1000
+const cacheConfig = new Map<number, { em: number; cfg: ConfigLoja }>()
+
+/**
+ * Conta Pix (lojas.omie_conta_pix) e regras de prazo (omie_contas_regras) da loja, cache de 10 min.
+ * Migration nao aplicada (coluna/tabela inexistente) ou erro: segue sem config (Pix nao mexe, prazo cai no pdv_dias_venc).
+ */
+async function configDaLoja(lojaId: number): Promise<ConfigLoja> {
+  const hit = cacheConfig.get(lojaId)
+  if (hit && Date.now() - hit.em < CACHE_CONFIG_MS) return hit.cfg
+  const cfg: ConfigLoja = { contaPix: null, regras: new Map() }
+  try {
+    const supabase = createServiceClient({ semAutor: true })
+    const [l, r] = await Promise.all([
+      supabase.from('lojas').select('omie_conta_pix').eq('id', lojaId).maybeSingle(),
+      supabase.from('omie_contas_regras').select('n_cod_cc, prazo_dias, taxa_percentual').eq('loja_id', lojaId),
+    ])
+    const pix = Number((l.data as { omie_conta_pix?: number | string | null } | null)?.omie_conta_pix)
+    if (!l.error && Number.isFinite(pix) && pix > 0) cfg.contaPix = pix
+    if (!r.error) {
+      for (const x of (r.data ?? []) as Array<{ n_cod_cc: number | string; prazo_dias: number; taxa_percentual: number | string | null }>) {
+        cfg.regras.set(Number(x.n_cod_cc), {
+          prazo_dias: Number(x.prazo_dias),
+          taxa_percentual: x.taxa_percentual == null ? null : Number(x.taxa_percentual),
+        })
+      }
+    }
+  } catch {
+    /* sem config: comportamento anterior */
+  }
+  cacheConfig.set(lojaId, { em: Date.now(), cfg })
+  return cfg
+}
+
 async function log(loja: LojaOmie, chNFe: string, i: number, motivo: string, erro: boolean) {
   try {
     await logIntegrationAttempt({
@@ -55,7 +92,7 @@ async function log(loja: LojaOmie, chNFe: string, i: number, motivo: string, err
 export async function rotearTitulosDeCartao(loja: LojaOmie, payload: IncluirNfcePayload): Promise<void> {
   const candidatos = payload.pagamentos
     .map((p, i) => ({ p, i }))
-    .filter(({ p }) => p.acquirer && tipoDoTPag(p.tPag))
+    .filter(({ p }) => (p.acquirer && tipoDoTPag(p.tPag)) || ehPix(p.tPag))
   if (!candidatos.length) return
 
   let contas: ContaCorrenteOmie[]
@@ -67,10 +104,14 @@ export async function rotearTitulosDeCartao(loja: LojaOmie, payload: IncluirNfce
   }
   const contasPorId = new Map(contas.map((c) => [Number(c.nCodCC), c]))
   const ativas = contasDeCartaoAtivas(contas)
+  const cfg = await configDaLoja(loja.id)
 
   for (const { p, i } of candidatos) {
     try {
-      const casou = casarContaDoCartao(ativas, { acquirer: p.acquirer!, brand: p.brand, tPag: p.tPag })
+      if (ehPix(p.tPag) && !cfg.contaPix) continue // loja sem Pix configurado: nao mexe, sem log
+      const casou: ResultadoCasamento = ehPix(p.tPag)
+        ? casarContaPix(contas, cfg.contaPix)
+        : casarContaDoCartao(ativas, { acquirer: p.acquirer!, brand: p.brand, tPag: p.tPag })
       if (!casou.ok) { await log(loja, payload.chNFe, i, casou.motivo, true); continue }
 
       const codigoIntegracao = `nfce${payload.nNF}-${i + 1}`
@@ -89,6 +130,7 @@ export async function rotearTitulosDeCartao(loja: LojaOmie, payload: IncluirNfce
         vPag: p.vPag,
         contaDestino: casou.conta,
         contasPorId,
+        prazoDias: escolherPrazoDias(casou.conta, cfg.regras),
       })
       if (!d.alterar) { await log(loja, payload.chNFe, i, `${codigoIntegracao}: ${d.motivo}`, true); continue }
 
@@ -101,7 +143,7 @@ export async function rotearTitulosDeCartao(loja: LojaOmie, payload: IncluirNfce
         call: 'AlterarContaReceber',
         data: d.payload,
       })
-      await log(loja, payload.chNFe, i, `${codigoIntegracao} movido para "${casou.conta.descricao}" (${casou.conta.nCodCC})`, false)
+      await log(loja, payload.chNFe, i, `${codigoIntegracao} movido para "${casou.conta.descricao}" (${casou.conta.nCodCC}), vencimento ${d.vencimentoNovo ?? 'mantido'}`, false)
     } catch (e) {
       await log(loja, payload.chNFe, i, e instanceof Error ? e.message : String(e), true)
     }

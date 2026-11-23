@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  casarContaDoCartao, decidirAlteracaoDoTitulo, normalizarNome, tipoDoTPag, type ContaCorrenteOmie,
+  casarContaDoCartao, casarContaPix, decidirAlteracaoDoTitulo, ehPix, escolherPrazoDias, normalizarNome, somarDiasBR, tipoDoTPag,
+  type ContaCorrenteOmie, type RegraConta,
 } from './roteamento-cartao-puro.ts'
 
 const nomes: Array<[number, string, string?]> = [
@@ -116,4 +117,71 @@ test('nao altera: chave diferente, valor diferente, conta ja mexida, ja na conta
 test('tolerancia de 1 centavo no valor', () => {
   const d = decidirAlteracaoDoTitulo({ titulo: { ...tituloReal, valor_documento: 127.005 }, chNFe: CH, vPag: 127, contaDestino: getnetVisa, contasPorId: porId })
   assert.equal(d.alterar, true)
+})
+
+// ---- Pix e prazo de recebimento ----
+const contaPix: ContaCorrenteOmie = { nCodCC: 6845514790, descricao: 'ITAU PIX', tipo_conta_corrente: 'CC', inativo: 'N' }
+const comPix = [...contas, contaPix]
+const porIdPix = new Map(comPix.map((c) => [c.nCodCC, c]))
+const semRegras = new Map<number, RegraConta>()
+
+test('pix: tPag 17 e reconhecido', () => {
+  assert.equal(ehPix('17'), true)
+  assert.equal(ehPix('03'), false)
+})
+
+test('pix: vai para a conta configurada (existente e ativa)', () => {
+  const r = casarContaPix(comPix, 6845514790)
+  assert.equal(r.ok && r.conta.nCodCC, 6845514790)
+})
+
+test('pix: nao vai sem config, conta ausente ou inativa', () => {
+  assert.equal(casarContaPix(comPix, null).ok, false)
+  assert.equal(casarContaPix(contas, 6845514790).ok, false)
+  assert.equal(casarContaPix(comPix.map((c) => (c.nCodCC === 6845514790 ? { ...c, inativo: 'S' } : c)), 6845514790).ok, false)
+})
+
+test('pix: titulo na Caixinha e movido; fora do CX nao', () => {
+  const base = { chNFe: CH, vPag: 127, contaDestino: contaPix, contasPorId: porIdPix }
+  const d = decidirAlteracaoDoTitulo({ ...base, titulo: tituloReal })
+  assert.equal(d.alterar, true)
+  if (d.alterar) assert.equal(d.payload.id_conta_corrente, 6845514790)
+  assert.equal(decidirAlteracaoDoTitulo({ ...base, titulo: { ...tituloReal, id_conta_corrente: 6690551203 } }).alterar, false)
+  assert.equal(decidirAlteracaoDoTitulo({ ...base, titulo: { ...tituloReal, chave_nfe: '2'.repeat(44) } }).alterar, false)
+})
+
+test('prazo: tabela vence pdv_dias_venc; pdv_dias_venc quando fora da tabela; senao null', () => {
+  const regras = new Map<number, RegraConta>([[6719180709, { prazo_dias: 30, taxa_percentual: 1.69 }]])
+  assert.equal(escolherPrazoDias({ nCodCC: 6719180709, descricao: 'x', pdv_dias_venc: 5 }, regras), 30)
+  assert.equal(escolherPrazoDias({ nCodCC: 1, descricao: 'x', pdv_dias_venc: 5 }, regras), 5)
+  assert.equal(escolherPrazoDias({ nCodCC: 1, descricao: 'x' }, regras), null)
+  assert.equal(escolherPrazoDias({ nCodCC: 1, descricao: 'x', pdv_dias_venc: 0 }, regras), null)
+  // prazo 0 na tabela vale (ex.: Pix)
+  assert.equal(escolherPrazoDias(contaPix, new Map([[6845514790, { prazo_dias: 0 }]])), 0)
+})
+
+test('somarDiasBR: virada de mes e ano, bissexto, data invalida', () => {
+  assert.equal(somarDiasBR('22/11/2026', 30), '22/12/2026')
+  assert.equal(somarDiasBR('22/12/2026', 30), '21/01/2027')
+  assert.equal(somarDiasBR('31/01/2027', 30), '02/03/2027')
+  assert.equal(somarDiasBR('15/02/2028', 15), '01/03/2028')
+  assert.equal(somarDiasBR('22/11/2026', 0), '22/11/2026')
+  assert.equal(somarDiasBR('2026-11-22', 1), null)
+  assert.equal(somarDiasBR('31/02/2026', 1), null)
+  assert.equal(somarDiasBR(undefined, 1), null)
+})
+
+test('datas do titulo: vencimento e previsao = emissao + prazo; sem prazo ou sem emissao nao mexe', () => {
+  const t = { ...tituloReal, data_emissao: '20/12/2026', data_vencimento: '20/12/2026' }
+  const base = { chNFe: CH, vPag: 127, contaDestino: getnetVisa, contasPorId: porId }
+  const d = decidirAlteracaoDoTitulo({ ...base, titulo: t, prazoDias: 30 })
+  assert.equal(d.alterar && d.payload.data_vencimento, '19/01/2027')
+  assert.equal(d.alterar && d.payload.data_previsao, '19/01/2027')
+  assert.equal(d.alterar && d.vencimentoNovo, '19/01/2027')
+  const sem = decidirAlteracaoDoTitulo({ ...base, titulo: t, prazoDias: null })
+  assert.equal(sem.alterar && sem.payload.data_vencimento, '20/12/2026')
+  assert.equal(sem.alterar && 'data_previsao' in sem.payload, false)
+  const semEmissao = decidirAlteracaoDoTitulo({ ...base, titulo: tituloReal, prazoDias: 30 })
+  assert.equal(semEmissao.alterar && semEmissao.payload.data_vencimento, '22/11/2026')
+  assert.equal(semEmissao.alterar && 'data_previsao' in semEmissao.payload, false)
 })
