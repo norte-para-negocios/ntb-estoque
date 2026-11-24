@@ -29,6 +29,7 @@ import { hojeBahiaISO } from '@/lib/data-bahia'
 import { EspelhoOmieBarra } from '@/components/estoque-proprio/EspelhoOmieBarra'
 import { formatCustoUnit } from '@/lib/num-br'
 import { EstoqueAtalhos } from '@/components/estoque-proprio/EstoqueAtalhos'
+import { SeletorLocal } from '@/components/estoque-proprio/SeletorLocal'
 import { LOJA_BLOQUEADA } from '@/lib/estoque/escrita-omie-puro'
 
 const POR_PAGINA = 50
@@ -191,6 +192,8 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
 
       <EstoqueAtalhos atual="estoque" />
 
+      {locaisAtivos.length > 1 && <SeletorLocal basePath="/estoque" locais={locaisAtivos.map((l) => ({ value: String(l.codigoLocal), label: l.descricao }))} />}
+
       {espelho && <EspelhoOmieBarra atualizadoEm={espelho.atualizadoEm} locaisSemLeitura={espelho.locaisSemLeitura} locaisSemSaldo={espelho.locaisSemSaldo} custoSuspeito={espelho.custoSuspeito} podeAtualizar={podeAtualizar} />}
 
       {ehOmie && (
@@ -220,8 +223,8 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Indicador icon={Boxes} rotulo="Produtos" valor={String(totalSkus)} dica={localSel ? 'neste local' : 'cadastrados'} />
         <Indicador icon={Wallet} rotulo="Valor em estoque" valor={fmtBRL(valorTotal)} dica="saldo × custo médio" />
-        <Indicador icon={BellRing} rotulo="Abaixo do mínimo" valor={String(nBaixos)} tom={nBaixos ? 'aviso' : undefined} href={nBaixos ? '/estoque?sit=baixo' : undefined} />
-        <Indicador icon={PackageX} rotulo="Negativos" valor={String(nNegativos)} dica={`${nZerados} zerado${nZerados === 1 ? '' : 's'}`} tom={nNegativos ? 'erro' : undefined} href={nNegativos ? '/estoque?sit=negativo' : undefined} />
+        <Indicador icon={BellRing} rotulo="Abaixo do mínimo" valor={String(nBaixos)} tom={nBaixos ? 'aviso' : undefined} href={nBaixos ? `/estoque?sit=baixo${localSel != null ? `&local=${localSel}` : ''}` : undefined} />
+        <Indicador icon={PackageX} rotulo="Negativos" valor={String(nNegativos)} dica={`${nZerados} zerado${nZerados === 1 ? '' : 's'}`} tom={nNegativos ? 'erro' : undefined} href={nNegativos ? `/estoque?sit=negativo${localSel != null ? `&local=${localSel}` : ''}` : undefined} />
       </div>
 
       {negativosTop.length > 0 && sp.sit !== 'negativo' && (
@@ -238,7 +241,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
               </li>
             ))}
           </ul>
-          {nNegativos > negativosTop.length && <Link href="/estoque?sit=negativo" className="mt-2 inline-block text-[13px] font-medium text-brand hover:underline">Ver os {nNegativos} itens</Link>}
+          {nNegativos > negativosTop.length && <Link href={`/estoque?sit=negativo${localSel != null ? `&local=${localSel}` : ''}`} className="mt-2 inline-block text-[13px] font-medium text-brand hover:underline">Ver os {nNegativos} itens</Link>}
         </section>
       )}
 
