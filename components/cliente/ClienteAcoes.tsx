@@ -66,7 +66,7 @@ export function ClienteForm({ existente, papelInicial = 'cliente' }: { existente
           <button type="button" className={btnClass('primary')}><Plus className="size-4" /> Novo cadastro</button>
         )}
       />
-      <DialogContent className="overflow-hidden bg-surface p-0 sm:max-w-lg" showCloseButton={false}>
+      <DialogContent className="overflow-y-auto bg-surface p-0 sm:max-w-lg" showCloseButton={false}>
         <div className="px-5 pb-2 pt-5 text-[17px] font-semibold text-text">{editando ? 'Editar cadastro' : 'Novo cliente ou transportadora'}</div>
         <div className="grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto px-5 py-3">
           <div className="col-span-2">

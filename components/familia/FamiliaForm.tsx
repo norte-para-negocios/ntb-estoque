@@ -74,7 +74,7 @@ export function FamiliaForm({ familia }: { familia?: FamiliaExistente }) {
           )
         }
       />
-      <DialogContent className="overflow-hidden bg-surface p-0 sm:max-w-md" showCloseButton={false}>
+      <DialogContent className="overflow-y-auto bg-surface p-0 sm:max-w-md" showCloseButton={false}>
         <div className="px-5 pb-2 pt-5 text-[17px] font-semibold text-text">
           {editando ? 'Editar família' : 'Nova família'}
         </div>

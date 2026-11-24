@@ -169,7 +169,7 @@ export function EstruturaProduto({
           </button>
         }
       />
-      <DialogContent className="overflow-hidden bg-surface p-0 sm:max-w-2xl" showCloseButton={false}>
+      <DialogContent className="overflow-y-auto bg-surface p-0 sm:max-w-2xl" showCloseButton={false}>
         <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-2">
           <div className="min-w-0">
             <div className="text-[20px] font-bold tracking-[-0.01em] text-text">

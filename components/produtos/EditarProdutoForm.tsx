@@ -125,7 +125,7 @@ export function EditarProdutoForm({
           </button>
         }
       />
-      <DialogContent className="overflow-hidden bg-surface p-0 sm:max-w-lg" showCloseButton={false}>
+      <DialogContent className="overflow-y-auto bg-surface p-0 sm:max-w-lg" showCloseButton={false}>
         <div className="px-5 pt-5 pb-2 text-[20px] font-bold tracking-[-0.01em] text-text">
           Editar produto
           {produto.codigo && <span className="ml-2 text-[13px] font-normal text-text-muted">#{produto.codigo}</span>}

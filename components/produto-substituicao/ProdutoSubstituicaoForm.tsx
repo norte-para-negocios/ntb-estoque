@@ -49,7 +49,7 @@ export function ProdutoSubstituicaoForm({ produtos }: { produtos: Produto[] }) {
           </button>
         }
       />
-      <DialogContent className="overflow-hidden bg-surface p-0 sm:max-w-md" showCloseButton={false}>
+      <DialogContent className="overflow-y-auto bg-surface p-0 sm:max-w-md" showCloseButton={false}>
         <div className="px-5 pt-5 pb-2 text-[20px] font-bold tracking-[-0.01em] text-text">
           Vincular produto substituto
         </div>

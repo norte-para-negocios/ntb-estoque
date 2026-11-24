@@ -70,7 +70,7 @@ export function DialogImprimirEtiqueta({
           )
         }
       />
-      <DialogContent className="overflow-hidden bg-surface p-0 sm:max-w-sm" showCloseButton={false}>
+      <DialogContent className="overflow-y-auto bg-surface p-0 sm:max-w-sm" showCloseButton={false}>
         <div className="px-5 pt-5 pb-1 text-[20px] font-bold tracking-[-0.01em] text-text">Imprimir etiqueta</div>
         <div className="px-5 py-3">
           <label className="flex min-h-[44px] cursor-pointer items-center gap-2 text-[15px] text-text">
