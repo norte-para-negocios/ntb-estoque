@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  casarContaDoCartao, casarContaPix, decidirAlteracaoDoTitulo, decidirTaxaDoTitulo, ehPix, escolherPrazoDias, normalizarNome, somarDiasBR, tipoDoTPag,
+  casarContaDoCartao, casarContaPix, casarTitulosDaNota, decidirAlteracaoDoTitulo, decidirTaxaDoTitulo, ehPix, escolherPrazoDias, normalizarNome, somarDiasBR, tipoDoTPag,
   type ContaCorrenteOmie, type RegraConta,
 } from './roteamento-cartao-puro.ts'
 
@@ -211,4 +211,31 @@ test('taxa: nao lanca sem taxa, com baixa ou sem dados', () => {
   assert.equal(decidirTaxaDoTitulo({ ...base, taxaPercentual: 1.69, dataEmissao: undefined }).lancar, false)
   assert.equal(decidirTaxaDoTitulo({ ...base, taxaPercentual: 1.69, codigoLancamento: undefined }).lancar, false)
   assert.equal(decidirTaxaDoTitulo({ ...base, vPag: 0.5, taxaPercentual: 0.69 }).lancar, false) // < 1 centavo
+})
+
+test('titulos da nota: mesmo codigo de integracao, casa por chave, valor e tipo (exemplo real nfce1292-2)', () => {
+  const ch = '2926113991271700014565002000001292189564506'
+  const t = (cod: number, valor: number, doc: string, chave = ch) =>
+    ({ codigo_lancamento_omie: cod, chave_nfe: chave, valor_documento: valor, codigo_tipo_documento: doc, codigo_lancamento_integracao: 'nfce1292-2' })
+  const lista = [t(6968530326, 324, 'CRC'), t(6968530324, 324, 'CRC'), t(6968530325, 324, 'CRC'), t(1, 324, 'CRC', 'outra')]
+  const r = casarTitulosDaNota(lista, ch, [{ tPag: '03', vPag: 324 }, { tPag: '03', vPag: 324 }, { tPag: '03', vPag: 324 }])
+  assert.deepEqual(r.map((x) => x?.codigo_lancamento_omie), [6968530324, 6968530325, 6968530326])
+  // tipo decide quando o valor empata; dinheiro sem titulo nao rouba o do cartao
+  const m = casarTitulosDaNota([t(10, 50, 'CRD'), t(11, 50, 'PIX')], ch, [{ tPag: '17', vPag: 50 }, { tPag: '04', vPag: 50 }, { tPag: '01', vPag: 20 }])
+  assert.deepEqual(m.map((x) => x?.codigo_lancamento_omie ?? null), [11, 10, null])
+  // cartao nao pega titulo de outro tipo conhecido
+  assert.deepEqual(casarTitulosDaNota([t(12, 30, 'PIX')], ch, [{ tPag: '03', vPag: 30 }]), [null])
+  // vale (tPag 10) aceita qualquer tipo
+  assert.equal(casarTitulosDaNota([t(13, 30, 'VRF')], ch, [{ tPag: '10', vPag: 30 }])[0]?.codigo_lancamento_omie, 13)
+})
+
+test('nao move titulo que o Omie ja deu como recebido na importacao (pix 1338)', () => {
+  const pix = { nCodCC: 2139695224, descricao: 'ITAU PIX', tipo_conta_corrente: 'CC', inativo: 'N' }
+  const porId = new Map([...contas, pix].map((c) => [c.nCodCC, c]))
+  const d = decidirAlteracaoDoTitulo({
+    titulo: { codigo_lancamento_omie: 9, chave_nfe: 'x', valor_documento: 208.67, id_conta_corrente: 2104002652, status_titulo: 'RECEBIDO',
+      codigo_cliente_fornecedor: 1, data_vencimento: '23/11/2026', codigo_categoria: '1.01.01' },
+    chNFe: 'x', vPag: 208.67, contaDestino: pix, contasPorId: porId,
+  })
+  assert.equal(d.alterar, false)
 })

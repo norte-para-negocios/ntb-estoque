@@ -1,9 +1,9 @@
 import { omieRequest, logIntegrationAttempt, type LojaOmie } from './client'
 import { createServiceClient } from '@/lib/supabase/server'
 import {
-  casarContaDoCartao, casarContaPix, contasDeCartaoAtivas, decidirAlteracaoDoTitulo, decidirTaxaDoTitulo, ehPix, escolherPrazoDias,
-  tipoDoTPag, titulo,
-  type ContaCorrenteOmie, type RegraConta, type ResultadoCasamento,
+  casarContaDoCartao, casarContaPix, casarTitulosDaNota, contasDeCartaoAtivas, decidirAlteracaoDoTitulo, decidirTaxaDoTitulo, ehPix, escolherPrazoDias,
+  tipoDoTPag,
+  type ContaCorrenteOmie, type TituloConsultado, type RegraConta, type ResultadoCasamento,
 } from './roteamento-cartao-puro'
 import type { IncluirNfcePayload } from './nota-fiscal-venda'
 
@@ -69,6 +69,36 @@ async function configDaLoja(lojaId: number): Promise<ConfigLoja> {
   return cfg
 }
 
+/**
+ * Titulos importados pela API emitidos no dia da nota (AAAA-MM-DD). O ImportarNFCe grava todos os
+ * titulos da nota com o mesmo codigo de integracao, entao a busca e pela lista do dia.
+ */
+async function titulosDoDia(loja: LojaOmie, dEmi: string): Promise<TituloConsultado[]> {
+  const [a, m, d] = dEmi.split('-')
+  const dia = `${d}/${m}/${a}`
+  const out: TituloConsultado[] = []
+  for (let pagina = 1; pagina <= 20; pagina++) {
+    const r = await omieRequest<{ total_de_paginas?: number; conta_receber_cadastro?: TituloConsultado[] }>({
+      loja_id: loja.id,
+      omie_app_key: loja.omie_app_key,
+      omie_app_secret: loja.omie_app_secret,
+      is_test: loja.is_test,
+      endpoint: 'v1/financas/contareceber',
+      call: 'ListarContasReceber',
+      data: {
+        pagina,
+        registros_por_pagina: 500,
+        apenas_importado_api: 'S',
+        filtrar_por_emissao_de: dia,
+        filtrar_por_emissao_ate: dia,
+      },
+    })
+    out.push(...(r?.conta_receber_cadastro ?? []))
+    if (pagina >= Number(r?.total_de_paginas ?? 1)) break
+  }
+  return out
+}
+
 async function log(loja: LojaOmie, chNFe: string, i: number, motivo: string, erro: boolean) {
   try {
     await logIntegrationAttempt({
@@ -106,6 +136,14 @@ export async function rotearTitulosDeCartao(loja: LojaOmie, payload: IncluirNfce
   const ativas = contasDeCartaoAtivas(contas)
   const cfg = await configDaLoja(loja.id)
 
+  let titulosDaNota: Array<TituloConsultado | null>
+  try {
+    titulosDaNota = casarTitulosDaNota(await titulosDoDia(loja, payload.dEmi), payload.chNFe, payload.pagamentos)
+  } catch (e) {
+    for (const { i } of candidatos) await log(loja, payload.chNFe, i, `ListarContasReceber falhou: ${e instanceof Error ? e.message : String(e)}`, true)
+    return
+  }
+
   for (const { p, i } of candidatos) {
     try {
       if (ehPix(p.tPag) && !cfg.contaPix) continue // loja sem Pix configurado: nao mexe, sem log
@@ -114,17 +152,9 @@ export async function rotearTitulosDeCartao(loja: LojaOmie, payload: IncluirNfce
         : casarContaDoCartao(ativas, { acquirer: p.acquirer!, brand: p.brand, tPag: p.tPag })
       if (!casou.ok) { await log(loja, payload.chNFe, i, casou.motivo, true); continue }
 
-      const codigoIntegracao = `nfce${payload.nNF}-${i + 1}`
-      const consulta = await omieRequest<Record<string, unknown>>({
-        loja_id: loja.id,
-        omie_app_key: loja.omie_app_key,
-        omie_app_secret: loja.omie_app_secret,
-        is_test: loja.is_test,
-        endpoint: 'v1/financas/contareceber',
-        call: 'ConsultarContaReceber',
-        data: { codigo_lancamento_integracao: codigoIntegracao },
-      })
-      const t = titulo(consulta)
+      const codigoIntegracao = `nfce${payload.nNF}-${payload.serie} pagamento ${i + 1}`
+      const t = titulosDaNota[i]
+      if (!t) { await log(loja, payload.chNFe, i, `${codigoIntegracao}: titulo da nota com valor ${p.vPag} nao encontrado no Omie`, true); continue }
       const d = decidirAlteracaoDoTitulo({
         titulo: t,
         chNFe: payload.chNFe,

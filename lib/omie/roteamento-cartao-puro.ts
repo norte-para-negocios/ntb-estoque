@@ -159,6 +159,41 @@ export type TituloConsultado = {
   data_emissao?: string
   codigo_categoria?: string
   status_titulo?: string
+  codigo_tipo_documento?: string
+  codigo_lancamento_integracao?: string
+}
+
+/** Tipo de documento que o Omie grava no titulo da NFC-e para cada tPag. */
+const DOC_DO_TPAG: Record<string, string> = { '01': 'DIN', '03': 'CRC', '04': 'CRD', '17': 'PIX' }
+
+/**
+ * Liga cada pagamento da nota ao seu titulo no Omie.
+ * O ImportarNFCe cria um titulo por pagamento com o MESMO codigo de integracao
+ * ("nfce<nNF>-<serie>"), entao nao da para achar pelo codigo: usa a chave da nota,
+ * o valor (1 centavo de tolerancia) e o tipo do documento quando o titulo o traz.
+ * Titulos em ordem de criacao (codigo_lancamento_omie); cada titulo vai para um pagamento so.
+ * Devolve um item por pagamento, na mesma ordem (null = sem titulo).
+ */
+export function casarTitulosDaNota(
+  titulos: TituloConsultado[],
+  chNFe: string,
+  pagamentos: Array<{ tPag: string; vPag: number }>,
+): Array<TituloConsultado | null> {
+  const daNota = titulos
+    .filter((t) => String(t.chave_nfe ?? '') === chNFe && t.codigo_lancamento_omie)
+    .sort((a, b) => Number(a.codigo_lancamento_omie) - Number(b.codigo_lancamento_omie))
+  const usados = new Set<number>()
+  const valorBate = (t: TituloConsultado, v: number) => Math.abs(Number(t.valor_documento) - v) <= 0.01
+  return pagamentos.map((p) => {
+    const doc = DOC_DO_TPAG[p.tPag]
+    const livres = daNota.filter((t) => !usados.has(Number(t.codigo_lancamento_omie)) && valorBate(t, p.vPag))
+    const escolhido =
+      livres.find((t) => doc && String(t.codigo_tipo_documento ?? '').toUpperCase() === doc) ??
+      livres.find((t) => !t.codigo_tipo_documento || !Object.values(DOC_DO_TPAG).includes(String(t.codigo_tipo_documento).toUpperCase()) || !doc) ??
+      null
+    if (escolhido) usados.add(Number(escolhido.codigo_lancamento_omie))
+    return escolhido
+  })
 }
 
 /** O Omie as vezes aninha o titulo em `cabecalho`; aceita os dois formatos. */
@@ -167,6 +202,8 @@ export function titulo(r: unknown): TituloConsultado {
   const base = (o.cabecalho && typeof o.cabecalho === 'object' ? { ...o, ...(o.cabecalho as object) } : o) as TituloConsultado
   return base
 }
+
+const SEM_BAIXA = new Set(['A VENCER', 'VENCE HOJE', 'ATRASADO', 'ABERTO', 'EM ABERTO'])
 
 export type DecisaoAlteracao =
   | { alterar: true; payload: Record<string, unknown>; vencimentoNovo: string | null }
@@ -192,6 +229,9 @@ export function decidirAlteracaoDoTitulo(p: {
   if (Math.abs(Number(t.valor_documento) - p.vPag) > 0.01) return { alterar: false, motivo: `valor do titulo (${t.valor_documento}) difere do pagamento (${p.vPag})` }
   const atual = Number(t.id_conta_corrente)
   if (atual === p.contaDestino.nCodCC) return { alterar: false, motivo: 'titulo ja esta na conta da maquininha' }
+  if (t.status_titulo && !SEM_BAIXA.has(String(t.status_titulo).toUpperCase())) {
+    return { alterar: false, motivo: `titulo ja ${t.status_titulo} no Omie (baixa na conta atual); nao mexe` }
+  }
   const contaAtual = p.contasPorId.get(atual)
   if (!contaAtual) return { alterar: false, motivo: `conta atual ${atual} nao esta na lista de contas; nao toca` }
   if (String(contaAtual.tipo_conta_corrente ?? '').toUpperCase() !== 'CX') {
@@ -219,7 +259,6 @@ export type DecisaoTaxa =
   | { lancar: false; motivo: string }
 
 /** Situacoes do titulo em que ainda nao houve baixa nenhuma. */
-const SEM_BAIXA = new Set(['A VENCER', 'VENCE HOJE', 'ATRASADO', 'ABERTO'])
 
 /**
  * Taxa da maquininha como o PDV antigo (CaixaRapido) gravava ate 28/09:
